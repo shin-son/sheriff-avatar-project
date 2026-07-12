@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AppState, IssueStatus } from '@shared/types'
+import CompactView from './components/CompactView'
 import IssueCard from './components/IssueCard'
 import Sidebar from './components/Sidebar'
 
@@ -35,12 +36,6 @@ export default function App() {
 
   if (!state) return null
 
-  const isSheriffView = state.user.role === 'sheriff'
-  const visible = isSheriffView
-    ? state.issues
-    : state.issues.filter((i) => i.assignment.assigneeId === state.user.userId)
-  const count = (status: IssueStatus) => visible.filter((i) => i.status === status).length
-
   const selectUser = async (userId: string) => {
     const user = await window.svp.setUser(userId)
     setState((s) => (s ? { ...s, user } : s))
@@ -49,6 +44,24 @@ export default function App() {
   const setStatus = (id: string, status: IssueStatus) => {
     void window.svp.setIssueStatus(id, status)
   }
+
+  // Regular members get a small window with only their own issues.
+  if (state.user.role === 'member') {
+    const myIssues = state.issues.filter((i) => i.assignment.assigneeId === state.user.userId)
+    return (
+      <CompactView
+        state={state}
+        issues={myIssues}
+        focusId={focusId}
+        onSelectUser={selectUser}
+        onSetStatus={setStatus}
+      />
+    )
+  }
+
+  // Sheriff (당번) gets the full operator dashboard with every issue.
+  const visible = state.issues
+  const count = (status: IssueStatus) => visible.filter((i) => i.status === status).length
 
   return (
     <div className="app">
@@ -62,9 +75,7 @@ export default function App() {
         <header className="content-header">
           <div>
             <h1>이슈 피드</h1>
-            <p className="subtitle">
-              {isSheriffView ? '🤠 당번 모드 — 팀 전체 이슈가 표시됩니다' : '내게 배정된 이슈만 표시됩니다'}
-            </p>
+            <p className="subtitle">🤠 당번 모드 — 팀 전체 이슈가 표시됩니다</p>
           </div>
           <div className="stats">
             <span className="stat stat-new">NEW {count('new')}</span>

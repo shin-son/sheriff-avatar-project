@@ -1,7 +1,7 @@
 import { BrowserWindow, app, ipcMain } from 'electron'
 import { join } from 'path'
 import { TEAM } from '@shared/team'
-import type { AppState, CIEvent, IssueStatus, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
+import type { AppState, CIEvent, IssueStatus, Role, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
 import { loadUserConfig, saveUserConfig } from './config'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
@@ -15,12 +15,27 @@ let mainWindow: BrowserWindow | null = null
 let wsStatus: WsStatus = 'connecting'
 let userConfig: UserConfig
 
+// Members get a small companion window; the sheriff gets the full dashboard.
+const WINDOW_SIZE: Record<Role, { width: number; height: number; minWidth: number; minHeight: number }> = {
+  member: { width: 420, height: 640, minWidth: 380, minHeight: 520 },
+  sheriff: { width: 1180, height: 760, minWidth: 920, minHeight: 600 }
+}
+
+function applyWindowMode(role: Role): void {
+  if (!mainWindow) return
+  const size = WINDOW_SIZE[role]
+  mainWindow.setMinimumSize(size.minWidth, size.minHeight)
+  mainWindow.setSize(size.width, size.height)
+  mainWindow.center()
+}
+
 function createMainWindow(): void {
+  const size = WINDOW_SIZE[userConfig.role]
   mainWindow = new BrowserWindow({
-    width: 1180,
-    height: 760,
-    minWidth: 920,
-    minHeight: 600,
+    width: size.width,
+    height: size.height,
+    minWidth: size.minWidth,
+    minHeight: size.minHeight,
     autoHideMenuBar: true,
     backgroundColor: '#0f1115',
     title: 'Sheriff Avatar',
@@ -74,8 +89,10 @@ app.whenReady().then(() => {
   ipcMain.handle('user:set', (_e, userId: string): UserConfig => {
     const member = TEAM.find((m) => m.id === userId)
     if (member) {
+      const roleChanged = member.role !== userConfig.role
       userConfig = { userId: member.id, role: member.role }
       saveUserConfig(userConfig)
+      if (roleChanged) applyWindowMode(member.role)
     }
     return userConfig
   })
