@@ -96,11 +96,12 @@ mock/                            mock CI/CD 서버
 - **main 브랜치 직접 push 금지.** 브랜치(`feat/<scope>-<desc>`, `fix/<scope>-<desc>`)에서 작업 → PR → 다른 1인 리뷰 승인 후 merge.
 - Claude가 생성한 커밋은 `Co-Authored-By: Claude <noreply@anthropic.com>` trailer를 유지한다.
 - 커밋 전 `npm run typecheck`가 통과해야 한다.
+- 커밋 메시지·수정 이력은 사내 도구가 검토/평가할 수 있다고 가정하고 작성한다. 관련 세부 기준은 팀 내부에서 별도 공유한다 (repo에는 두지 않음).
 
 ## 리뷰 프로세스 & 코드 위생
 
 - **자기(또는 Claude)가 쓴 코드는 PR 올리기 전에 스스로 전체 diff를 검토한다.** Claude가 생성한 코드도 예외 없음 — 이해하지 못한 코드는 merge하지 않는다.
-- 모든 PR은 다른 1인의 리뷰 승인 후 merge. 순환 리뷰: A→B→C→A ([docs/PLAN.md](./docs/PLAN.md) 참고).
+- 모든 PR은 다른 1인의 리뷰 승인 후 merge. 순환 리뷰: 손신→김병재→김민석→손신 ([docs/PLAN.md](./docs/PLAN.md) 참고).
 - **동작이 확인되면 그 시점을 즉시 작은 커밋으로 남긴다.** "잘 되는 상태"가 커밋 히스토리에 항상 존재해야 하며, 되돌아갈 지점 없이 큰 변경을 쌓지 않는다.
 - **커밋 규칙(위 섹션)은 반드시 지킨다.** 규칙 위반 커밋은 리뷰에서 reject하고 다시 쓴다.
 - **쓸데없는 코드는 주기적으로 제거한다.** 매주 금요일 dead code / 미사용 export / 주석 처리된 코드 정리 (`chore(scope): remove dead code`). 기능 삭제가 아니라 위생 정리임을 커밋 메시지에 명시.
@@ -115,5 +116,10 @@ mock/                            mock CI/CD 서버
 - Karpathy의 llm-wiki 컨셉을 따른다 (원문: [docs/llm-wiki-concept.md](./docs/llm-wiki-concept.md)): **1차 독자는 사람이 아니라 LLM이다.** 애매한 표현 대신 명시적 사실·조건·담당자를 쓴다.
 - 3계층 매핑 — raw sources: CI 로그/이슈 이벤트(불변), wiki: `wiki-vault/`(LLM이 작성·유지), schema: 이 섹션.
 - 노트 하나 = 주제 하나 (모듈별 known-failure, playbook, case-log).
-- 이슈 처리 완료 시 앱이 `wiki-vault/case-log.md`에 케이스를 append한다. 수동 편집은 Obsidian으로 한다.
+- 핵심 동작 4가지 (`src/main/modules/wiki/`):
+  - **query** — 분류 시 관련 노트 검색 (`index.md`를 카탈로그로 사용)
+  - **ingest** — 해결된 이슈를 case-log에 기록 + `index.md`/`log.md` 자동 갱신
+  - **lint** — 고아 노트·부정 피드백 누적 노트 점검 (당번이 주기 실행)
+  - **feedback** — 담당자의 노트 유용성 👍/👎. 부정 누적(👎3+) 노트는 query 감점 → lint 정리 후보. **쓸데없는 정보는 이 루프로 제거한다.**
+- `index.md`/`log.md`는 앱이 자동 갱신 — 수동 편집 금지.
 - wiki 내용 변경도 코드와 동일하게 PR 리뷰를 거친다.
