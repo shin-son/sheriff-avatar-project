@@ -17,6 +17,8 @@ const api = {
   onWsStatus: (cb: (payload: unknown) => void) => subscribe('ws:status', cb),
   onIssueFocus: (cb: (payload: unknown) => void) => subscribe('issue:focus', cb),
   onToastData: (cb: (payload: unknown) => void) => subscribe('toast:data', cb),
+  wikiLint: () => ipcRenderer.invoke('wiki:lint'),
+  wikiFeedback: (noteTitle: string, helpful: boolean) => ipcRenderer.send('wiki:feedback', noteTitle, helpful),
   toastClick: (issueId: string) => ipcRenderer.send('toast:click', issueId),
   toastClose: () => ipcRenderer.send('toast:close')
 }

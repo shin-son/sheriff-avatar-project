@@ -33,8 +33,17 @@
 
 `new` → `acknowledged` (담당자 확인) → `resolved` (처리 완료)
 
-`resolved` 시점에 `wiki/appendCaseLog()`가 `wiki-vault/case-log.md`에 케이스를 기록한다.
-이 기록이 쌓여 다음 분류의 신뢰도를 높이는 것이 llm-wiki 루프의 핵심이다.
+`resolved` 시점에 `wiki/ingestResolvedIssue()`가 `wiki-vault/case-log.md`에 케이스를 기록하고
+`index.md`/`log.md`를 갱신한다. 이 기록이 쌓여 다음 분류의 신뢰도를 높이는 것이 llm-wiki 루프의 핵심이다.
+
+## wiki 4대 동작 (`src/main/modules/wiki/`)
+
+| 동작 | 트리거 | 하는 일 |
+|---|---|---|
+| query | 이슈 수신 시 자동 | 관련 노트 검색, 부정 피드백 노트는 감점 |
+| ingest | "해결 완료" 클릭 | case-log 기록, index/log 갱신 |
+| lint | 당번의 "WIKI 점검" 버튼 | 고아 노트·부정 피드백 노트 보고 |
+| feedback | 이슈 카드의 노트 👍/👎 | 유용성 투표 저장 (👎3+ → query 감점, lint 정리 후보) |
 
 ## 향후 계획 (스켈레톤 범위 밖)
 

@@ -1,4 +1,4 @@
-import type { AppState, IssueStatus, SheriffIssue, UserConfig, WsStatus } from '../shared/types'
+import type { AppState, IssueStatus, SheriffIssue, UserConfig, WikiLintReport, WsStatus } from '../shared/types'
 
 declare global {
   interface Window {
@@ -11,6 +11,8 @@ declare global {
       onWsStatus(cb: (status: WsStatus) => void): () => void
       onIssueFocus(cb: (issueId: string) => void): () => void
       onToastData(cb: (issue: SheriffIssue) => void): () => void
+      wikiLint(): Promise<WikiLintReport>
+      wikiFeedback(noteTitle: string, helpful: boolean): void
       toastClick(issueId: string): void
       toastClose(): void
     }

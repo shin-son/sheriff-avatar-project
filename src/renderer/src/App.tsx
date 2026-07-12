@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AppState, IssueStatus } from '@shared/types'
+import type { AppState, IssueStatus, WikiLintReport } from '@shared/types'
 import CompactView from './components/CompactView'
 import IssueCard from './components/IssueCard'
 import Sidebar from './components/Sidebar'
@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar'
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [lintReport, setLintReport] = useState<WikiLintReport | null>(null)
 
   useEffect(() => {
     void window.svp.getState().then(setState)
@@ -81,9 +82,36 @@ export default function App() {
             <span className="stat stat-new">NEW {count('new')}</span>
             <span className="stat stat-ack">진행중 {count('acknowledged')}</span>
             <span className="stat stat-done">해결 {count('resolved')}</span>
+            <button
+              className="btn"
+              onClick={() => void window.svp.wikiLint().then(setLintReport)}
+              title="wiki 상태 점검 (고아 노트, 부정 피드백 노트)"
+            >
+              🔍 WIKI 점검
+            </button>
           </div>
         </header>
         <section className="feed">
+          {lintReport && (
+            <div className="lint-card">
+              <div className="lint-head">
+                <strong>WIKI 점검 결과</strong>
+                <span className="lint-count">노트 {lintReport.noteCount}개</span>
+                <button className="toast-close" onClick={() => setLintReport(null)}>
+                  ✕
+                </button>
+              </div>
+              {lintReport.suggestions.length === 0 ? (
+                <p className="lint-ok">문제 없음 ✨</p>
+              ) : (
+                <ul className="lint-list">
+                  {lintReport.suggestions.map((s) => (
+                    <li key={s}>{s}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {visible.length === 0 && (
             <div className="empty">
               <div className="empty-star">🤠</div>

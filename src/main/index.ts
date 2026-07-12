@@ -7,7 +7,7 @@ import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
 import { ToastManager } from './modules/notifications/toast'
 import { CIWebSocketClient } from './modules/websocket/client'
-import { appendCaseLog, findRelatedNotes } from './modules/wiki'
+import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback } from './modules/wiki'
 
 const issues: SheriffIssue[] = []
 const toasts = new ToastManager()
@@ -55,7 +55,7 @@ function isRelevantTo(issue: SheriffIssue, cfg: UserConfig): boolean {
 
 async function handleCIEvent(event: CIEvent): Promise<void> {
   try {
-    const wikiRefs = await findRelatedNotes(event)
+    const wikiRefs = await queryWiki(event)
     const classification = await classify(event, wikiRefs)
     const assignment = route(classification, TEAM)
     const issue: SheriffIssue = {
@@ -101,9 +101,15 @@ app.whenReady().then(() => {
     const issue = issues.find((i) => i.event.id === id)
     if (!issue) return null
     issue.status = status
-    if (status === 'resolved') await appendCaseLog(issue)
+    if (status === 'resolved') await ingestResolvedIssue(issue)
     mainWindow?.webContents.send('issue:updated', issue)
     return issue
+  })
+
+  ipcMain.handle('wiki:lint', () => lintWiki())
+
+  ipcMain.on('wiki:feedback', (_e, noteTitle: string, helpful: boolean) => {
+    recordFeedback(noteTitle, helpful)
   })
 
   ipcMain.on('toast:click', (e, issueId: string) => {

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CIEventType, IssueStatus, SheriffIssue } from '@shared/types'
 
 const TYPE_LABEL: Record<CIEventType, string> = {
@@ -16,6 +17,12 @@ interface Props {
 export default function IssueCard({ issue, highlighted, onSetStatus }: Props) {
   const { event, classification, assignment, status } = issue
   const confClass = classification.confidence > 80 ? 'high' : 'low'
+  const [voted, setVoted] = useState<Record<string, boolean>>({})
+
+  const vote = (noteTitle: string, helpful: boolean) => {
+    window.svp.wikiFeedback(noteTitle, helpful)
+    setVoted((v) => ({ ...v, [noteTitle]: true }))
+  }
 
   return (
     <article
@@ -64,6 +71,18 @@ export default function IssueCard({ issue, highlighted, onSetStatus }: Props) {
           {classification.wikiRefs.map((r) => (
             <span key={r.file} className="wiki-ref">
               📄 {r.title}
+              {voted[r.title] ? (
+                <span className="fb-done">·피드백됨</span>
+              ) : (
+                <>
+                  <button className="fb-btn" title="이 노트가 도움됨" onClick={() => vote(r.title, true)}>
+                    👍
+                  </button>
+                  <button className="fb-btn" title="이 노트는 도움 안 됨" onClick={() => vote(r.title, false)}>
+                    👎
+                  </button>
+                </>
+              )}
             </span>
           ))}
         </div>

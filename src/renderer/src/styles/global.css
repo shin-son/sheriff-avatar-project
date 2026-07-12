@@ -520,12 +520,78 @@ body {
 }
 
 .wiki-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--blue);
   background: rgba(76, 154, 255, 0.08);
   border: 1px solid rgba(76, 154, 255, 0.2);
   padding: 3px 9px;
   border-radius: 999px;
+}
+
+.fb-btn {
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.55;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.fb-btn:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.fb-done {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.lint-card {
+  background: rgba(76, 154, 255, 0.06);
+  border: 1px solid rgba(76, 154, 255, 0.25);
+  border-radius: 14px;
+  padding: 14px 18px;
+  animation: fadeInUp 0.3s ease both;
+}
+
+.lint-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.lint-head .toast-close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.lint-count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.lint-ok {
+  font-size: 12px;
+  color: var(--green);
+  margin-top: 8px;
+}
+
+.lint-list {
+  margin: 10px 0 0 18px;
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .card-actions {

@@ -68,6 +68,17 @@ export interface UserConfig {
 
 export type WsStatus = 'connected' | 'disconnected' | 'connecting'
 
+/** Result of a wiki health check (lint operation). */
+export interface WikiLintReport {
+  generatedAt: string
+  noteCount: number
+  /** Notes no other note links to. */
+  orphanNotes: string[]
+  /** Notes with accumulated negative feedback (removal candidates). */
+  unhelpfulNotes: string[]
+  suggestions: string[]
+}
+
 export interface AppState {
   issues: SheriffIssue[]
   team: TeamMember[]
