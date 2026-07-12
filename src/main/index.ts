@@ -1,0 +1,113 @@
+import { BrowserWindow, app, ipcMain } from 'electron'
+import { join } from 'path'
+import { TEAM } from '@shared/team'
+import type { AppState, CIEvent, IssueStatus, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
+import { loadUserConfig, saveUserConfig } from './config'
+import { route } from './modules/assignment/router'
+import { classify } from './modules/classifier'
+import { ToastManager } from './modules/notifications/toast'
+import { CIWebSocketClient } from './modules/websocket/client'
+import { appendCaseLog, findRelatedNotes } from './modules/wiki'
+
+const issues: SheriffIssue[] = []
+const toasts = new ToastManager()
+let mainWindow: BrowserWindow | null = null
+let wsStatus: WsStatus = 'connecting'
+let userConfig: UserConfig
+
+function createMainWindow(): void {
+  mainWindow = new BrowserWindow({
+    width: 1180,
+    height: 760,
+    minWidth: 920,
+    minHeight: 600,
+    autoHideMenuBar: true,
+    backgroundColor: '#0f1115',
+    title: 'Sheriff Avatar',
+    webPreferences: { preload: join(__dirname, '../preload/index.js') }
+  })
+  mainWindow.on('closed', () => (mainWindow = null))
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
+    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+}
+
+function isRelevantTo(issue: SheriffIssue, cfg: UserConfig): boolean {
+  return cfg.role === 'sheriff' || issue.assignment.assigneeId === cfg.userId
+}
+
+async function handleCIEvent(event: CIEvent): Promise<void> {
+  try {
+    const wikiRefs = await findRelatedNotes(event)
+    const classification = await classify(event, wikiRefs)
+    const assignment = route(classification, TEAM)
+    const issue: SheriffIssue = {
+      event,
+      classification,
+      assignment,
+      status: 'new',
+      receivedAt: new Date().toISOString()
+    }
+    issues.unshift(issue)
+    mainWindow?.webContents.send('issue:new', issue)
+    if (isRelevantTo(issue, userConfig)) toasts.show(issue)
+  } catch (err) {
+    console.error('[svp] failed to process CI event', err)
+  }
+}
+
+app.whenReady().then(() => {
+  userConfig = loadUserConfig()
+  createMainWindow()
+
+  const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
+  const client = new CIWebSocketClient(wsUrl, handleCIEvent, (status) => {
+    wsStatus = status
+    mainWindow?.webContents.send('ws:status', status)
+  })
+  client.connect()
+
+  ipcMain.handle('state:get', (): AppState => ({ issues, team: TEAM, user: userConfig, wsStatus }))
+
+  ipcMain.handle('user:set', (_e, userId: string): UserConfig => {
+    const member = TEAM.find((m) => m.id === userId)
+    if (member) {
+      userConfig = { userId: member.id, role: member.role }
+      saveUserConfig(userConfig)
+    }
+    return userConfig
+  })
+
+  ipcMain.handle('issue:setStatus', async (_e, id: string, status: IssueStatus) => {
+    const issue = issues.find((i) => i.event.id === id)
+    if (!issue) return null
+    issue.status = status
+    if (status === 'resolved') await appendCaseLog(issue)
+    mainWindow?.webContents.send('issue:updated', issue)
+    return issue
+  })
+
+  ipcMain.on('toast:click', (e, issueId: string) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+      mainWindow.webContents.send('issue:focus', issueId)
+    }
+    BrowserWindow.fromWebContents(e.sender)?.close()
+  })
+
+  ipcMain.on('toast:close', (e) => {
+    BrowserWindow.fromWebContents(e.sender)?.close()
+  })
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+  })
+})
+
+app.on('window-all-closed', () => {
+  app.quit()
+})
