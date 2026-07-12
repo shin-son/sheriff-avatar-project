@@ -3,6 +3,39 @@
 LLM-WIKI 기반 Sheriff Agent — CI/CD 이슈를 WebSocket으로 수신해 LLM이 분류하고,
 신뢰도 점수에 따라 Feature 담당자 또는 Sheriff(당번)에게 배정하는 Windows 데스크톱 앱.
 
+## 큰 그림
+
+팀원 전원(예: A, B, C — C가 당번)이 EXE로 Sheriff Avatar를 설치한다.
+일반 팀원은 **자기에게 배정된 이슈만** 작은 창으로 받고, 당번은 **팀 전체 이슈**를 대시보드로 본다.
+LLM-WIKI(`wiki-vault/`)는 분류의 근거이자 처리 결과가 다시 쌓이는 곳이다 — 쓸수록 똑똑해진다.
+
+```mermaid
+flowchart LR
+    CI["사내 CI/CD<br/>(TEST FAILED 등)"] -- WebSocket --> WS["websocket 수신"]
+    WS --> CLS["LLM 분류기<br/>(신뢰도 0~100)"]
+    WIKI[("LLM-WIKI<br/>wiki-vault/")] -- "query" --> CLS
+    CLS -- "신뢰도 > 80" --> OWNER["Feature 담당자 앱<br/>(컴팩트 창 + 팝업)"]
+    CLS -- "신뢰도 ≤ 80" --> SHERIFF["당번 앱 🤠<br/>(전체 대시보드 + 팝업)"]
+    OWNER -- "해결 → ingest" --> WIKI
+    SHERIFF -- "해결 → ingest" --> WIKI
+    OWNER -- "👍/👎 feedback" --> WIKI
+    SHERIFF -- "lint (점검)" --> WIKI
+```
+
+## 한 사이클 (이슈 하나의 흐름)
+
+1. 사내 CI/CD에서 `test_failed` 발생 → WebSocket으로 앱 수신
+2. **query**: 앱이 wiki-vault에서 관련 노트 검색 (known-failure, 과거 케이스)
+3. LLM 분류기가 노트를 근거로 이슈를 분류하고 **신뢰도 점수** 산출
+4. 라우팅 — **80점 초과**: 해당 모듈 담당자에게 자동 배정 / **80점 이하**: 당번에게 배정 (human-in-the-loop)
+5. 배정된 사람의 앱에 **우하단 팝업** 알림 (당번은 모든 이슈 알림 수신)
+6. 담당자가 확인 → 처리 → 앱에서 "해결 완료"
+7. **ingest**: 처리 결과가 `case-log.md`에 기록되고 `index.md`/`log.md` 갱신 → 다음번 같은 유형 이슈의 신뢰도가 올라감
+8. **feedback**: 담당자가 참조된 wiki 노트에 👍/👎 — 부정 누적 노트는 검색에서 감점
+9. **lint**: 당번이 주기적으로 "WIKI 점검" — 고아 노트·저품질 노트를 정리 후보로 보고
+
+이 루프가 반복되며 wiki가 축적되고, 자동 배정 비율(신뢰도 >80)이 점점 올라가는 것이 목표다.
+
 ## 요구 사항
 
 - Node.js 20+ / npm
