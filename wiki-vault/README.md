@@ -1,6 +1,6 @@
 # LLM-WIKI (SVP wiki-vault)
 
-Andrej Karpathy의 llm-wiki 컨셉을 따르는 팀 지식 베이스.
+Andrej Karpathy의 llm-wiki 컨셉([원문 전문](../docs/llm-wiki-concept.md))을 따르는 팀 지식 베이스.
 **1차 독자는 사람이 아니라 LLM이다.** Sheriff Avatar의 classifier가 이슈를 분류할 때
 이 vault를 검색해 신뢰도 점수의 근거로 사용한다.
 

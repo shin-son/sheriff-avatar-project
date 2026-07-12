@@ -112,7 +112,8 @@ mock/                            mock CI/CD 서버
 
 ## LLM-WIKI 규칙 (`wiki-vault/`)
 
-- Karpathy의 llm-wiki 컨셉을 따른다: **1차 독자는 사람이 아니라 LLM이다.** 애매한 표현 대신 명시적 사실·조건·담당자를 쓴다.
+- Karpathy의 llm-wiki 컨셉을 따른다 (원문: [docs/llm-wiki-concept.md](./docs/llm-wiki-concept.md)): **1차 독자는 사람이 아니라 LLM이다.** 애매한 표현 대신 명시적 사실·조건·담당자를 쓴다.
+- 3계층 매핑 — raw sources: CI 로그/이슈 이벤트(불변), wiki: `wiki-vault/`(LLM이 작성·유지), schema: 이 섹션.
 - 노트 하나 = 주제 하나 (모듈별 known-failure, playbook, case-log).
 - 이슈 처리 완료 시 앱이 `wiki-vault/case-log.md`에 케이스를 append한다. 수동 편집은 Obsidian으로 한다.
 - wiki 내용 변경도 코드와 동일하게 PR 리뷰를 거친다.
