@@ -70,6 +70,34 @@ npm run dist
 # → dist/Sheriff Avatar Setup 0.1.0.exe
 ```
 
+## 병합 후 검증 체크리스트 (필수)
+
+브랜치 merge 후, 그리고 **사내에서 pull 받은 직후**에는 반드시 아래를 순서대로 실행한다.
+하나라도 실패하면 merge를 되돌리거나 즉시 fix를 올린다.
+
+```bash
+npm install          # 1. package-lock.json이 바뀐 경우 (merge 후엔 습관적으로 실행 권장)
+npm run typecheck    # 2. 타입 체크 통과
+npm run build        # 3. 프로덕션 빌드 성공
+npm run mock:ci      # 4. (터미널 1) mock 서버
+npm run dev          # 5. (터미널 2) 스모크 테스트 →
+```
+
+스모크 테스트에서 확인할 것 (약 1분):
+
+- [ ] 사이드바에 초록색 "CI/CD 연결됨" 표시
+- [ ] 새 이슈 수신 시 우하단 팝업이 뜨고, 클릭하면 해당 이슈로 이동
+- [ ] 사용자 전환: member → 컴팩트 창(내 이슈만) / sheriff → 대시보드(전체 이슈)
+- [ ] 이슈 "해결 완료" → `wiki-vault/case-log.md`·`log.md`·`index.md` 자동 갱신
+- [ ] "🔍 WIKI 점검" 버튼이 보고서 카드를 띄움
+
+### 병합 시 주의: wiki-vault 자동 갱신 파일
+
+`wiki-vault/`의 `index.md`, `log.md`, `case-log.md`는 앱이 런타임에 수정한다.
+**mock 서버로 테스트하며 생긴 변경은 커밋하지 말고 `git restore wiki-vault`로 되돌린다.**
+(실제 사내 데이터 축적 시작 후의 커밋 정책은 Week 3에 재논의 — docs/PLAN.md)
+이 파일들에서 merge conflict가 나면 append-only 특성상 대부분 양쪽을 모두 남기면 된다.
+
 ## 운영 원칙 (사내/사외)
 
 - 이 repo(사외 GitHub)가 **유일한 개발 저장소**다. 모든 코드 작성은 사외에서 한다.
