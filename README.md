@@ -107,5 +107,8 @@ npm run dev          # 5. (터미널 2) 스모크 테스트 →
 ## 문서
 
 - [CLAUDE.md](./CLAUDE.md) — 개발 규칙, 커밋 규칙, 모듈 맵 (Claude 사용 시 필독)
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 데이터 흐름과 모듈 설계
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 목표 구조 (클라이언트·서버 + Jira 중심) 와 데이터 흐름
+- [docs/API.md](./docs/API.md) — 클라이언트↔서버 WS·Jira REST·LLM 계약 명세
+- [docs/BACKEND.md](./docs/BACKEND.md) — 백엔드 핵심 기능(F1~F8) 명세와 완료 기준
+- [docs/DEMO-SCENARIO.md](./docs/DEMO-SCENARIO.md) — 데모 시나리오 (15분, 4장면)
 - [wiki-vault/](./wiki-vault/) — LLM-WIKI (Obsidian으로 열 수 있음)
