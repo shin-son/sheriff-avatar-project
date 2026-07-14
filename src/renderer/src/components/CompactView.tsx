@@ -1,17 +1,10 @@
-import type { AppState, CIEventType, IssueStatus, SheriffIssue, WsStatus } from '@shared/types'
-import { formatIssueTime } from '../format'
+import type { AppState, IssueStatus, SheriffIssue, WsStatus } from '@shared/types'
+import { TYPE_LABEL, formatIssueTime } from '../format'
 
 const WS_LABEL: Record<WsStatus, string> = {
   connected: 'CI/CD 연결됨',
   connecting: '연결 중…',
   disconnected: '연결 끊김'
-}
-
-const TYPE_LABEL: Record<CIEventType, string> = {
-  test_failed: 'TEST FAILED',
-  build_failed: 'BUILD FAILED',
-  lint_failed: 'LINT FAILED',
-  deploy_failed: 'DEPLOY FAILED'
 }
 
 interface Props {
@@ -20,10 +13,18 @@ interface Props {
   focusId: string | null
   onSelectUser: (userId: string) => void
   onSetStatus: (id: string, status: IssueStatus) => void
+  onToggleMuted: () => void
 }
 
 /** Small always-usable window for regular members: only their own issues. */
-export default function CompactView({ state, issues, focusId, onSelectUser, onSetStatus }: Props) {
+export default function CompactView({
+  state,
+  issues,
+  focusId,
+  onSelectUser,
+  onSetStatus,
+  onToggleMuted
+}: Props) {
   const openCount = issues.filter((i) => i.status !== 'resolved').length
 
   return (
@@ -32,6 +33,13 @@ export default function CompactView({ state, issues, focusId, onSelectUser, onSe
         <div className={`compact-ws ${state.wsStatus}`}>
           <span className="dot" /> {WS_LABEL[state.wsStatus]}
         </div>
+        <button
+          className={`notify-toggle-sm ${state.notificationsMuted ? 'off' : ''}`}
+          title={state.notificationsMuted ? '알림 팝업 다시 켜기' : '알림 팝업 끄기'}
+          onClick={onToggleMuted}
+        >
+          {state.notificationsMuted ? '알림 꺼짐' : '알림 켜짐'}
+        </button>
         <select
           className="compact-user"
           value={state.user.userId}
@@ -79,6 +87,10 @@ function CompactItem({
   onSetStatus: (id: string, status: IssueStatus) => void
 }) {
   const { event, classification, assignment, status } = issue
+  const checkTicket = () => {
+    window.svp.openTicket(event.url)
+    if (status === 'new') onSetStatus(event.id, 'acknowledged')
+  }
   return (
     <article
       id={`issue-${event.id}`}
@@ -107,18 +119,13 @@ function CompactItem({
         </span>
       </div>
       <div className="citem-actions">
-        {status === 'new' && (
-          <button className="btn" onClick={() => onSetStatus(event.id, 'acknowledged')}>
-            확인
-          </button>
-        )}
         {status === 'acknowledged' && <span className="ack-label">진행 중</span>}
+        {status === 'resolved' && <span className="resolved-label">✓ 해결됨</span>}
         {status !== 'resolved' && (
-          <button className="btn btn-primary" onClick={() => onSetStatus(event.id, 'resolved')}>
-            해결
+          <button className="btn btn-primary" onClick={checkTicket}>
+            티켓 확인 ↗
           </button>
         )}
-        {status === 'resolved' && <span className="resolved-label">✓ 해결됨</span>}
       </div>
     </article>
   )

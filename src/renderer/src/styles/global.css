@@ -1,7 +1,8 @@
-/* Sheriff Avatar — "Tin Star Ledger" theme, v2.
-   Dense ledger rows instead of cards; one colored element per row (the star).
-   Confidence > 80 wears a filled brass badge (auto-routed), <= 80 stays
-   unstamped (the sheriff must step in). Fonts are bundled (offline-safe). */
+/* Sheriff Avatar — "Glass Ledger" theme.
+   Floating translucent panels over the window's acrylic material (Windows 11
+   desktop blur-behind; solid ink fallback elsewhere). The brass star stays the
+   signature mark: confidence > 80 wears a filled badge (auto-routed), <= 80
+   stays unstamped (the sheriff steps in). Fonts are bundled (offline-safe). */
 
 @font-face {
   font-family: 'Pretendard Variable';
@@ -25,19 +26,21 @@
 }
 
 :root {
-  --ink: #16120e;
   --ink-deep: #110d0a;
-  --leather: #201a14;
-  --leather-2: #2b2219;
-  --seam: #372c20;
   --lamplight: #f0e8d8;
   --paper: #d9cdb8;
   --dust: #a8987f;
   --brass: #d9a441;
-  --brass-dim: rgba(217, 164, 65, 0.14);
+  --brass-dim: rgba(217, 164, 65, 0.16);
   --turquoise: #49b896;
   --vermilion: #e2543e;
   --sky: #82a7c7;
+  /* glass layers — neutral smoke, like frosted glass; warmth lives in the content */
+  --glass: rgba(30, 30, 34, 0.5);
+  --glass-raised: rgba(255, 255, 255, 0.06);
+  --glass-hover: rgba(255, 255, 255, 0.09);
+  --hair: rgba(255, 255, 255, 0.09);
+  --hair-faint: rgba(255, 255, 255, 0.055);
   --font-body: 'Pretendard Variable', 'Segoe UI', 'Malgun Gothic', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Malgun Gothic', monospace;
   --star-shape: polygon(
@@ -55,7 +58,8 @@
 
 body {
   font-family: var(--font-body);
-  background: var(--ink);
+  /* Neutral tint over the acrylic void; on the solid-color fallback this reads as ink. */
+  background: rgba(12, 12, 14, 0.35);
   color: var(--lamplight);
   overflow: hidden;
   user-select: none;
@@ -78,47 +82,6 @@ select:focus-visible {
     animation: none !important;
     transition: none !important;
   }
-}
-
-.shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-/* Custom title bar: draggable strip under the native titleBarOverlay controls. */
-.titlebar {
-  height: 40px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  background: var(--ink-deep);
-  border-bottom: 1px solid var(--seam);
-  -webkit-app-region: drag;
-}
-
-.titlebar-name {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-  color: var(--brass);
-}
-
-.titlebar-sub {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.6px;
-  color: var(--dust);
-}
-
-.app {
-  display: flex;
-  flex: 1;
-  min-height: 0;
 }
 
 /* ── Tin star (brand mark + confidence badge) ── */
@@ -171,7 +134,7 @@ select:focus-visible {
 }
 
 .star-badge.low {
-  background: var(--leather-2);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .star-badge.low .star-num {
@@ -188,27 +151,118 @@ select:focus-visible {
   transform: translateY(2px);
 }
 
-/* ── Sidebar ─────────────────────────────── */
+/* ── Shell: title strip + floating panels ── */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Bare strip over the glass void — brand left, window controls right. */
+.titlebar {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 18px;
+  -webkit-app-region: drag;
+}
+
+.titlebar-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+
+.titlebar-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  color: var(--dust);
+}
+
+.win-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  width: 38px;
+  height: 30px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dust);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.win-btn:hover {
+  background: var(--glass-hover);
+  color: var(--lamplight);
+}
+
+.win-btn.win-close:hover {
+  background: rgba(226, 84, 62, 0.85);
+  color: #fff;
+}
+
+.app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 0 14px 14px;
+}
+
+/* Shared glass panel material. Inside a sheet there are no boxed groups —
+   sections are separated by hairlines and shifts in glass tone only.
+   The detail panel is the single detached floating element (reference look). */
+.workspace,
+.compact,
+.detail {
+  border-radius: 32px;
+  background: var(--glass);
+  border: 1px solid var(--hair);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(28px) saturate(1.25);
+}
+
+/* One sheet holding sidebar + ledger */
+.workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Sidebar (left zone of the sheet, set apart by tone + line) ── */
 .sidebar {
   width: 264px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 20px 16px;
-  background: var(--ink-deep);
-  border-right: 1px solid var(--seam);
+  padding: 0;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.16);
+  border-right: 1px solid var(--hair-faint);
 }
 
 .me-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
-  border-radius: 6px;
-  background: var(--leather);
-  border: 1px solid var(--seam);
-  border-top: 2px solid var(--brass);
+  padding: 16px;
+  background: var(--glass-raised);
+  border-bottom: 1px solid var(--hair-faint);
 }
 
 .me-name {
@@ -236,36 +290,34 @@ select:focus-visible {
   letter-spacing: 1.6px;
   text-transform: uppercase;
   color: var(--dust);
-  margin-top: 6px;
+  padding: 16px 16px 8px;
 }
 
 .team-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .team-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid transparent;
+  padding: 9px 16px;
+  border: none;
   background: transparent;
   color: var(--lamplight);
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
 }
 
 .team-item:hover {
-  background: var(--leather);
+  background: var(--glass-raised);
 }
 
 .team-item.active {
-  background: var(--brass-dim);
-  border-color: rgba(217, 164, 65, 0.35);
+  background: var(--glass-raised);
+  box-shadow: inset 2px 0 0 var(--brass);
 }
 
 .team-item-body {
@@ -299,7 +351,7 @@ select:focus-visible {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--leather-2);
+  background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(217, 164, 65, 0.22);
   font-size: 12px;
   font-weight: 700;
@@ -312,18 +364,45 @@ select:focus-visible {
   font-size: 16px;
 }
 
-.ws-status {
+.notify-toggle {
   margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--dust);
+  padding: 13px 16px;
+  border: none;
+  border-top: 1px solid var(--hair-faint);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notify-toggle:hover {
+  background: var(--glass-raised);
+}
+
+.notify-toggle .dot {
+  background: var(--brass);
+}
+
+.notify-toggle.off .dot {
+  background: var(--dust);
+}
+
+.ws-status {
   display: flex;
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--dust);
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--leather);
-  border: 1px solid var(--seam);
+  padding: 13px 16px;
+  border-top: 1px solid var(--hair-faint);
 }
 
 .dot {
@@ -353,20 +432,21 @@ select:focus-visible {
   }
 }
 
-/* ── Content ─────────────────────────────── */
+/* ── Content panel ───────────────────────── */
 .content {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden; /* keeps the scrolling ledger inside the rounded corners */
 }
 
 .content-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 14px;
-  border-bottom: 1px solid var(--seam);
+  padding: 20px 28px 14px 26px;
+  border-bottom: 1px solid var(--hair-faint);
 }
 
 .content-header h1 {
@@ -379,6 +459,30 @@ select:focus-visible {
   font-size: 12px;
   color: var(--dust);
   margin-top: 4px;
+}
+
+.search {
+  flex: 1;
+  max-width: 300px;
+  margin: 0 20px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--lamplight);
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  padding: 8px 16px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.search::placeholder {
+  color: var(--dust);
+}
+
+.search:focus {
+  outline: none;
+  background: var(--glass-hover);
+  border-color: rgba(217, 164, 65, 0.4);
 }
 
 .stats {
@@ -406,12 +510,12 @@ select:focus-visible {
 }
 
 .ledger::-webkit-scrollbar-thumb {
-  background: var(--seam);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 4px;
 }
 
 .ledger .lint-card {
-  margin: 14px 24px 0;
+  margin: 0;
 }
 
 .ledger-head {
@@ -420,7 +524,7 @@ select:focus-visible {
   column-gap: 12px;
   align-items: center;
   padding: 10px 24px 8px;
-  border-bottom: 1px solid var(--seam);
+  border-bottom: 1px solid var(--hair-faint);
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 700;
@@ -445,7 +549,7 @@ select:focus-visible {
   height: 52px;
   margin: 0 auto 16px;
   clip-path: var(--star-shape);
-  background: var(--leather-2);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .empty-hint {
@@ -456,15 +560,15 @@ select:focus-visible {
 .empty code {
   font-family: var(--font-mono);
   font-size: 11px;
-  background: var(--leather);
-  border: 1px solid var(--seam);
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 /* ── Ledger row ──────────────────────────── */
 .row {
-  border-bottom: 1px solid var(--seam);
+  border-bottom: 1px solid var(--hair-faint);
   animation: fadeIn 0.3s ease both;
   transition: opacity 0.3s;
 }
@@ -477,8 +581,9 @@ select:focus-visible {
   background: var(--brass-dim);
 }
 
-.row.open {
-  background: var(--ink-deep);
+.row.selected {
+  background: var(--glass-raised);
+  box-shadow: inset 2px 0 0 var(--brass);
 }
 
 @keyframes fadeIn {
@@ -493,7 +598,7 @@ select:focus-visible {
   column-gap: 12px;
   align-items: center;
   width: 100%;
-  padding: 8px 24px;
+  padding: 9px 24px;
   border: none;
   background: transparent;
   color: var(--lamplight);
@@ -503,7 +608,7 @@ select:focus-visible {
 }
 
 .row-line:hover {
-  background: var(--leather);
+  background: var(--glass-raised);
 }
 
 .row-type {
@@ -515,7 +620,8 @@ select:focus-visible {
   white-space: nowrap;
 }
 
-.row.severity-critical .row-type {
+.row.severity-critical .row-type,
+.row-type.crit {
   color: var(--vermilion);
 }
 
@@ -572,84 +678,168 @@ select:focus-visible {
   white-space: nowrap;
 }
 
-.row-detail {
-  padding: 2px 24px 16px 72px;
+/* ── Detached floating detail panel ───────────
+   Overlays the sheet instead of joining the layout — the ledger keeps its
+   width, the panel hovers over it (reference: the detached side card). */
+.detail {
+  position: fixed;
+  top: 52px;
+  right: 18px;
+  bottom: 18px;
+  width: 340px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  animation: panelIn 0.25s ease both;
 }
 
-.detail-summary {
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 14px 0 20px;
+}
+
+.detail-close {
+  width: 32px;
+  height: 28px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dust);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.detail-close:hover {
+  background: var(--glass-hover);
+  color: var(--lamplight);
+}
+
+.detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 20px 12px;
+}
+
+.detail-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.detail-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+}
+
+.detail-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 8px 0 16px;
+}
+
+.detail-star {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hair-faint);
+}
+
+.detail-conf {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detail-route {
+  font-size: 11.5px;
+  color: var(--dust);
+  margin-top: 3px;
+}
+
+.detail-section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hair-faint);
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--dust);
+  margin-bottom: 6px;
+}
+
+.detail-text {
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--paper);
-  max-width: 640px;
 }
 
-.detail-reason {
-  font-size: 11.5px;
-  color: var(--dust);
-  margin-top: 6px;
-  max-width: 640px;
+.detail-ref {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--paper);
+  padding: 3px 0;
 }
 
-.wiki-refs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.wiki-ref {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.detail-meta {
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--paper);
-  background: var(--leather);
-  border: 1px solid var(--seam);
-  padding: 4px 10px;
-  border-radius: 4px;
-}
-
-.fb-btn {
-  border: none;
-  background: transparent;
-  font-size: 10.5px;
-  color: var(--dust);
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.12s;
-}
-
-.fb-btn:hover {
-  color: var(--lamplight);
-  text-decoration: underline;
-}
-
-.fb-done {
-  font-size: 10px;
   color: var(--dust);
 }
 
-.card-actions {
+.detail-actions {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--hair-faint);
+}
+
+.detail-actions .btn {
+  width: 100%;
+}
+
+.detail-goto {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 10px 16px;
 }
 
 .btn {
   font-size: 12px;
   font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 5px;
-  border: 1px solid var(--seam);
-  background: var(--leather-2);
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--hair);
+  background: var(--glass-raised);
   color: var(--lamplight);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .btn:hover {
+  background: var(--glass-hover);
   border-color: rgba(217, 164, 65, 0.4);
 }
 
@@ -675,13 +865,11 @@ select:focus-visible {
   font-weight: 600;
 }
 
-/* ── Wiki lint card ──────────────────────── */
+/* ── Wiki lint report (full-bleed strip) ─── */
 .lint-card {
-  background: var(--leather);
-  border: 1px solid var(--seam);
-  border-left: 2px solid var(--sky);
-  border-radius: 6px;
-  padding: 14px 18px;
+  background: var(--glass-raised);
+  border-bottom: 1px solid var(--hair-faint);
+  padding: 14px 24px;
 }
 
 .lint-head {
@@ -722,10 +910,12 @@ select:focus-visible {
 
 /* ── Compact member view ─────────────────── */
 .compact {
-  display: flex;
-  flex-direction: column;
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 14px 14px;
+  overflow: hidden;
 }
 
 .compact-header {
@@ -733,16 +923,37 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--seam);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hair-faint);
 }
 
 .compact-ws {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
   font-size: 9.5px;
+  color: var(--dust);
+}
+
+.notify-toggle-sm {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--brass);
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notify-toggle-sm:hover {
+  background: var(--glass-hover);
+}
+
+.notify-toggle-sm.off {
   color: var(--dust);
 }
 
@@ -763,15 +974,15 @@ select:focus-visible {
   font-family: inherit;
   font-size: 12px;
   color: var(--lamplight);
-  background: var(--leather);
-  border: 1px solid var(--seam);
-  border-radius: 5px;
-  padding: 6px 8px;
+  background: var(--glass-raised);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 6px 12px;
   cursor: pointer;
 }
 
 .compact-user option {
-  background: var(--leather);
+  background: #232327;
 }
 
 .compact-sub {
@@ -797,13 +1008,13 @@ select:focus-visible {
 }
 
 .compact-feed::-webkit-scrollbar-thumb {
-  background: var(--seam);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 3px;
 }
 
 .citem {
   padding: 10px 16px;
-  border-bottom: 1px solid var(--seam);
+  border-bottom: 1px solid var(--hair-faint);
   animation: fadeIn 0.3s ease both;
   transition: opacity 0.3s;
 }

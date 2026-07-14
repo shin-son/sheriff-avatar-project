@@ -1,8 +1,8 @@
-import { BrowserWindow, app, ipcMain } from 'electron'
+import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { TEAM } from '@shared/team'
 import type { AppState, CIEvent, IssueStatus, Role, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
-import { loadUserConfig, saveUserConfig } from './config'
+import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
 import { ToastManager } from './modules/notifications/toast'
@@ -12,13 +12,16 @@ import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback } from './modu
 const issues: SheriffIssue[] = []
 const toasts = new ToastManager()
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let quitting = false
 let wsStatus: WsStatus = 'connecting'
+let notificationsMuted = false
 let userConfig: UserConfig
 
 // Members get a small companion window; the sheriff gets the full dashboard.
 const WINDOW_SIZE: Record<Role, { width: number; height: number; minWidth: number; minHeight: number }> = {
   member: { width: 420, height: 640, minWidth: 380, minHeight: 520 },
-  sheriff: { width: 1180, height: 760, minWidth: 920, minHeight: 600 }
+  sheriff: { width: 1440, height: 700, minWidth: 1080, minHeight: 560 }
 }
 
 function applyWindowMode(role: Role): void {
@@ -29,6 +32,13 @@ function applyWindowMode(role: Role): void {
   mainWindow.center()
 }
 
+// Acrylic (desktop blur-behind) needs Windows 11; older builds fall back to a solid theme color.
+function supportsAcrylic(): boolean {
+  if (process.platform !== 'win32') return false
+  const build = Number(process.getSystemVersion().split('.')[2] ?? 0)
+  return build >= 22000
+}
+
 function createMainWindow(): void {
   const size = WINDOW_SIZE[userConfig.role]
   mainWindow = new BrowserWindow({
@@ -37,11 +47,19 @@ function createMainWindow(): void {
     minWidth: size.minWidth,
     minHeight: size.minHeight,
     autoHideMenuBar: true,
-    backgroundColor: '#16120e',
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#110d0a', symbolColor: '#a8987f', height: 40 },
+    ...(supportsAcrylic()
+      ? { backgroundMaterial: 'acrylic' as const, backgroundColor: '#00000000' }
+      : { backgroundColor: '#161618' }),
     title: 'Sheriff Avatar',
     webPreferences: { preload: join(__dirname, '../preload/index.js') }
+  })
+  // Close hides to the tray so the agent keeps receiving issues; quit via tray menu.
+  mainWindow.on('close', (e) => {
+    if (!quitting) {
+      e.preventDefault()
+      mainWindow?.hide()
+    }
   })
   mainWindow.on('closed', () => (mainWindow = null))
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
@@ -49,6 +67,53 @@ function createMainWindow(): void {
   } else {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+function showMainWindow(): void {
+  if (!mainWindow) {
+    createMainWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function setNotificationsMuted(muted: boolean): void {
+  notificationsMuted = muted
+  saveNotificationsMuted(muted)
+  updateTrayMenu()
+  mainWindow?.webContents.send('notify:muted', muted)
+}
+
+function updateTrayMenu(): void {
+  tray?.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: '열기', click: showMainWindow },
+      {
+        label: notificationsMuted ? '알림 켜기' : '알림 끄기',
+        click: () => setNotificationsMuted(!notificationsMuted)
+      },
+      { type: 'separator' },
+      {
+        label: '종료',
+        click: () => {
+          quitting = true
+          app.quit()
+        }
+      }
+    ])
+  )
+}
+
+function createTray(): void {
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'icon.png')
+    : join(app.getAppPath(), 'resources', 'icon.png')
+  tray = new Tray(nativeImage.createFromPath(iconPath))
+  tray.setToolTip('Sheriff Avatar')
+  tray.on('double-click', showMainWindow)
+  updateTrayMenu()
 }
 
 function isRelevantTo(issue: SheriffIssue, cfg: UserConfig): boolean {
@@ -69,7 +134,7 @@ async function handleCIEvent(event: CIEvent): Promise<void> {
     }
     issues.unshift(issue)
     mainWindow?.webContents.send('issue:new', issue)
-    if (isRelevantTo(issue, userConfig)) toasts.show(issue)
+    if (!notificationsMuted && isRelevantTo(issue, userConfig)) toasts.show(issue)
   } catch (err) {
     console.error('[svp] failed to process CI event', err)
   }
@@ -77,7 +142,9 @@ async function handleCIEvent(event: CIEvent): Promise<void> {
 
 app.whenReady().then(() => {
   userConfig = loadUserConfig()
+  notificationsMuted = loadNotificationsMuted()
   createMainWindow()
+  createTray()
 
   const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
   const client = new CIWebSocketClient(wsUrl, handleCIEvent, (status) => {
@@ -86,7 +153,15 @@ app.whenReady().then(() => {
   })
   client.connect()
 
-  ipcMain.handle('state:get', (): AppState => ({ issues, team: TEAM, user: userConfig, wsStatus }))
+  ipcMain.handle(
+    'state:get',
+    (): AppState => ({ issues, team: TEAM, user: userConfig, wsStatus, notificationsMuted })
+  )
+
+  ipcMain.handle('notify:setMuted', (_e, muted: boolean): boolean => {
+    setNotificationsMuted(muted)
+    return notificationsMuted
+  })
 
   ipcMain.handle('user:set', (_e, userId: string): UserConfig => {
     const member = TEAM.find((m) => m.id === userId)
@@ -110,6 +185,19 @@ app.whenReady().then(() => {
 
   ipcMain.handle('wiki:lint', () => lintWiki())
 
+  // Window controls live in the renderer title bar (titleBarStyle: 'hidden').
+  ipcMain.on('window:minimize', () => mainWindow?.minimize())
+  ipcMain.on('window:maximize', () => {
+    if (!mainWindow) return
+    if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    else mainWindow.maximize()
+  })
+  ipcMain.on('window:close', () => mainWindow?.close())
+
+  ipcMain.on('ticket:open', (_e, url: string) => {
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+  })
+
   ipcMain.on('wiki:feedback', (_e, noteTitle: string, helpful: boolean) => {
     recordFeedback(noteTitle, helpful)
   })
@@ -131,6 +219,10 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
   })
+})
+
+app.on('before-quit', () => {
+  quitting = true
 })
 
 app.on('window-all-closed', () => {

@@ -24,9 +24,7 @@
 
 :root {
   --ink-deep: #110d0a;
-  --leather: #201a14;
   --leather-2: #2b2219;
-  --seam: #372c20;
   --lamplight: #f0e8d8;
   --dust: #a8987f;
   --brass: #d9a441;
@@ -65,12 +63,14 @@ body.toast-body {
   align-items: flex-start;
   gap: 12px;
   margin: 8px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: var(--leather);
-  border: 1px solid var(--seam);
+  padding: 13px 15px;
+  border-radius: 22px;
+  /* The toast window is transparent (no acrylic), so fake the glass with a
+     high-alpha tint + highlight border to match the main window's panels. */
+  background: rgba(30, 30, 34, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-left: 3px solid var(--brass);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   color: var(--lamplight);
   cursor: pointer;
   animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.3, 1) both;

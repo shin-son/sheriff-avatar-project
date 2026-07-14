@@ -10,10 +10,12 @@ interface Props {
   team: TeamMember[]
   user: UserConfig
   wsStatus: WsStatus
+  muted: boolean
   onSelectUser: (userId: string) => void
+  onToggleMuted: () => void
 }
 
-export default function Sidebar({ team, user, wsStatus, onSelectUser }: Props) {
+export default function Sidebar({ team, user, wsStatus, muted, onSelectUser, onToggleMuted }: Props) {
   const me = team.find((m) => m.id === user.userId)
   return (
     <aside className="sidebar">
@@ -47,6 +49,13 @@ export default function Sidebar({ team, user, wsStatus, onSelectUser }: Props) {
         ))}
       </div>
 
+      <button
+        className={`notify-toggle ${muted ? 'off' : ''}`}
+        title={muted ? '알림 팝업 다시 켜기' : '알림 팝업 끄기 (이슈는 목록에 계속 쌓임)'}
+        onClick={onToggleMuted}
+      >
+        <span className="dot" /> {muted ? '알림 꺼짐' : '알림 켜짐'}
+      </button>
       <div className={`ws-status ${wsStatus}`}>
         <span className="dot" /> {WS_LABEL[wsStatus]}
       </div>
