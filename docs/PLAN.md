@@ -12,12 +12,12 @@
 
 | 담당 | 개발 | 검토(리뷰) |
 |---|---|---|
-| 손신 | `modules/jira/`: **F1 폴러**(신규 티켓 감지, 처리 키 영속화로 중복 방지, 지수 백오프) + **F5 라이터 기초**(요약 댓글·assignee 지정) + `mock/jira-server.mjs`(포트 8792, 데모 트리거 포함 — [API.md §4](./API.md)) | 김병재의 PR |
-| 김병재 | `modules/hub/`: **F6 클라이언트 허브**(WS 서버 8791, hello/welcome, 하트비트, 서버 측 필터링, 재접속 시 배정분 복원) + `modules/hub-client/`(클라이언트 모드의 서버 접속 — 기존 `websocket/` 대체) + 컴팩트(member) 뷰를 hub-client 연결로 전환 | 김민석의 PR |
-| 김민석 | `modules/wiki/`: **F2 query 개선** — vault 노트 스키마(frontmatter) 확정, 검색 정확도 개선(case-log 검색 포함), case-log 포맷 정리, 실제 팀 모듈/담당자 목록 반영 (`shared/team.ts` 외부 설정화 + `jiraUsername` 매핑) | 손신의 PR |
+| 김병재 | `modules/jira/` + 서버(backend): **F1 Jira 폴러** — 신규 티켓 감지, **처리 티켓 테이블(중복 방지 저장소)** 설계·영속화, 지수 백오프 + 폴러 검증용 `mock/jira-server.mjs`(포트 8792, 데모 트리거 — [API.md §4](./API.md)) | 김민석의 PR |
+| 손신 | `modules/hub/`: **F6 서버 → 클라이언트 push 전용 채널** — WS 서버(8791), hello/welcome 스냅샷, 본인 배정분만 서버 측 필터링해 push, 하트비트. 이번 주는 **단방향(push)만** — C→S 메시지(issue:ack) 배선은 다음 주 | 김병재의 PR |
+| 김민석 | 클라이언트(frontend): `modules/hub-client/` 서버 접속(기존 `websocket/` 대체) + **push 수신 후 화면 구성** — `issue:assigned`/`issue:updated`를 대장·컴팩트 뷰에 반영, 재접속 시 welcome 스냅샷으로 상태 복원 | 손신의 PR |
 
-**마일스톤 M1 (7/18):** mock Jira 기준 전체 플로우(폴링→분류(stub)→배정→Jira 댓글→클라이언트 push→해결→전이→ingest)가
-서버 1대 + 클라이언트 2대 구성으로 3인 PC 전부에서 안정 동작.
+**마일스톤 M1 (7/18):** mock Jira 기준 **폴링 → 분류(stub) → 배정 → 서버 push → 클라이언트 화면 표시**가
+서버 1대 + 클라이언트 구성으로 안정 동작 (Jira 댓글·해결 감지·ingest는 Week 2).
 
 ## Week 2 — 7/19 ~ 7/25: 핵심 지능
 
@@ -25,7 +25,7 @@
 |---|---|---|
 | 손신 | `classifier/`: **F3 실제 LLM(Claude API) 연동** — wiki 노트를 컨텍스트로 분류/요약/신뢰도 산출 ([API.md §3](./API.md) 계약: 30초 타임아웃, 실패 시 `confidence: 0` fallback), API key 보안(.env, 사내 프록시 고려) | 김병재의 PR |
 | 김병재 | `assignment/` + `hub/` + `ui/`: **F4 당번 수동 재배정**(human-in-the-loop — hub push로 기존/신규 담당자 양쪽 반영, Jira assignee 갱신 + 갱신 댓글), 배정 이력 표시 | 김민석의 PR |
-| 김민석 | `wiki/` + `jira/`: **F7 해결 감지→ingest**(앱 "해결 완료" 경로·Jira 직접 Done 경로 모두, 중복 ingest 방지) + **F8 lint/feedback 고도화**(감점 임계값·정리 자동화, feedback의 hub 경유 배선) + 이슈 해결 시 known-failure 초안 자동 생성(LLM) | 손신의 PR |
+| 김민석 | `wiki/` + `jira/`: **F7 해결 감지→ingest**(Jira Done 폴링 단일 경로 — [ARCHITECTURE.md](./ARCHITECTURE.md), 중복 ingest 방지) + **F8 lint/feedback 고도화**(해결 확정 시 원인 일치/불일치 toast, 감점 임계값, feedback의 hub 경유 배선) + 이슈 해결 시 LLM이 해결 코멘트 기반 case-log 작성 | 손신의 PR |
 
 **마일스톤 M2 (7/25):** LLM 실분류 + 당번 재배정 + Jira 댓글·상태 전이가 mock 시나리오로 검증됨.
 신뢰도 80점 기준 라우팅이 실데이터로 검증되고, [DEMO-SCENARIO.md](./DEMO-SCENARIO.md) 장면 1~3 리허설 가능.
