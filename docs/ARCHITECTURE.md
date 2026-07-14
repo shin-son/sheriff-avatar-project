@@ -22,7 +22,7 @@ flowchart LR
         CLS --> ROUTER["assignment/ 라우터"]
         ROUTER --> HUB["hub/ 클라이언트 WS 서버"]
         ROUTER --> DASH["당번 대시보드 UI"]
-        HUB -- "resolve → ingest" --> WIKI
+        POLLER -- "Done 확정 → LLM ingest" --> WIKI
     end
     JIRA -- "REST 폴링 (신규/상태변경)" --> POLLER
     ROUTER -- "요약 댓글 + assignee 지정" --> JIRA
@@ -41,9 +41,11 @@ flowchart LR
 5. **route** — 신뢰도 **>80**: 해당 모듈 담당자 / **≤80**: 당번 (human-in-the-loop, 당번이 수동 재배정 가능)
 6. **Jira 댓글** — 서버가 티켓에 요약 댓글(분류·신뢰도·추정 원인·참고 wiki·배정 근거)을 달고 assignee를 지정
 7. **push** — 배정된 팀원의 클라이언트로 `issue:assigned` 전송 → 우하단 팝업. 당번 대시보드에는 전체 이슈 표시
-8. 담당자 처리 → 앱에서 "해결 완료" → 서버가 Jira 상태 전이(transition) 호출 → 폴링으로 Done 확인
-9. **ingest** — 해결 확정 시 `case-log.md` 기록 + `index.md`/`log.md` 갱신 → **다음 같은 유형 이슈의 신뢰도가 올라간다** (compounding)
-10. **feedback/lint** — 담당자의 노트 👍/👎, 당번의 주기 점검으로 저품질 노트 정리 (기존과 동일)
+8. 담당자 처리 → **Jira에서 해결 코멘트 + Done 전이** (또는 앱의 "해결 완료" → 서버가 전이 호출) → 폴링으로 Done 확인
+9. **ingest** — Done 확정 시 **LLM이 Jira 해결 코멘트를 근거로 `case-log.md` 항목을 작성** + `index.md`/`log.md` 갱신
+   → **다음 같은 유형 이슈의 신뢰도가 올라간다** (compounding)
+10. **feedback/lint** — 담당자의 노트 👍/👎, 당번의 주기 점검으로 저품질 노트 정리. Done 확정 시 서버가 담당자 앱에
+    "참조 노트가 도움됐나요?" toast를 push해 피드백 접점을 유지한다 (해결이 Jira로 이동해도 피드백 루프 보존)
 
 ## 상태 관리 — Jira가 source of truth
 
@@ -51,7 +53,7 @@ flowchart LR
 |---|---|---|
 | `new` | To Do (Open) | CI/CD가 티켓 생성 |
 | `acknowledged` | In Progress | 담당자가 앱에서 "확인" → 서버가 transition 호출 |
-| `resolved` | Done | 담당자가 앱에서 "해결 완료" → 서버가 transition 호출 → 폴링으로 확정 |
+| `resolved` | Done | 담당자가 **Jira에서 직접 Done 처리** (기본 경로) 또는 앱 "해결 완료" → 폴링으로 확정 |
 
 - 담당자가 Jira에서 직접 상태를 바꿔도 서버가 폴링으로 감지해 앱에 반영한다 (양방향 동기화, Jira 우선).
 - ingest는 **Jira에서 Done이 확인된 시점**에 1회만 수행한다.
@@ -84,9 +86,13 @@ src/main/
 | 동작 | 트리거 | 하는 일 |
 |---|---|---|
 | query | 신규 티켓 감지 시 자동 | 관련 노트 검색, 부정 피드백 노트는 감점 |
-| ingest | Jira Done 확정 시 자동 | case-log 기록, index/log 갱신 |
+| ingest | Jira Done 확정 시 자동 (1회) | **LLM이 Jira 해결 코멘트를 근거로 case-log 작성**, index/log 갱신 |
 | lint | 당번의 "WIKI 점검" 버튼 | 고아 노트·부정 피드백 노트 보고 |
-| feedback | 클라이언트의 노트 👍/👎 (hub 경유) | 유용성 투표 저장 (👎3+ → query 감점) |
+| feedback | 클라이언트의 노트 👍/👎 (hub 경유) + Done 확정 시 피드백 toast | 유용성 투표 저장 (👎3+ → query 감점) |
+
+- ingest 중 LLM이 "참조 노트가 가리킨 원인 ≠ 실제 해결 내용"을 감지하면 **lint 보고로만** 전달한다.
+  query 감점은 사람의 👍/👎 투표만 반영 — LLM 판단은 노이즈가 있어 보조 신호로만 쓴다.
+- Jira는 reopen이 가능하므로 ingest 1회 규칙에는 처리 완료 키 기록이 필요하다 (reopen → 재해결 시 중복 기록 방지).
 
 ## 현재 구현과의 차이
 
