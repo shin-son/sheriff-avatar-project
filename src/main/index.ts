@@ -1,5 +1,11 @@
+import { config as loadDotenv } from 'dotenv'
 import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron'
 import { join } from 'path'
+
+// Local config from <project root>/.env (gitignored) — shell env vars still win.
+// NODE_EXTRA_CA_CERTS is the one exception: Node reads it at process start, so it
+// cannot come from .env (see docs/SETUP.md).
+loadDotenv({ quiet: true })
 import { TEAM } from '@shared/team'
 import type { AppState, CIEvent, IssueStatus, Role, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
 import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
