@@ -44,8 +44,9 @@ flowchart LR
 8. 담당자 처리 → **Jira에서 해결 코멘트 + Done 전이** (또는 앱의 "해결 완료" → 서버가 전이 호출) → 폴링으로 Done 확인
 9. **ingest** — Done 확정 시 **LLM이 Jira 해결 코멘트를 근거로 `case-log.md` 항목을 작성** + `index.md`/`log.md` 갱신
    → **다음 같은 유형 이슈의 신뢰도가 올라간다** (compounding)
-10. **feedback/lint** — 담당자의 노트 👍/👎, 당번의 주기 점검으로 저품질 노트 정리. Done 확정 시 서버가 담당자 앱에
-    "참조 노트가 도움됐나요?" toast를 push해 피드백 접점을 유지한다 (해결이 Jira로 이동해도 피드백 루프 보존)
+10. **feedback/lint** — Done 확정 시 서버가 담당자 앱에 "참조 노트의 원인이 실제 원인과 일치했나요?" toast를
+    push (일치/불일치 1클릭, 선택 입력). 불일치 누적 노트는 query 감점 + lint 정리 후보 (해결이 Jira로 이동해도
+    피드백 접점 유지)
 
 ## 상태 관리 — Jira가 source of truth
 
@@ -85,14 +86,27 @@ src/main/
 
 | 동작 | 트리거 | 하는 일 |
 |---|---|---|
-| query | 신규 티켓 감지 시 자동 | 관련 노트 검색, 부정 피드백 노트는 감점 |
+| query | 신규 티켓 감지 시 자동 | 관련 노트 검색, 불일치 누적 노트는 감점 |
 | ingest | Jira Done 확정 시 자동 (1회) | **LLM이 Jira 해결 코멘트를 근거로 case-log 작성**, index/log 갱신 |
-| lint | 당번의 "WIKI 점검" 버튼 | 고아 노트·부정 피드백 노트 보고 |
-| feedback | 클라이언트의 노트 👍/👎 (hub 경유) + Done 확정 시 피드백 toast | 유용성 투표 저장 (👎3+ → query 감점) |
+| lint | 당번의 "WIKI 점검" 버튼 | 고아 노트·불일치 누적 노트(사람 판정 + LLM 대조) 보고 |
+| feedback | Done 확정 시 담당자 toast (hub 경유) | "참조 노트의 원인 = 실제 원인?" **일치/불일치** 판정 저장 (불일치 3+ → query 감점) |
 
-- ingest 중 LLM이 "참조 노트가 가리킨 원인 ≠ 실제 해결 내용"을 감지하면 **lint 보고로만** 전달한다.
-  query 감점은 사람의 👍/👎 투표만 반영 — LLM 판단은 노이즈가 있어 보조 신호로만 쓴다.
+- 질문은 "도움됐나요"가 아니라 **원인 일치/불일치**로 묻는다 — 담당자는 문서 품질을 평가할 수 없지만,
+  방금 해결한 이슈의 실제 원인과 노트가 맞았는지는 정확히 안다. 상시 👍/👎 버튼은 두지 않는다.
+- **LLM 대조 (보조 신호)**: ingest 때 LLM이 노트 내용과 해결 코멘트를 대조해 불일치를 감지하면
+  근거 인용을 포함한 structured output(`{ match, quotedNote, quotedResolution }`)으로 **lint 후보에만** 올린다.
+  query 감점 권한은 사람 판정에만 있고, 위키 수정·삭제는 어떤 경우에도 자동으로 하지 않는다 (사람 PR 전용).
 - Jira는 reopen이 가능하므로 ingest 1회 규칙에는 처리 완료 키 기록이 필요하다 (reopen → 재해결 시 중복 기록 방지).
+
+### vault 저장소와 리뷰 경계
+
+- **이 repo의 `wiki-vault/`는 시드·데모 데이터 전용.** 운영 vault에는 사내 CI 로그·이슈 내용·해결 코멘트가 쌓이므로
+  **사내 git 저장소에 별도로 두고, 이 repo(GitHub)로는 절대 push하지 않는다** (CLAUDE.md 절대 규칙 2·4).
+- 리뷰는 파일 두 계층으로 나눈다:
+  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
+    해결 건마다 PR을 만드는 것은 비현실적.
+  - **사람이 관리하는 노트** (`modules/*.md`의 known-failure, playbook) — 수정·삭제는 PR 리뷰를 거친다.
+    lint가 지목한 노트의 diff를 리뷰하는 이 시점이 사람이 사실성을 검토하는 지점이다.
 
 ## 현재 구현과의 차이
 
