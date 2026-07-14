@@ -158,14 +158,16 @@ select:focus-visible {
   height: 100vh;
 }
 
-/* Bare strip over the glass void — brand left, window controls right. */
+/* Title bar: acrylic mode renders it inside the glass sheet (top row);
+   frameless mode floats it as its own pill (override below). */
 .titlebar {
-  height: 44px;
+  height: 46px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 8px 0 18px;
+  padding: 0 10px 0 20px;
+  border-bottom: 1px solid var(--hair-faint);
   -webkit-app-region: drag;
 }
 
@@ -220,7 +222,7 @@ select:focus-visible {
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 0 14px 14px;
+  padding: 10px; /* thin acrylic halo — the sheet reads as the whole window */
 }
 
 /* Shared glass panel material. Inside a sheet there are no boxed groups —
@@ -236,12 +238,19 @@ select:focus-visible {
   backdrop-filter: blur(28px) saturate(1.25);
 }
 
-/* One sheet holding sidebar + ledger */
+/* One sheet holding the title bar + sidebar + ledger */
 .workspace {
   flex: 1;
   min-width: 0;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.workspace-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 
 /* ── Sidebar (left zone of the sheet, set apart by tone + line) ── */
@@ -683,9 +692,9 @@ select:focus-visible {
    width, the panel hovers over it (reference: the detached side card). */
 .detail {
   position: fixed;
-  top: 52px;
-  right: 18px;
-  bottom: 18px;
+  top: 66px;
+  right: 20px;
+  bottom: 20px;
   width: 340px;
   z-index: 20;
   display: flex;
@@ -914,7 +923,7 @@ select:focus-visible {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin: 0 14px 14px;
+  margin: 10px;
   overflow: hidden;
 }
 
@@ -1100,4 +1109,37 @@ select:focus-visible {
   align-items: center;
   gap: 8px;
   margin-top: 10px;
+}
+
+/* ── Frameless experiment (SVP_GLASS=frameless) ──────────────────────────
+   The OS window is an invisible transparent rectangle; panels float directly
+   over the desktop with a fully custom silhouette. No acrylic blur exists in
+   this mode, so panels use a denser tint to stay readable. */
+body.frameless {
+  background: transparent;
+}
+
+body.frameless .titlebar {
+  height: 44px;
+  margin: 6px 14px 0;
+  padding: 0 8px 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--hair);
+  background: rgba(22, 22, 26, 0.92);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.45);
+}
+
+body.frameless .app {
+  padding: 12px 14px 14px;
+}
+
+body.frameless .compact {
+  margin: 12px 14px 14px;
+}
+
+body.frameless .workspace,
+body.frameless .compact,
+body.frameless .detail {
+  border-radius: 40px;
+  background: rgba(22, 22, 26, 0.94);
 }

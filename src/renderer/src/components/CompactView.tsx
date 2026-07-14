@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { AppState, IssueStatus, SheriffIssue, WsStatus } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
@@ -11,6 +12,8 @@ interface Props {
   state: AppState
   issues: SheriffIssue[]
   focusId: string | null
+  /** In acrylic mode the title bar renders inside this sheet (frameless: floats outside). */
+  titlebar?: ReactNode
   onSelectUser: (userId: string) => void
   onSetStatus: (id: string, status: IssueStatus) => void
   onToggleMuted: () => void
@@ -21,6 +24,7 @@ export default function CompactView({
   state,
   issues,
   focusId,
+  titlebar,
   onSelectUser,
   onSetStatus,
   onToggleMuted
@@ -29,6 +33,7 @@ export default function CompactView({
 
   return (
     <div className="compact">
+      {titlebar}
       <header className="compact-header">
         <div className={`compact-ws ${state.wsStatus}`}>
           <span className="dot" /> {WS_LABEL[state.wsStatus]}

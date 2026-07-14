@@ -81,7 +81,9 @@ export default function App() {
       new Date(b.event.timestamp).getTime() - new Date(a.event.timestamp).getTime()
   )
 
-  // Window chrome is hidden (titleBarOverlay); this bar hosts the brand and drag region.
+  // Window chrome is hidden; this bar hosts the brand, drag region, and window controls.
+  // Acrylic mode: rendered inside the glass sheet. Frameless mode: floats as its own pill.
+  const frameless = window.svp.frameless
   const titlebar = (
     <div className="titlebar">
       <span className="brand-star brand-star-sm" aria-hidden="true" />
@@ -106,11 +108,12 @@ export default function App() {
     const myIssues = sorted.filter((i) => i.assignment.assigneeId === state.user.userId)
     return (
       <div className="shell">
-        {titlebar}
+        {frameless && titlebar}
         <CompactView
           state={state}
           issues={myIssues}
           focusId={focusId}
+          titlebar={frameless ? undefined : titlebar}
           onSelectUser={selectUser}
           onSetStatus={setStatus}
           onToggleMuted={toggleMuted}
@@ -133,101 +136,104 @@ export default function App() {
 
   return (
     <div className="shell">
-      {titlebar}
+      {frameless && titlebar}
       <div className="app">
         <div className="workspace">
-          <Sidebar
-            team={state.team}
-            user={state.user}
-            wsStatus={state.wsStatus}
-            muted={state.notificationsMuted}
-            onSelectUser={selectUser}
-            onToggleMuted={toggleMuted}
-          />
-          <main className="content">
-            <header className="content-header">
-              <div>
-                <h1>이슈 대장</h1>
-                <p className="subtitle">당번 모드 — 팀 전체 이슈가 표시됩니다</p>
-              </div>
-              <input
-                className="search"
-                type="search"
-                placeholder="검색 — 제목 · 모듈 · 담당"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                spellCheck={false}
-              />
-              <div className="stats">
-                <span className="stat">NEW {count('new')}</span>
-                <span className="stat">진행중 {count('acknowledged')}</span>
-                <span className="stat">해결 {count('resolved')}</span>
-                <button
-                  className="btn"
-                  onClick={() => void window.svp.wikiLint().then(setLintReport)}
-                  title="wiki 상태 점검 (고아 노트, 부정 피드백 노트)"
-                >
-                  WIKI 점검
-                </button>
-              </div>
-            </header>
-            <section className="ledger">
-              {lintReport && (
-                <div className="lint-card">
-                  <div className="lint-head">
-                    <strong>WIKI 점검 결과</strong>
-                    <span className="lint-count">노트 {lintReport.noteCount}개</span>
-                    <button className="toast-close" onClick={() => setLintReport(null)}>
-                      ✕
-                    </button>
-                  </div>
-                  {lintReport.suggestions.length === 0 ? (
-                    <p className="lint-ok">문제 없음</p>
-                  ) : (
-                    <ul className="lint-list">
-                      {lintReport.suggestions.map((s) => (
-                        <li key={s}>{s}</li>
-                      ))}
-                    </ul>
-                  )}
+          {!frameless && titlebar}
+          <div className="workspace-body">
+            <Sidebar
+              team={state.team}
+              user={state.user}
+              wsStatus={state.wsStatus}
+              muted={state.notificationsMuted}
+              onSelectUser={selectUser}
+              onToggleMuted={toggleMuted}
+            />
+            <main className="content">
+              <header className="content-header">
+                <div>
+                  <h1>이슈 대장</h1>
+                  <p className="subtitle">당번 모드 — 팀 전체 이슈가 표시됩니다</p>
                 </div>
-              )}
-              {visible.length === 0 && (
-                <div className="empty">
-                  <div className="empty-star" aria-hidden="true" />
-                  {q ? (
-                    <p>『{query.trim()}』에 해당하는 이슈가 없습니다</p>
-                  ) : (
-                    <>
-                      <p>아직 이슈가 없습니다</p>
-                      <p className="empty-hint">
-                        mock CI 서버를 실행하세요: <code>npm run mock:ci</code>
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-              {visible.length > 0 && (
-                <div className="ledger-head">
-                  <span>신뢰도</span>
-                  <span>유형</span>
-                  <span>제목</span>
-                  <span>모듈 · 브랜치</span>
-                  <span>담당</span>
-                  <span className="th-time">시간</span>
-                </div>
-              )}
-              {visible.map((issue) => (
-                <IssueCard
-                  key={issue.event.id}
-                  issue={issue}
-                  selected={issue.event.id === selectedId}
-                  highlighted={focusId === issue.event.id}
-                  onSelect={setSelectedId}
+                <input
+                  className="search"
+                  type="search"
+                  placeholder="검색 — 제목 · 모듈 · 담당"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  spellCheck={false}
                 />
-              ))}
-            </section>
-          </main>
+                <div className="stats">
+                  <span className="stat">NEW {count('new')}</span>
+                  <span className="stat">진행중 {count('acknowledged')}</span>
+                  <span className="stat">해결 {count('resolved')}</span>
+                  <button
+                    className="btn"
+                    onClick={() => void window.svp.wikiLint().then(setLintReport)}
+                    title="wiki 상태 점검 (고아 노트, 부정 피드백 노트)"
+                  >
+                    WIKI 점검
+                  </button>
+                </div>
+              </header>
+              <section className="ledger">
+                {lintReport && (
+                  <div className="lint-card">
+                    <div className="lint-head">
+                      <strong>WIKI 점검 결과</strong>
+                      <span className="lint-count">노트 {lintReport.noteCount}개</span>
+                      <button className="toast-close" onClick={() => setLintReport(null)}>
+                        ✕
+                      </button>
+                    </div>
+                    {lintReport.suggestions.length === 0 ? (
+                      <p className="lint-ok">문제 없음</p>
+                    ) : (
+                      <ul className="lint-list">
+                        {lintReport.suggestions.map((s) => (
+                          <li key={s}>{s}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {visible.length === 0 && (
+                  <div className="empty">
+                    <div className="empty-star" aria-hidden="true" />
+                    {q ? (
+                      <p>『{query.trim()}』에 해당하는 이슈가 없습니다</p>
+                    ) : (
+                      <>
+                        <p>아직 이슈가 없습니다</p>
+                        <p className="empty-hint">
+                          mock CI 서버를 실행하세요: <code>npm run mock:ci</code>
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+                {visible.length > 0 && (
+                  <div className="ledger-head">
+                    <span>신뢰도</span>
+                    <span>유형</span>
+                    <span>제목</span>
+                    <span>모듈 · 브랜치</span>
+                    <span>담당</span>
+                    <span className="th-time">시간</span>
+                  </div>
+                )}
+                {visible.map((issue) => (
+                  <IssueCard
+                    key={issue.event.id}
+                    issue={issue}
+                    selected={issue.event.id === selectedId}
+                    highlighted={focusId === issue.event.id}
+                    onSelect={setSelectedId}
+                  />
+                ))}
+              </section>
+            </main>
+          </div>
         </div>
       </div>
       {selected && (

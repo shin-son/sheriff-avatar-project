@@ -39,20 +39,40 @@ function supportsAcrylic(): boolean {
   return build >= 22000
 }
 
+// Default chrome: transparent frameless window — panels float directly over the
+// desktop with a fully custom silhouette (no drag-resize/snap: Windows disables
+// thickFrame on transparent windows). SVP_GLASS=acrylic switches to the standard
+// window with desktop blur-behind.
+type GlassMode = 'frameless' | 'acrylic' | 'solid'
+
+function glassMode(): GlassMode {
+  if (process.env.SVP_GLASS === 'acrylic') return supportsAcrylic() ? 'acrylic' : 'solid'
+  return 'frameless'
+}
+
+function windowChrome(mode: GlassMode): Electron.BrowserWindowConstructorOptions {
+  if (mode === 'frameless') return { transparent: true, frame: false, backgroundColor: '#00000000' }
+  if (mode === 'acrylic')
+    return { titleBarStyle: 'hidden', backgroundMaterial: 'acrylic', backgroundColor: '#00000000' }
+  return { titleBarStyle: 'hidden', backgroundColor: '#161618' }
+}
+
 function createMainWindow(): void {
   const size = WINDOW_SIZE[userConfig.role]
+  const mode = glassMode()
+  console.log(`[svp] glass mode: ${mode} (SVP_GLASS=${process.env.SVP_GLASS ?? '<unset>'})`)
   mainWindow = new BrowserWindow({
     width: size.width,
     height: size.height,
     minWidth: size.minWidth,
     minHeight: size.minHeight,
     autoHideMenuBar: true,
-    titleBarStyle: 'hidden',
-    ...(supportsAcrylic()
-      ? { backgroundMaterial: 'acrylic' as const, backgroundColor: '#00000000' }
-      : { backgroundColor: '#161618' }),
+    ...windowChrome(mode),
     title: 'Sheriff Avatar',
-    webPreferences: { preload: join(__dirname, '../preload/index.js') }
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      additionalArguments: mode === 'frameless' ? ['--svp-frameless'] : []
+    }
   })
   // Close hides to the tray so the agent keeps receiving issues; quit via tray menu.
   mainWindow.on('close', (e) => {
