@@ -1,10 +1,20 @@
 import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { TEAM } from '@shared/team'
-import type { AppState, CIEvent, IssueStatus, Role, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
+import type {
+  AppState,
+  CIEvent,
+  IssueStatus,
+  Role,
+  SheriffIssue,
+  TeamMember,
+  UserConfig,
+  WsStatus
+} from '@shared/types'
 import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
+import { HubClient } from './modules/hub-client/client'
 import { ToastManager } from './modules/notifications/toast'
 import { CIWebSocketClient } from './modules/websocket/client'
 import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback, vaultDir } from './modules/wiki'
@@ -17,6 +27,9 @@ let quitting = false
 let wsStatus: WsStatus = 'connecting'
 let notificationsMuted = false
 let userConfig: UserConfig
+// Hardcoded TEAM until the first server:welcome replaces it (server owns the roster).
+let team: TeamMember[] = TEAM
+let transport: { dispose(): void } | null = null
 
 // Members get a small companion window; the sheriff gets the full dashboard.
 const WINDOW_SIZE: Record<Role, { width: number; height: number; minWidth: number; minHeight: number }> = {
@@ -160,22 +173,67 @@ async function handleCIEvent(event: CIEvent): Promise<void> {
   }
 }
 
+function setWsStatus(status: WsStatus): void {
+  wsStatus = status
+  mainWindow?.webContents.send('ws:status', status)
+}
+
+// member → sheriff hub (server-filtered push), sheriff → CI WS directly
+// (the sheriff app becomes the hub server itself once modules/hub/ lands — F6).
+// Restarted on user switch so the hub sees the new clientId.
+function startTransport(): void {
+  transport?.dispose()
+  if (userConfig.role === 'member') {
+    const url = process.env.SVP_SERVER_URL ?? 'ws://localhost:8791'
+    const client = new HubClient(
+      url,
+      { clientId: userConfig.userId, appVersion: app.getVersion() },
+      {
+        onWelcome: (snapshot) => {
+          team = snapshot.team
+          issues.splice(0, issues.length, ...snapshot.issues)
+          mainWindow?.webContents.send('state:refresh')
+        },
+        onIssueAssigned: ({ issue }) => {
+          issues.unshift(issue)
+          mainWindow?.webContents.send('issue:new', issue)
+          if (!notificationsMuted) toasts.show(issue)
+        },
+        onIssueUpdated: ({ issue }) => {
+          const idx = issues.findIndex((i) => i.event.id === issue.event.id)
+          if (idx === -1) return
+          // Reassigned-away issues keep flowing here; the renderer hides them
+          // by filtering on issue.assignment (docs/API.md §1).
+          issues[idx] = issue
+          mainWindow?.webContents.send('issue:updated', issue)
+        },
+        onServerError: (e) => {
+          // TODO(SVP-7): surface as a toast once C→S wiring lands in Week 2.
+          console.error(`[svp:hub-client] server error ${e.code}: ${e.message}`)
+        },
+        onStatus: setWsStatus
+      }
+    )
+    client.connect()
+    transport = client
+  } else {
+    const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
+    const client = new CIWebSocketClient(wsUrl, handleCIEvent, setWsStatus)
+    client.connect()
+    transport = client
+  }
+}
+
 app.whenReady().then(() => {
   userConfig = loadUserConfig()
   notificationsMuted = loadNotificationsMuted()
   createMainWindow()
   createTray()
-
-  const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
-  const client = new CIWebSocketClient(wsUrl, handleCIEvent, (status) => {
-    wsStatus = status
-    mainWindow?.webContents.send('ws:status', status)
-  })
-  client.connect()
+  startTransport()
 
   ipcMain.handle(
     'state:get',
-    (): AppState => ({ issues, team: TEAM, user: userConfig, wsStatus, notificationsMuted })
+    (): AppState => ({ issues, team, user: userConfig, wsStatus, notificationsMuted })
   )
 
   ipcMain.handle('notify:setMuted', (_e, muted: boolean): boolean => {
@@ -184,12 +242,13 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('user:set', (_e, userId: string): UserConfig => {
-    const member = TEAM.find((m) => m.id === userId)
-    if (member) {
+    const member = team.find((m) => m.id === userId)
+    if (member && member.id !== userConfig.userId) {
       const roleChanged = member.role !== userConfig.role
       userConfig = { userId: member.id, role: member.role }
       saveUserConfig(userConfig)
       if (roleChanged) applyWindowMode(member.role)
+      startTransport() // reconnect as the new clientId (hub filters per client)
     }
     return userConfig
   })

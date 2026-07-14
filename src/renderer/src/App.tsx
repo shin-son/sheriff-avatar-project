@@ -37,6 +37,7 @@ export default function App() {
             : s
         )
       ),
+      window.svp.onStateRefresh(() => void window.svp.getState().then(setState)),
       window.svp.onWsStatus((wsStatus) => setState((s) => (s ? { ...s, wsStatus } : s))),
       window.svp.onNotifyMuted((muted) =>
         setState((s) => (s ? { ...s, notificationsMuted: muted } : s))

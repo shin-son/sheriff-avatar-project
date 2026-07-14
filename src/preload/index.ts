@@ -15,6 +15,7 @@ const api = {
   setIssueStatus: (id: string, status: IssueStatus) => ipcRenderer.invoke('issue:setStatus', id, status),
   onIssueNew: (cb: (payload: unknown) => void) => subscribe('issue:new', cb),
   onIssueUpdated: (cb: (payload: unknown) => void) => subscribe('issue:updated', cb),
+  onStateRefresh: (cb: (payload: unknown) => void) => subscribe('state:refresh', cb),
   onWsStatus: (cb: (payload: unknown) => void) => subscribe('ws:status', cb),
   onIssueFocus: (cb: (payload: unknown) => void) => subscribe('issue:focus', cb),
   onToastData: (cb: (payload: unknown) => void) => subscribe('toast:data', cb),
