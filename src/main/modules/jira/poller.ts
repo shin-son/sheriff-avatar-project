@@ -5,6 +5,13 @@ export interface JiraPollerOptions {
   baseUrl: string
   project: string
   label: string
+  /**
+   * Overrides the default `project = X AND labels = Y` filter when the team's CI
+   * tickets are identified differently (e.g. by component/assignee). The poller
+   * appends the created-time bound and ordering. Keep the actual corporate value
+   * in env only — never in the repo.
+   */
+  jql?: string
   pollMs: number
   pat?: string
   /** Path of the processed-ticket dedup store (JSON, under userData). */
@@ -122,8 +129,9 @@ export class JiraPoller {
   // TODO(SVP-7): also poll tracked keys with `updated >= lastPoll` for status changes
   // (Done detection → ingest, Week 2 / F7).
   private async fetchNewTickets(): Promise<JiraIssue[]> {
+    const baseJql = this.opts.jql ?? `project = ${this.opts.project} AND labels = ${this.opts.label}`
     const bounds = this.store.lastPoll ? ` AND created >= "${toJqlMinute(this.store.lastPoll)}"` : ''
-    const jql = `project = ${this.opts.project} AND labels = ${this.opts.label}${bounds} ORDER BY created ASC`
+    const jql = `${baseJql}${bounds} ORDER BY created ASC`
     const url = `${this.opts.baseUrl}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,labels,status,created,assignee`
     const res = await fetch(url, {
       headers: this.opts.pat ? { Authorization: `Bearer ${this.opts.pat}` } : {}

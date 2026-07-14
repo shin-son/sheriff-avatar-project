@@ -153,6 +153,7 @@ function syncJiraPoller(): void {
         baseUrl: process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792',
         project: process.env.SVP_JIRA_PROJECT ?? 'CIOPS',
         label: process.env.SVP_JIRA_LABEL ?? 'ci-failure',
+        jql: process.env.SVP_JIRA_JQL,
         pollMs: Number(process.env.SVP_JIRA_POLL_MS ?? 30000),
         pat: process.env.SVP_JIRA_PAT,
         storePath: join(app.getPath('userData'), 'svp-processed-tickets.json')
