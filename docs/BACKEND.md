@@ -59,6 +59,22 @@
 ## F6 — 클라이언트 허브
 
 - **책임**: `ws://:8791` 리슨, 클라이언트 세션 관리(hello/welcome, 하트비트), **서버 측 필터링** push.
+- **공개 API (서버 내부 계약 — 같은 프로세스의 F1 파이프라인이 TypeScript import로 호출)**:
+
+  ```ts
+  // src/main/modules/hub/ — 타입은 @shared/types의 SheriffIssue만 사용
+  startHub(opts: {
+    port?: number                                        // 기본 8791 (SVP_HUB_PORT)
+    getIssuesFor: (clientId: string) => SheriffIssue[]   // server:welcome 스냅샷용 — 이슈 저장소는 파이프라인 소유
+  }): void
+  pushIssue(issue: SheriffIssue): void       // 분류·배정 완료된 신규 이슈 → 담당자에게 issue:assigned
+  notifyUpdated(issue: SheriffIssue): void   // 상태 변경·재배정 → issue:updated
+                                             // (재배정으로 제외된 기존 담당자에게도 전송 — 클라이언트가 목록에서 제거)
+  ```
+
+  - 파이프라인(F1→F3→F4)은 배정 확정 후 `pushIssue()` 한 번만 호출하면 된다.
+    당번 대시보드 반영은 hub 경유가 아니라 기존 IPC(`webContents.send`)로 별도 호출.
+  - **W2 예고**: C→S 메시지(`issue:ack`)가 들어오면 `startHub`에 `onAck(clientId, issueId)` 핸들러가 추가된다.
 - **불변 조건**:
   - 클라이언트에는 자기에게 배정된 이슈만 나간다. 전체 목록은 당번 대시보드(같은 프로세스, IPC)에만 존재.
   - 클라이언트 재접속 시 `server:welcome`으로 미해결 배정분 전체를 복원한다 — 오프라인 중 배정을 잃지 않는다.
@@ -66,22 +82,23 @@
 
 ## F7 — 해결 감지 → WIKI ingest
 
-- **책임**: 티켓이 Done으로 확정된 시점에 `ingestResolvedIssue()` 1회 호출 (case-log + index/log 갱신).
-- 해결 경로는 두 가지 모두 지원: ① 앱 "해결 완료" → 서버가 전이 → 폴링 확정, ② 담당자가 Jira에서 직접 Done → 폴링 감지.
-- **완료 기준**: 두 경로 모두에서 case-log에 정확히 1건 기록. 같은 티켓을 Done↔Reopen 반복해도 중복 ingest 없음.
+- **책임**: 티켓이 Done으로 확정된 시점에 LLM이 Jira 해결 코멘트를 근거로 case-log를 작성 (+ index/log 갱신), 1회만.
+- 해결 경로는 **Jira에서 Done 처리가 유일** — 앱에는 해결 버튼이 없다 ([ARCHITECTURE.md](./ARCHITECTURE.md) 데이터 흐름 8단계).
+- **완료 기준**: Jira Done 처리 시 case-log에 정확히 1건 기록. 같은 티켓을 Done↔Reopen 반복해도 중복 ingest 없음.
 
 ## F8 — WIKI 위생 (lint / feedback)
 
-- **책임**: 기존 구현 유지 — 클라이언트발 feedback이 hub 경유로 서버 저장소에 쌓이도록 배선만 변경.
-  Week 2에 감점 임계값·정리 자동화 고도화 (김민석).
-- **완료 기준**: A 클라이언트에서 👎3회 → 당번의 lint 보고서에 해당 노트가 정리 후보로 표시됨.
+- **책임**: Done 확정 시 담당자에게 "참조 노트의 원인 = 실제 원인?" **일치/불일치** toast를 push하고, 판정이 hub 경유로
+  서버 저장소에 쌓이도록 배선 ([ARCHITECTURE.md](./ARCHITECTURE.md) wiki 4대 동작). Week 2에 감점 임계값 고도화 (김민석).
+- **완료 기준**: A 클라이언트에서 불일치 판정 3회 → 당번의 lint 보고서에 해당 노트가 정리 후보로 표시됨.
 
 ## PLAN.md 매핑 (확정 — [PLAN.md](./PLAN.md)에 반영됨)
 
-| 담당 | 기존 계획 | 이 문서 기준 |
+| 담당 | Week 1 | Week 2 |
 |---|---|---|
-| 손신 | websocket 견고화 → classifier LLM | **F1·F5 (jira/)** → F3 (classifier) |
-| 김병재 | ui/toast → 재배정 | **F6 (hub/) + 클라이언트 모드 UI** → F4 재배정 |
-| 김민석 | wiki 스키마·검색 → wiki 지능화 | F2 → F7·F8 (기존과 동일) |
+| 김병재 | **F1 (jira/ 폴러 + 처리 티켓 중복 방지 테이블)** | F4 재배정 |
+| 손신 | **F6 (hub/ — push 전용 채널)** | F3 (classifier LLM) |
+| 김민석 | **클라이언트 (hub-client/ + push 수신 화면 구성)** | F7·F8 |
 
-기존 Week 1의 "websocket 견고화"는 대상이 CI 직결 WS에서 **Jira 폴러(F1) + 허브(F6)**로 바뀌었다.
+- F5(Jira 라이터)와 F2(wiki query 개선 + `jiraUsername` 매핑)는 W1 재편으로 담당 미정 —
+  주간 회고에서 W2 편입을 정한다 (F2의 jiraUsername 매핑은 F5 assignee 지정의 전제 조건).
