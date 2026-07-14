@@ -37,7 +37,9 @@ function createMainWindow(): void {
     minWidth: size.minWidth,
     minHeight: size.minHeight,
     autoHideMenuBar: true,
-    backgroundColor: '#0f1115',
+    backgroundColor: '#16120e',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#110d0a', symbolColor: '#a8987f', height: 40 },
     title: 'Sheriff Avatar',
     webPreferences: { preload: join(__dirname, '../preload/index.js') }
   })
