@@ -68,6 +68,38 @@ export interface UserConfig {
 
 export type WsStatus = 'connected' | 'disconnected' | 'connecting'
 
+// Client ↔ hub server WebSocket protocol (docs/API.md §1).
+// Every frame is one JSON envelope; unknown `type` must be ignored (forward compat).
+export const HUB_PROTOCOL_VERSION = 1
+
+export interface HubMessage {
+  v: number
+  type: string
+  ts: string
+  payload: unknown
+}
+
+export interface HubHelloPayload {
+  clientId: string
+  appVersion: string
+}
+
+export interface HubWelcomePayload {
+  user: UserConfig
+  team: TeamMember[]
+  /** Unresolved issues assigned to this client (state restore on reconnect). */
+  issues: SheriffIssue[]
+}
+
+export interface HubIssuePayload {
+  issue: SheriffIssue
+}
+
+export interface HubErrorPayload {
+  code: string
+  message: string
+}
+
 /** Result of a wiki health check (lint operation). */
 export interface WikiLintReport {
   generatedAt: string
