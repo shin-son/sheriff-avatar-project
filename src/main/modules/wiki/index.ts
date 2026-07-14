@@ -13,7 +13,8 @@ import type { CIEvent, SheriffIssue, WikiLintReport, WikiMatch } from '@shared/t
  *   feedback — 👍/👎 votes on note usefulness; the loop that keeps junk out
  */
 
-function vaultDir(): string {
+/** Absolute path of the wiki vault — also used to open notes in Obsidian. */
+export function vaultDir(): string {
   return app.isPackaged
     ? join(process.resourcesPath, 'wiki-vault')
     : join(app.getAppPath(), 'wiki-vault')

@@ -169,10 +169,17 @@ export default function App() {
                   <span className="stat">해결 {count('resolved')}</span>
                   <button
                     className="btn"
-                    onClick={() => void window.svp.wikiLint().then(setLintReport)}
-                    title="wiki 상태 점검 (고아 노트, 부정 피드백 노트)"
+                    onClick={() => window.svp.openWiki()}
+                    title="wiki-vault를 Obsidian으로 열기"
                   >
-                    WIKI 점검
+                    위키 열기 ↗
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => void window.svp.wikiLint().then(setLintReport)}
+                    title="wiki 상태 점검 (고아 노트, 부정 신호 누적 노트)"
+                  >
+                    위키 점검
                   </button>
                 </div>
               </header>
@@ -180,18 +187,31 @@ export default function App() {
                 {lintReport && (
                   <div className="lint-card">
                     <div className="lint-head">
-                      <strong>WIKI 점검 결과</strong>
+                      <strong>위키 점검 결과</strong>
                       <span className="lint-count">노트 {lintReport.noteCount}개</span>
                       <button className="toast-close" onClick={() => setLintReport(null)}>
                         ✕
                       </button>
                     </div>
-                    {lintReport.suggestions.length === 0 ? (
-                      <p className="lint-ok">문제 없음</p>
+                    {lintReport.orphanNotes.length === 0 && lintReport.unhelpfulNotes.length === 0 ? (
+                      <p className="lint-ok">정리할 노트 없음 — 노트를 클릭해 열람하려면 위의 위키 열기를 사용하세요</p>
                     ) : (
                       <ul className="lint-list">
-                        {lintReport.suggestions.map((s) => (
-                          <li key={s}>{s}</li>
+                        {lintReport.orphanNotes.map((t) => (
+                          <li key={`orphan-${t}`}>
+                            <button className="lint-note" onClick={() => window.svp.openWiki(t)}>
+                              {t}
+                            </button>{' '}
+                            — 참조하는 노트가 없음, 링크하거나 통합 검토
+                          </li>
+                        ))}
+                        {lintReport.unhelpfulNotes.map((t) => (
+                          <li key={`unhelpful-${t}`}>
+                            <button className="lint-note" onClick={() => window.svp.openWiki(t)}>
+                              {t}
+                            </button>{' '}
+                            — 부정 신호 누적, 내용 수정 또는 삭제 검토
+                          </li>
                         ))}
                       </ul>
                     )}

@@ -19,6 +19,7 @@ const api = {
   onIssueFocus: (cb: (payload: unknown) => void) => subscribe('issue:focus', cb),
   onToastData: (cb: (payload: unknown) => void) => subscribe('toast:data', cb),
   wikiLint: () => ipcRenderer.invoke('wiki:lint'),
+  openWiki: (noteTitle?: string) => ipcRenderer.send('wiki:open', noteTitle),
   wikiFeedback: (noteTitle: string, helpful: boolean) => ipcRenderer.send('wiki:feedback', noteTitle, helpful),
   toastClick: (issueId: string) => ipcRenderer.send('toast:click', issueId),
   toastClose: () => ipcRenderer.send('toast:close'),
