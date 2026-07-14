@@ -1,6 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws'
 import { TEAM } from '@shared/team'
-import type { HubEnvelope, HubHelloPayload, SheriffIssue } from '@shared/types'
+import { HUB_PROTOCOL_VERSION } from '@shared/types'
+import type { HubHelloPayload, HubMessage, SheriffIssue } from '@shared/types'
 
 /**
  * Client hub (F6): WS server that pushes each member their own issues.
@@ -31,7 +32,7 @@ const sessions = new Map<string, Session>()
 const holders = new Map<string, Set<string>>()
 
 function envelope(type: string, payload: unknown): string {
-  const frame: HubEnvelope = { v: 1, type, ts: new Date().toISOString(), payload }
+  const frame: HubMessage = { v: HUB_PROTOCOL_VERSION, type, ts: new Date().toISOString(), payload }
   return JSON.stringify(frame)
 }
 
@@ -89,13 +90,13 @@ export function startHub(opts: HubOptions): void {
     let session: Session | null = null
 
     socket.on('message', (data) => {
-      let frame: HubEnvelope | null = null
+      let frame: HubMessage | null = null
       try {
-        frame = JSON.parse(String(data)) as HubEnvelope
+        frame = JSON.parse(String(data)) as HubMessage
       } catch {
         return // not JSON: ignore (forward compatibility)
       }
-      if (frame?.v !== 1) return
+      if (frame?.v !== HUB_PROTOCOL_VERSION) return
       if (frame.type === 'client:hello' && !session) {
         session = handleHello(socket, frame.payload as HubHelloPayload, opts)
       }
