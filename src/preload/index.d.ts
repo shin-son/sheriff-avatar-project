@@ -3,6 +3,7 @@ import type { AppState, IssueStatus, SheriffIssue, UserConfig, WikiLintReport, W
 declare global {
   interface Window {
     svp: {
+      frameless: boolean
       getState(): Promise<AppState>
       setUser(userId: string): Promise<UserConfig>
       setIssueStatus(id: string, status: IssueStatus): Promise<SheriffIssue | null>
