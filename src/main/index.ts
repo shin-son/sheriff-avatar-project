@@ -5,6 +5,7 @@ import type { AppState, CIEvent, IssueStatus, Role, SheriffIssue, UserConfig, Ws
 import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
+import { JiraPoller } from './modules/jira/poller'
 import { ToastManager } from './modules/notifications/toast'
 import { CIWebSocketClient } from './modules/websocket/client'
 import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback, vaultDir } from './modules/wiki'
@@ -172,6 +173,21 @@ app.whenReady().then(() => {
     mainWindow?.webContents.send('ws:status', status)
   })
   client.connect()
+
+  // F1 — Jira polling is the main issue inflow; the CI WebSocket above stays as a
+  // dev-only path until fully replaced (ARCHITECTURE.md).
+  const poller = new JiraPoller(
+    {
+      baseUrl: process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792',
+      project: process.env.SVP_JIRA_PROJECT ?? 'CIOPS',
+      label: process.env.SVP_JIRA_LABEL ?? 'ci-failure',
+      pollMs: Number(process.env.SVP_JIRA_POLL_MS ?? 30000),
+      pat: process.env.SVP_JIRA_PAT,
+      storePath: join(app.getPath('userData'), 'svp-processed-tickets.json')
+    },
+    handleCIEvent
+  )
+  poller.start()
 
   ipcMain.handle(
     'state:get',
