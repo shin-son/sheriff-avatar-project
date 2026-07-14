@@ -15,6 +15,12 @@ declare global {
       wikiFeedback(noteTitle: string, helpful: boolean): void
       toastClick(issueId: string): void
       toastClose(): void
+      winMinimize(): void
+      winMaximize(): void
+      winClose(): void
+      openTicket(url: string): void
+      setNotificationsMuted(muted: boolean): Promise<boolean>
+      onNotifyMuted(cb: (muted: boolean) => void): () => void
     }
   }
 }

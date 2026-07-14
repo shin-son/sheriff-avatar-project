@@ -84,4 +84,5 @@ export interface AppState {
   team: TeamMember[]
   user: UserConfig
   wsStatus: WsStatus
+  notificationsMuted: boolean
 }

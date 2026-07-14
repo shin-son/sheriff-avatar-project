@@ -20,7 +20,13 @@ const api = {
   wikiLint: () => ipcRenderer.invoke('wiki:lint'),
   wikiFeedback: (noteTitle: string, helpful: boolean) => ipcRenderer.send('wiki:feedback', noteTitle, helpful),
   toastClick: (issueId: string) => ipcRenderer.send('toast:click', issueId),
-  toastClose: () => ipcRenderer.send('toast:close')
+  toastClose: () => ipcRenderer.send('toast:close'),
+  winMinimize: () => ipcRenderer.send('window:minimize'),
+  winMaximize: () => ipcRenderer.send('window:maximize'),
+  winClose: () => ipcRenderer.send('window:close'),
+  openTicket: (url: string) => ipcRenderer.send('ticket:open', url),
+  setNotificationsMuted: (muted: boolean) => ipcRenderer.invoke('notify:setMuted', muted),
+  onNotifyMuted: (cb: (payload: unknown) => void) => subscribe('notify:muted', cb)
 }
 
 contextBridge.exposeInMainWorld('svp', api)
