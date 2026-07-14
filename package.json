@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist": "electron-vite build && electron-builder --win",
-    "mock:ci": "node mock/ci-server.mjs"
+    "mock:ci": "node mock/ci-server.mjs",
+    "mock:jira": "node mock/jira-server.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
