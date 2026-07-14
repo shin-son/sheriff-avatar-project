@@ -74,7 +74,16 @@ export function startHub(opts: HubOptions): void {
   if (server) return
   const port = opts.port ?? Number(process.env.SVP_HUB_PORT ?? 8791)
   server = new WebSocketServer({ port })
-  console.log(`[svp:hub] listening on ws://0.0.0.0:${port}`)
+
+  // A port conflict (e.g. a stray server instance) must not crash the app —
+  // the dashboard keeps working, only client push is unavailable.
+  server.on('error', (err) => {
+    console.error(`[svp:hub] server error (client push disabled): ${err.message}`)
+    server?.close()
+    server = null
+  })
+
+  server.on('listening', () => console.log(`[svp:hub] listening on ws://0.0.0.0:${port}`))
 
   server.on('connection', (socket) => {
     let session: Session | null = null
