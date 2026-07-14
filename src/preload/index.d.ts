@@ -13,6 +13,7 @@ declare global {
       onIssueFocus(cb: (issueId: string) => void): () => void
       onToastData(cb: (issue: SheriffIssue) => void): () => void
       wikiLint(): Promise<WikiLintReport>
+      openWiki(noteTitle?: string): void
       wikiFeedback(noteTitle: string, helpful: boolean): void
       toastClick(issueId: string): void
       toastClose(): void

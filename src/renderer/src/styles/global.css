@@ -917,6 +917,21 @@ select:focus-visible {
   gap: 5px;
 }
 
+/* Flagged note — click to open it in Obsidian */
+.lint-note {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--sky);
+  cursor: pointer;
+}
+
+.lint-note:hover {
+  text-decoration: underline;
+}
+
 /* ── Compact member view ─────────────────── */
 .compact {
   flex: 1;

@@ -7,7 +7,7 @@ import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
 import { ToastManager } from './modules/notifications/toast'
 import { CIWebSocketClient } from './modules/websocket/client'
-import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback } from './modules/wiki'
+import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback, vaultDir } from './modules/wiki'
 
 const issues: SheriffIssue[] = []
 const toasts = new ToastManager()
@@ -220,6 +220,14 @@ app.whenReady().then(() => {
 
   ipcMain.on('wiki:feedback', (_e, noteTitle: string, helpful: boolean) => {
     recordFeedback(noteTitle, helpful)
+  })
+
+  // Open the vault (or one note) in Obsidian; falls back to the OS default
+  // (Explorer / .md editor) when the obsidian:// protocol isn't registered.
+  ipcMain.on('wiki:open', (_e, noteTitle?: string) => {
+    const target = noteTitle ? join(vaultDir(), noteTitle) : vaultDir()
+    const uri = `obsidian://open?path=${encodeURIComponent(target)}`
+    shell.openExternal(uri).catch(() => void shell.openPath(target))
   })
 
   ipcMain.on('toast:click', (e, issueId: string) => {
