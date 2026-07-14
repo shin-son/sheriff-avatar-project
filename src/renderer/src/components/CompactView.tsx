@@ -1,4 +1,5 @@
 import type { AppState, CIEventType, IssueStatus, SheriffIssue, WsStatus } from '@shared/types'
+import { formatIssueTime } from '../format'
 
 const WS_LABEL: Record<WsStatus, string> = {
   connected: 'CI/CD 연결됨',
@@ -28,12 +29,8 @@ export default function CompactView({ state, issues, focusId, onSelectUser, onSe
   return (
     <div className="compact">
       <header className="compact-header">
-        <span className="compact-badge">🤠</span>
-        <div className="compact-titles">
-          <div className="compact-name">Sheriff Avatar</div>
-          <div className={`compact-ws ${state.wsStatus}`}>
-            <span className="dot" /> {WS_LABEL[state.wsStatus]}
-          </div>
+        <div className={`compact-ws ${state.wsStatus}`}>
+          <span className="dot" /> {WS_LABEL[state.wsStatus]}
         </div>
         <select
           className="compact-user"
@@ -44,7 +41,7 @@ export default function CompactView({ state, issues, focusId, onSelectUser, onSe
           {state.team.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
-              {m.role === 'sheriff' ? ' ⭐' : ''}
+              {m.role === 'sheriff' ? ' (당번)' : ''}
             </option>
           ))}
         </select>
@@ -55,7 +52,7 @@ export default function CompactView({ state, issues, focusId, onSelectUser, onSe
       <div className="compact-feed">
         {issues.length === 0 && (
           <div className="empty">
-            <div className="empty-star">✨</div>
+            <div className="empty-star" aria-hidden="true" />
             <p>배정된 이슈가 없습니다</p>
           </div>
         )}
@@ -89,20 +86,24 @@ function CompactItem({
         'citem',
         `severity-${classification.severity}`,
         highlighted ? 'highlighted' : '',
+        status === 'new' ? 'is-new' : '',
         status === 'resolved' ? 'is-resolved' : ''
       ].join(' ')}
     >
       <div className="citem-top">
         <span className={`type-badge t-${event.type}`}>{TYPE_LABEL[event.type]}</span>
-        <span className="time">{new Date(event.timestamp).toLocaleTimeString('ko-KR')}</span>
+        <span className="time">{formatIssueTime(event.timestamp)}</span>
       </div>
       <div className="citem-title">{event.title}</div>
       <div className="citem-meta">
-        <span className={`conf-num ${classification.confidence > 80 ? 'high' : 'low'}`}>
-          신뢰도 {classification.confidence}
+        <span
+          className={`star-badge star-sm ${classification.confidence > 80 ? 'high' : 'low'}`}
+          title={`신뢰도 ${classification.confidence}`}
+        >
+          <span className="star-num">{classification.confidence}</span>
         </span>
         <span className={`route-badge ${assignment.routedTo}`}>
-          {assignment.routedTo === 'feature-owner' ? '자동 배정' : '🤠 당번 확인'}
+          {assignment.routedTo === 'feature-owner' ? '자동 배정' : '당번 확인 필요'}
         </span>
       </div>
       <div className="citem-actions">
