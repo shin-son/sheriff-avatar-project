@@ -11,7 +11,9 @@ export default function Toast() {
 
   return (
     <div className="toast" onClick={() => window.svp.toastClick(issue.event.id)}>
-      <div className="toast-icon">{issue.assignment.routedTo === 'sheriff' ? '🤠' : '🔔'}</div>
+      <span className={`star-badge ${conf > 80 ? 'high' : 'low'}`} title={`신뢰도 ${conf}`}>
+        <span className="star-num">{conf}</span>
+      </span>
       <div className="toast-content">
         <div className="toast-header">
           <span className="toast-app">SHERIFF AVATAR</span>
@@ -27,7 +29,9 @@ export default function Toast() {
         </div>
         <div className="toast-title">{issue.event.title}</div>
         <div className="toast-meta">
-          <span className={`toast-conf ${conf > 80 ? 'high' : 'low'}`}>신뢰도 {conf}</span>
+          <span className={`toast-route ${issue.assignment.routedTo}`}>
+            {issue.assignment.routedTo === 'sheriff' ? '당번 확인 필요' : '자동 배정'}
+          </span>
           <span className="toast-assignee">→ {issue.assignment.assigneeName}</span>
         </div>
       </div>

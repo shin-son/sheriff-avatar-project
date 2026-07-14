@@ -1,3 +1,43 @@
+/* Toast popup window — keep palette/star in sync with global.css.
+   The window itself is transparent + frameless; only .toast is painted. */
+
+@font-face {
+  font-family: 'Pretendard Variable';
+  src: url('../assets/fonts/PretendardVariable.woff2') format('woff2-variations');
+  font-weight: 45 920;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --ink-deep: #110d0a;
+  --leather: #201a14;
+  --leather-2: #2b2219;
+  --seam: #372c20;
+  --lamplight: #f0e8d8;
+  --dust: #a8987f;
+  --brass: #d9a441;
+  --font-body: 'Pretendard Variable', 'Segoe UI', 'Malgun Gothic', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Malgun Gothic', monospace;
+  --star-shape: polygon(
+    50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
+    50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%
+  );
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -5,23 +45,33 @@
 }
 
 body.toast-body {
-  font-family: 'Segoe UI Variable', 'Segoe UI', 'Malgun Gothic', sans-serif;
+  font-family: var(--font-body);
   background: transparent;
   overflow: hidden;
   user-select: none;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 .toast {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
   margin: 8px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #1e2331 0%, #171b26 100%);
-  border: 1px solid rgba(240, 180, 41, 0.35);
-  border-left: 4px solid #f0b429;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--leather);
+  border: 1px solid var(--seam);
+  border-left: 3px solid var(--brass);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
-  color: #e8eaf0;
+  color: var(--lamplight);
   cursor: pointer;
   animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
@@ -33,11 +83,37 @@ body.toast-body {
   }
 }
 
-.toast-icon {
-  font-size: 26px;
-  line-height: 1;
-  padding-top: 4px;
-  filter: drop-shadow(0 0 8px rgba(240, 180, 41, 0.4));
+.star-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  clip-path: var(--star-shape);
+}
+
+.star-badge .star-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  transform: translateY(2px);
+}
+
+.star-badge.high {
+  background: linear-gradient(160deg, #eec25e, #b8842a);
+}
+
+.star-badge.high .star-num {
+  color: var(--ink-deep);
+}
+
+.star-badge.low {
+  background: var(--leather-2);
+}
+
+.star-badge.low .star-num {
+  color: var(--dust);
 }
 
 .toast-content {
@@ -53,23 +129,24 @@ body.toast-body {
 }
 
 .toast-app {
+  font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 1.4px;
-  color: #f0b429;
+  color: var(--brass);
 }
 
 .toast-close {
   border: none;
   background: transparent;
-  color: #9aa1b2;
+  color: var(--dust);
   font-size: 12px;
   cursor: pointer;
   padding: 2px 4px;
 }
 
 .toast-close:hover {
-  color: #e8eaf0;
+  color: var(--lamplight);
 }
 
 .toast-title {
@@ -78,7 +155,7 @@ body.toast-body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 7px;
+  margin-bottom: 6px;
 }
 
 .toast-meta {
@@ -88,23 +165,16 @@ body.toast-body {
   font-size: 11px;
 }
 
-.toast-conf {
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
+.toast-route {
+  color: var(--dust);
 }
 
-.toast-conf.high {
-  background: rgba(54, 179, 126, 0.16);
-  color: #36b37e;
-}
-
-.toast-conf.low {
-  background: rgba(255, 171, 0, 0.16);
-  color: #ffab00;
+.toast-route.sheriff {
+  color: var(--brass);
+  font-weight: 600;
 }
 
 .toast-assignee {
-  color: #9aa1b2;
+  color: var(--dust);
   font-weight: 600;
 }
