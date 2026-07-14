@@ -41,7 +41,8 @@ flowchart LR
 5. **route** — 신뢰도 **>80**: 해당 모듈 담당자 / **≤80**: 당번 (human-in-the-loop, 당번이 수동 재배정 가능)
 6. **Jira 댓글** — 서버가 티켓에 요약 댓글(분류·신뢰도·추정 원인·참고 wiki·배정 근거)을 달고 assignee를 지정
 7. **push** — 배정된 팀원의 클라이언트로 `issue:assigned` 전송 → 우하단 팝업. 당번 대시보드에는 전체 이슈 표시
-8. 담당자 처리 → **Jira에서 해결 코멘트 + Done 전이** (또는 앱의 "해결 완료" → 서버가 전이 호출) → 폴링으로 Done 확인
+8. 담당자 처리 → **Jira에서 해결 코멘트 + Done 전이** → 폴링으로 Done 확인.
+   **앱에는 해결 버튼이 없다** — 해결 코멘트 없는 Done(기록 근거 없는 해결)을 만들지 않기 위해 쓰기는 Jira 한 곳이다
 9. **ingest** — Done 확정 시 **LLM이 Jira 해결 코멘트를 근거로 `case-log.md` 항목을 작성** + `index.md`/`log.md` 갱신
    → **다음 같은 유형 이슈의 신뢰도가 올라간다** (compounding)
 10. **feedback/lint** — Done 확정 시 서버가 담당자 앱에 "참조 노트의 원인이 실제 원인과 일치했나요?" toast를
@@ -53,8 +54,8 @@ flowchart LR
 | 앱 상태 | Jira 상태 (statusCategory) | 전이 주체 |
 |---|---|---|
 | `new` | To Do (Open) | CI/CD가 티켓 생성 |
-| `acknowledged` | In Progress | 담당자가 앱에서 "확인" → 서버가 transition 호출 |
-| `resolved` | Done | 담당자가 **Jira에서 직접 Done 처리** (기본 경로) 또는 앱 "해결 완료" → 폴링으로 확정 |
+| `acknowledged` | In Progress | 앱의 "티켓 확인" 클릭 (티켓이 열리며 동시에 ack) → 서버가 transition 호출 |
+| `resolved` | Done | 담당자가 **Jira에서 Done 처리** (유일 경로) → 폴링으로 확정 |
 
 - 담당자가 Jira에서 직접 상태를 바꿔도 서버가 폴링으로 감지해 앱에 반영한다 (양방향 동기화, Jira 우선).
 - ingest는 **Jira에서 Done이 확인된 시점**에 1회만 수행한다.

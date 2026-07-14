@@ -28,8 +28,7 @@
 | S→C | `server:welcome` | `{ user: UserConfig, team: TeamMember[], issues: SheriffIssue[] }` | 해당 클라이언트에 배정된 이슈 스냅샷 (재접속 시 상태 복원) |
 | S→C | `issue:assigned` | `{ issue: SheriffIssue }` | 새 이슈 배정 push — **본인 배정분만 전송** |
 | S→C | `issue:updated` | `{ issue: SheriffIssue }` | 상태 변경·재배정 반영. 재배정으로 자신이 제외되면 `issue.assignment`로 판별해 목록에서 제거 |
-| C→S | `issue:ack` | `{ issueId }` | 담당자 확인 → 서버가 Jira를 In Progress로 전이 |
-| C→S | `issue:resolve` | `{ issueId, note? }` | 해결 요청 → 서버가 Jira를 Done으로 전이, 폴링 확정 후 ingest |
+| C→S | `issue:ack` | `{ issueId }` | "티켓 확인" 클릭(티켓 열림과 동시) → 서버가 Jira를 In Progress로 전이. **해결 메시지는 없다** — Done은 Jira에서만 일어나고 서버가 폴링으로 감지한다 |
 | C→S | `wiki:feedback` | `{ noteTitle, helpful: boolean }` | 참조 노트 👍/👎 (서버의 feedback 저장소에 기록) |
 | S→C | `server:error` | `{ code, message }` | 요청 처리 실패 (예: `JIRA_TRANSITION_FAILED`) — 클라이언트는 토스트로 표시 |
 
