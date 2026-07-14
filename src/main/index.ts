@@ -3,6 +3,7 @@ import { join } from 'path'
 import { TEAM } from '@shared/team'
 import type { AppState, CIEvent, IssueStatus, Role, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
 import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
+import { notifyUpdated, pushIssue, startHub } from './modules/hub'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
 import { ToastManager } from './modules/notifications/toast'
@@ -153,7 +154,8 @@ async function handleCIEvent(event: CIEvent): Promise<void> {
       receivedAt: new Date().toISOString()
     }
     issues.unshift(issue)
-    mainWindow?.webContents.send('issue:new', issue)
+    mainWindow?.webContents.send('issue:new', issue) // 당번 대시보드 (same process, IPC)
+    pushIssue(issue) // 담당자 클라이언트 (hub — no-op when the assignee is offline; welcome restores)
     if (!notificationsMuted && isRelevantTo(issue, userConfig)) toasts.show(issue)
   } catch (err) {
     console.error('[svp] failed to process CI event', err)
@@ -165,6 +167,15 @@ app.whenReady().then(() => {
   notificationsMuted = loadNotificationsMuted()
   createMainWindow()
   createTray()
+
+  // Server mode: the sheriff's app hosts the client hub (ARCHITECTURE.md topology).
+  // Started once at boot — switching roles via the demo user picker needs a restart.
+  if (userConfig.role === 'sheriff') {
+    startHub({
+      getIssuesFor: (clientId) =>
+        issues.filter((i) => i.assignment.assigneeId === clientId && i.status !== 'resolved')
+    })
+  }
 
   const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
   const client = new CIWebSocketClient(wsUrl, handleCIEvent, (status) => {
@@ -200,6 +211,7 @@ app.whenReady().then(() => {
     issue.status = status
     if (status === 'resolved') await ingestResolvedIssue(issue)
     mainWindow?.webContents.send('issue:updated', issue)
+    notifyUpdated(issue)
     return issue
   })
 

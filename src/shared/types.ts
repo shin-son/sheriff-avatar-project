@@ -86,3 +86,33 @@ export interface AppState {
   wsStatus: WsStatus
   notificationsMuted: boolean
 }
+
+/* ── Hub protocol (client ↔ server WS, API.md §1) ─────────────────────── */
+
+/** Every hub frame is one JSON envelope. Unknown `type`s must be ignored. */
+export interface HubEnvelope<T = unknown> {
+  v: 1
+  type: string
+  ts: string
+  payload: T
+}
+
+export interface HubHelloPayload {
+  clientId: string
+  appVersion: string
+}
+
+export interface HubWelcomePayload {
+  user: UserConfig
+  team: TeamMember[]
+  issues: SheriffIssue[]
+}
+
+export interface HubIssuePayload {
+  issue: SheriffIssue
+}
+
+export interface HubErrorPayload {
+  code: 'UNKNOWN_CLIENT' | 'JIRA_TRANSITION_FAILED' | string
+  message: string
+}
