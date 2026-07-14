@@ -17,25 +17,17 @@ export default function Sidebar({ team, user, wsStatus, onSelectUser }: Props) {
   const me = team.find((m) => m.id === user.userId)
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <span className="brand-badge">🤠</span>
-        <div>
-          <div className="brand-name">Sheriff Avatar</div>
-          <div className="brand-sub">SVP · LLM-WIKI Agent</div>
-        </div>
-      </div>
-
       <div className="me-card">
         <span className="avatar avatar-lg">{me?.name.charAt(0)}</span>
         <div className="me-info">
           <div className="me-name">{me?.name}</div>
           <span className={`role-badge ${user.role}`}>
-            {user.role === 'sheriff' ? '⭐ 당번 (SHERIFF)' : '팀원 (MEMBER)'}
+            {user.role === 'sheriff' ? '당번 · SHERIFF' : '팀원 · MEMBER'}
           </span>
         </div>
       </div>
 
-      <div className="section-title">사용자 전환 (데모)</div>
+      <div className="section-title">팀 · 사용자 전환 (데모)</div>
       <div className="team-list">
         {team.map((m) => (
           <button
@@ -44,25 +36,14 @@ export default function Sidebar({ team, user, wsStatus, onSelectUser }: Props) {
             onClick={() => onSelectUser(m.id)}
           >
             <span className="avatar">{m.name.charAt(0)}</span>
-            <span className="team-name">{m.name}</span>
-            {m.role === 'sheriff' && <span className="star">⭐</span>}
-          </button>
-        ))}
-      </div>
-
-      <div className="section-title">담당 모듈 (IP)</div>
-      <div className="modules">
-        {team.map((m) => (
-          <div key={m.id} className="module-row">
-            <span className="avatar avatar-sm">{m.name.charAt(0)}</span>
-            <span className="module-chips">
-              {m.ownedModules.map((mod) => (
-                <span key={mod} className="chip">
-                  {mod}
-                </span>
-              ))}
+            <span className="team-item-body">
+              <span className="team-name">
+                {m.name}
+                {m.role === 'sheriff' && <span className="mini-star" aria-hidden="true" />}
+              </span>
+              <span className="team-mods">{m.ownedModules.join(' · ')}</span>
             </span>
-          </div>
+          </button>
         ))}
       </div>
 
