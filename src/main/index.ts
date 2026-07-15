@@ -18,6 +18,7 @@ import type {
   WsStatus
 } from '@shared/types'
 import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
+import { loadIssueSnapshot, saveIssueSnapshot } from './issue-store'
 import { notifyUpdated, pushIssue, startHub } from './modules/hub'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
@@ -188,6 +189,17 @@ function syncJiraPoller(): void {
   }
 }
 
+function issueSnapshotPath(): string {
+  return join(app.getPath('userData'), 'svp-issues.json')
+}
+
+// The sheriff app owns the pipeline's issue list, so it persists the snapshot;
+// members restore from server:welcome instead.
+function persistIssues(): void {
+  if (userConfig.role !== 'sheriff') return
+  saveIssueSnapshot(issueSnapshotPath(), issues)
+}
+
 async function handleCIEvent(event: CIEvent): Promise<void> {
   try {
     const wikiRefs = await queryWiki(event)
@@ -201,6 +213,7 @@ async function handleCIEvent(event: CIEvent): Promise<void> {
       receivedAt: new Date().toISOString()
     }
     issues.unshift(issue)
+    persistIssues()
     mainWindow?.webContents.send('issue:new', issue) // 당번 대시보드 (same process, IPC)
     pushIssue(issue) // 담당자 클라이언트 (hub — no-op when the assignee is offline; welcome restores)
     if (!notificationsMuted && isRelevantTo(issue, userConfig)) toasts.show(issue)
@@ -270,6 +283,17 @@ function startTransport(): void {
 app.whenReady().then(() => {
   userConfig = loadUserConfig()
   notificationsMuted = loadNotificationsMuted()
+
+  // Refill the open backlog before the window and hub come up — restored issues
+  // go straight into the list (no toast storm), and welcome snapshots see them.
+  if (userConfig.role === 'sheriff') {
+    const restored = loadIssueSnapshot(issueSnapshotPath())
+    if (restored.length) {
+      issues.push(...restored)
+      console.log(`[svp] restored ${restored.length} unresolved issue(s) from snapshot`)
+    }
+  }
+
   createMainWindow()
   createTray()
   startTransport()
@@ -305,6 +329,7 @@ app.whenReady().then(() => {
     const issue = issues.find((i) => i.event.id === id)
     if (!issue) return null
     issue.status = status
+    persistIssues()
     if (status === 'resolved') await ingestResolvedIssue(issue)
     mainWindow?.webContents.send('issue:updated', issue)
     notifyUpdated(issue)
