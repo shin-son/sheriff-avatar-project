@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import type { AppState, IssueStatus, SheriffIssue, WsStatus } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
+// Members connect to the sheriff hub, not to CI directly (docs/API.md §1).
 const WS_LABEL: Record<WsStatus, string> = {
-  connected: 'CI/CD 연결됨',
+  connected: '서버 연결됨',
   connecting: '연결 중…',
   disconnected: '연결 끊김'
 }

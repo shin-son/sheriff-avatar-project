@@ -1,6 +1,17 @@
 export type CIEventType = 'test_failed' | 'build_failed' | 'lint_failed' | 'deploy_failed'
 
-/** Raw event pushed by the CI/CD server over WebSocket. */
+/** Where an issue event came from. Jira polling is the main inflow (ARCHITECTURE.md). */
+export type IssueSource = 'jira' | 'mock-ci'
+
+/** Reference to the Jira ticket an event was created from. */
+export interface JiraTicketRef {
+  key: string
+  url: string
+  /** Jira statusCategory key: 'new' | 'indeterminate' | 'done' */
+  status: string
+}
+
+/** Normalized issue event entering the pipeline (from Jira polling or the mock CI WS). */
 export interface CIEvent {
   id: string
   type: CIEventType
@@ -11,6 +22,10 @@ export interface CIEvent {
   log: string
   url: string
   timestamp: string
+  /** Absent means the legacy mock CI WebSocket. */
+  source?: IssueSource
+  /** Present when the event was created from a Jira ticket. */
+  jira?: JiraTicketRef
 }
 
 export type IssueSeverity = 'critical' | 'major' | 'minor'
@@ -67,6 +82,38 @@ export interface UserConfig {
 }
 
 export type WsStatus = 'connected' | 'disconnected' | 'connecting'
+
+// Client ↔ hub server WebSocket protocol (docs/API.md §1).
+// Every frame is one JSON envelope; unknown `type` must be ignored (forward compat).
+export const HUB_PROTOCOL_VERSION = 1
+
+export interface HubMessage {
+  v: number
+  type: string
+  ts: string
+  payload: unknown
+}
+
+export interface HubHelloPayload {
+  clientId: string
+  appVersion: string
+}
+
+export interface HubWelcomePayload {
+  user: UserConfig
+  team: TeamMember[]
+  /** Unresolved issues assigned to this client (state restore on reconnect). */
+  issues: SheriffIssue[]
+}
+
+export interface HubIssuePayload {
+  issue: SheriffIssue
+}
+
+export interface HubErrorPayload {
+  code: string
+  message: string
+}
 
 /** Result of a wiki health check (lint operation). */
 export interface WikiLintReport {

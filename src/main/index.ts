@@ -1,10 +1,28 @@
+import { config as loadDotenv } from 'dotenv'
 import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron'
 import { join } from 'path'
+
+// Local config from <project root>/.env (gitignored) — shell env vars still win.
+// NODE_EXTRA_CA_CERTS is the one exception: Node reads it at process start, so it
+// cannot come from .env (see docs/SETUP.md).
+loadDotenv({ quiet: true })
 import { TEAM } from '@shared/team'
-import type { AppState, CIEvent, IssueStatus, Role, SheriffIssue, UserConfig, WsStatus } from '@shared/types'
+import type {
+  AppState,
+  CIEvent,
+  IssueStatus,
+  Role,
+  SheriffIssue,
+  TeamMember,
+  UserConfig,
+  WsStatus
+} from '@shared/types'
 import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
+import { notifyUpdated, pushIssue, startHub } from './modules/hub'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
+import { HubClient } from './modules/hub-client/client'
+import { JiraPoller } from './modules/jira/poller'
 import { ToastManager } from './modules/notifications/toast'
 import { CIWebSocketClient } from './modules/websocket/client'
 import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback, vaultDir } from './modules/wiki'
@@ -17,6 +35,9 @@ let quitting = false
 let wsStatus: WsStatus = 'connecting'
 let notificationsMuted = false
 let userConfig: UserConfig
+// Hardcoded TEAM until the first server:welcome replaces it (server owns the roster).
+let team: TeamMember[] = TEAM
+let transport: { dispose(): void } | null = null
 
 // Members get a small companion window; the sheriff gets the full dashboard.
 const WINDOW_SIZE: Record<Role, { width: number; height: number; minWidth: number; minHeight: number }> = {
@@ -140,6 +161,33 @@ function isRelevantTo(issue: SheriffIssue, cfg: UserConfig): boolean {
   return cfg.role === 'sheriff' || issue.assignment.assigneeId === cfg.userId
 }
 
+let jiraPoller: JiraPoller | null = null
+
+// Team decision: Jira polling runs only where the app acts as the server (sheriff).
+// Members never poll Jira themselves — they receive issues via push. Called on
+// startup and whenever the role changes ('user:set').
+function syncJiraPoller(): void {
+  if (userConfig.role === 'sheriff' && !jiraPoller) {
+    jiraPoller = new JiraPoller(
+      {
+        baseUrl: process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792',
+        project: process.env.SVP_JIRA_PROJECT ?? 'CIOPS',
+        label: process.env.SVP_JIRA_LABEL ?? 'ci-failure',
+        jql: process.env.SVP_JIRA_JQL,
+        pollMs: Number(process.env.SVP_JIRA_POLL_MS ?? 30000),
+        pat: process.env.SVP_JIRA_PAT,
+        storePath: join(app.getPath('userData'), 'svp-processed-tickets.json')
+      },
+      handleCIEvent
+    )
+    jiraPoller.start()
+  } else if (userConfig.role !== 'sheriff' && jiraPoller) {
+    jiraPoller.dispose()
+    jiraPoller = null
+    console.log('[svp:jira] poller stopped (member role does not poll)')
+  }
+}
+
 async function handleCIEvent(event: CIEvent): Promise<void> {
   try {
     const wikiRefs = await queryWiki(event)
@@ -153,10 +201,69 @@ async function handleCIEvent(event: CIEvent): Promise<void> {
       receivedAt: new Date().toISOString()
     }
     issues.unshift(issue)
-    mainWindow?.webContents.send('issue:new', issue)
+    mainWindow?.webContents.send('issue:new', issue) // 당번 대시보드 (same process, IPC)
+    pushIssue(issue) // 담당자 클라이언트 (hub — no-op when the assignee is offline; welcome restores)
     if (!notificationsMuted && isRelevantTo(issue, userConfig)) toasts.show(issue)
   } catch (err) {
     console.error('[svp] failed to process CI event', err)
+  }
+}
+
+function setWsStatus(status: WsStatus): void {
+  wsStatus = status
+  mainWindow?.webContents.send('ws:status', status)
+}
+
+// member → sheriff hub (server-filtered push), sheriff → CI WS directly
+// (the sheriff app becomes the hub server itself once modules/hub/ lands — F6).
+// Restarted on user switch so the hub sees the new clientId.
+function startTransport(): void {
+  transport?.dispose()
+  if (userConfig.role === 'member') {
+    const url = process.env.SVP_SERVER_URL ?? 'ws://localhost:8791'
+    const client = new HubClient(
+      url,
+      { clientId: userConfig.userId, appVersion: app.getVersion() },
+      {
+        onWelcome: (snapshot) => {
+          team = snapshot.team
+          issues.splice(0, issues.length, ...snapshot.issues)
+          mainWindow?.webContents.send('state:refresh')
+        },
+        onIssueAssigned: ({ issue }) => {
+          issues.unshift(issue)
+          mainWindow?.webContents.send('issue:new', issue)
+          if (!notificationsMuted) toasts.show(issue)
+        },
+        onIssueUpdated: ({ issue }) => {
+          const idx = issues.findIndex((i) => i.event.id === issue.event.id)
+          if (idx === -1) return
+          // Reassigned-away issues keep flowing here; the renderer hides them
+          // by filtering on issue.assignment (docs/API.md §1).
+          issues[idx] = issue
+          mainWindow?.webContents.send('issue:updated', issue)
+        },
+        onServerError: (e) => {
+          // TODO(SVP-7): surface as a toast once C→S wiring lands in Week 2.
+          console.error(`[svp:hub-client] server error ${e.code}: ${e.message}`)
+        },
+        onStatus: setWsStatus
+      }
+    )
+    client.connect()
+    transport = client
+  } else {
+    // Server mode: the sheriff's app hosts the client hub (F6) and takes CI
+    // events directly. startHub is guarded, so re-entering after a user
+    // switch is a no-op; the hub stays up if the user later switches away.
+    startHub({
+      getIssuesFor: (clientId) =>
+        issues.filter((i) => i.assignment.assigneeId === clientId && i.status !== 'resolved')
+    })
+    const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
+    const client = new CIWebSocketClient(wsUrl, handleCIEvent, setWsStatus)
+    client.connect()
+    transport = client
   }
 }
 
@@ -165,17 +272,15 @@ app.whenReady().then(() => {
   notificationsMuted = loadNotificationsMuted()
   createMainWindow()
   createTray()
+  startTransport()
 
-  const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
-  const client = new CIWebSocketClient(wsUrl, handleCIEvent, (status) => {
-    wsStatus = status
-    mainWindow?.webContents.send('ws:status', status)
-  })
-  client.connect()
+  // F1 — Jira polling is the main issue inflow (sheriff only); the CI WebSocket
+  // above stays as a dev-only path until fully replaced (ARCHITECTURE.md).
+  syncJiraPoller()
 
   ipcMain.handle(
     'state:get',
-    (): AppState => ({ issues, team: TEAM, user: userConfig, wsStatus, notificationsMuted })
+    (): AppState => ({ issues, team, user: userConfig, wsStatus, notificationsMuted })
   )
 
   ipcMain.handle('notify:setMuted', (_e, muted: boolean): boolean => {
@@ -184,12 +289,14 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('user:set', (_e, userId: string): UserConfig => {
-    const member = TEAM.find((m) => m.id === userId)
-    if (member) {
+    const member = team.find((m) => m.id === userId)
+    if (member && member.id !== userConfig.userId) {
       const roleChanged = member.role !== userConfig.role
       userConfig = { userId: member.id, role: member.role }
       saveUserConfig(userConfig)
       if (roleChanged) applyWindowMode(member.role)
+      startTransport() // reconnect as the new clientId (hub filters per client)
+      syncJiraPoller()
     }
     return userConfig
   })
@@ -200,6 +307,7 @@ app.whenReady().then(() => {
     issue.status = status
     if (status === 'resolved') await ingestResolvedIssue(issue)
     mainWindow?.webContents.send('issue:updated', issue)
+    notifyUpdated(issue)
     return issue
   })
 

@@ -9,6 +9,8 @@ declare global {
       setIssueStatus(id: string, status: IssueStatus): Promise<SheriffIssue | null>
       onIssueNew(cb: (issue: SheriffIssue) => void): () => void
       onIssueUpdated(cb: (issue: SheriffIssue) => void): () => void
+      /** Whole-state invalidation (e.g. hub welcome snapshot) — re-fetch via getState(). */
+      onStateRefresh(cb: () => void): () => void
       onWsStatus(cb: (status: WsStatus) => void): () => void
       onIssueFocus(cb: (issueId: string) => void): () => void
       onToastData(cb: (issue: SheriffIssue) => void): () => void
