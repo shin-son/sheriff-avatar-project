@@ -74,9 +74,11 @@
 
   - 파이프라인(F1→F3→F4)은 배정 확정 후 `pushIssue()` 한 번만 호출하면 된다.
     당번 대시보드 반영은 hub 경유가 아니라 기존 IPC(`webContents.send`)로 별도 호출.
+    (v3 제안에서는 sheriff 세션 push로 대체 — [ARCHITECTURE.md 이행 계획](./ARCHITECTURE.md) 1단계)
   - **W2 예고**: C→S 메시지(`issue:ack`)가 들어오면 `startHub`에 `onAck(clientId, issueId)` 핸들러가 추가된다.
 - **불변 조건**:
-  - 클라이언트에는 자기에게 배정된 이슈만 나간다. 전체 목록은 당번 대시보드(같은 프로세스, IPC)에만 존재.
+  - member 세션에는 자기에게 배정된 이슈만 나간다. 전체 목록은 당번 대시보드에만 존재
+    (v2 = 같은 프로세스 IPC, v3 제안 = sheriff 세션에 전체 push — [ARCHITECTURE.md](./ARCHITECTURE.md)).
   - 클라이언트 재접속 시 `server:welcome`으로 미해결 배정분 전체를 복원한다 — 오프라인 중 배정을 잃지 않는다.
 - **완료 기준**: A 접속 끊고 A에게 이슈 배정 → A 재접속 시 해당 이슈가 복원되어 표시됨. B에게는 A의 이슈가 보이지 않음.
 
