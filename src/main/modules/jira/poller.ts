@@ -136,7 +136,12 @@ export class JiraPoller {
     const res = await fetch(url, {
       headers: this.opts.pat ? { Authorization: `Bearer ${this.opts.pat}` } : {}
     })
-    if (!res.ok) throw new Error(`search returned ${res.status}`)
+    if (!res.ok) {
+      // Jira explains rejections (bad JQL, unknown status name, ...) in the body —
+      // surface it, or diagnosing a 400 in the field is guesswork.
+      const body = await res.text().catch(() => '')
+      throw new Error(`search returned ${res.status}${body ? ` — ${body.slice(0, 300)}` : ''}`)
+    }
     const body = (await res.json()) as { issues: JiraIssue[] }
     return body.issues
   }
