@@ -13,7 +13,8 @@
     "dist": "electron-vite build && electron-builder --win",
     "mock:ci": "node mock/ci-server.mjs",
     "mock:jira": "node mock/jira-server.mjs",
-    "mock:push": "node mock/push-server.mjs"
+    "mock:push": "node mock/push-server.mjs",
+    "mock:server": "node mock/svp-server.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
