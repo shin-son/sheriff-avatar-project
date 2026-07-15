@@ -1,6 +1,17 @@
 export type CIEventType = 'test_failed' | 'build_failed' | 'lint_failed' | 'deploy_failed'
 
-/** Raw event pushed by the CI/CD server over WebSocket. */
+/** Where an issue event came from. Jira polling is the main inflow (ARCHITECTURE.md). */
+export type IssueSource = 'jira' | 'mock-ci'
+
+/** Reference to the Jira ticket an event was created from. */
+export interface JiraTicketRef {
+  key: string
+  url: string
+  /** Jira statusCategory key: 'new' | 'indeterminate' | 'done' */
+  status: string
+}
+
+/** Normalized issue event entering the pipeline (from Jira polling or the mock CI WS). */
 export interface CIEvent {
   id: string
   type: CIEventType
@@ -11,6 +22,10 @@ export interface CIEvent {
   log: string
   url: string
   timestamp: string
+  /** Absent means the legacy mock CI WebSocket. */
+  source?: IssueSource
+  /** Present when the event was created from a Jira ticket. */
+  jira?: JiraTicketRef
 }
 
 export type IssueSeverity = 'critical' | 'major' | 'minor'

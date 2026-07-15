@@ -51,19 +51,21 @@ LLM-WIKI 기반 Sheriff Agent Windows 데스크톱 앱 (Electron + React + TypeS
 ```bash
 npm install          # 의존성 설치
 npm run dev          # 개발 모드 실행 (HMR)
-npm run mock:ci      # mock CI/CD WebSocket 서버 (별도 터미널, 포트 8790)
+npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792) — 이슈 유입 메인 경로
+npm run mock:ci      # mock CI/CD WebSocket 서버 (별도 터미널, 포트 8790) — 개발용 병존
 npm run typecheck    # 타입 체크
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
 
-로컬 개발은 항상 `mock:ci`를 먼저 띄우고 `dev`를 실행한다.
+로컬 개발은 `mock:jira`를 먼저 띄우고 `dev`를 실행한다. 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
 
 ## 모듈 맵
 
 ```
 src/main/                        Electron 메인 프로세스
-  modules/websocket/             CI/CD WebSocket 수신 (재접속 포함)
+  modules/jira/                  Jira 폴링 — 이슈 유입 메인 (F1, sheriff 역할일 때만 동작)
+  modules/websocket/             CI/CD WebSocket 수신 (재접속 포함, 개발용 병존)
   modules/classifier/            LLM 이슈 분류 + 신뢰도 점수 (현재 stub, TODO: Claude API)
   modules/wiki/                  LLM-WIKI 어댑터 (wiki-vault/ 읽기·케이스 로그 쓰기)
   modules/assignment/            신뢰도 기반 담당자 라우팅 (>80 → feature owner, ≤80 → sheriff)

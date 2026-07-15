@@ -1,5 +1,11 @@
+import { config as loadDotenv } from 'dotenv'
 import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron'
 import { join } from 'path'
+
+// Local config from <project root>/.env (gitignored) — shell env vars still win.
+// NODE_EXTRA_CA_CERTS is the one exception: Node reads it at process start, so it
+// cannot come from .env (see docs/SETUP.md).
+loadDotenv({ quiet: true })
 import { TEAM } from '@shared/team'
 import type {
   AppState,
@@ -16,6 +22,7 @@ import { notifyUpdated, pushIssue, startHub } from './modules/hub'
 import { route } from './modules/assignment/router'
 import { classify } from './modules/classifier'
 import { HubClient } from './modules/hub-client/client'
+import { JiraPoller } from './modules/jira/poller'
 import { ToastManager } from './modules/notifications/toast'
 import { CIWebSocketClient } from './modules/websocket/client'
 import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback, vaultDir } from './modules/wiki'
@@ -154,6 +161,33 @@ function isRelevantTo(issue: SheriffIssue, cfg: UserConfig): boolean {
   return cfg.role === 'sheriff' || issue.assignment.assigneeId === cfg.userId
 }
 
+let jiraPoller: JiraPoller | null = null
+
+// Team decision: Jira polling runs only where the app acts as the server (sheriff).
+// Members never poll Jira themselves — they receive issues via push. Called on
+// startup and whenever the role changes ('user:set').
+function syncJiraPoller(): void {
+  if (userConfig.role === 'sheriff' && !jiraPoller) {
+    jiraPoller = new JiraPoller(
+      {
+        baseUrl: process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792',
+        project: process.env.SVP_JIRA_PROJECT ?? 'CIOPS',
+        label: process.env.SVP_JIRA_LABEL ?? 'ci-failure',
+        jql: process.env.SVP_JIRA_JQL,
+        pollMs: Number(process.env.SVP_JIRA_POLL_MS ?? 30000),
+        pat: process.env.SVP_JIRA_PAT,
+        storePath: join(app.getPath('userData'), 'svp-processed-tickets.json')
+      },
+      handleCIEvent
+    )
+    jiraPoller.start()
+  } else if (userConfig.role !== 'sheriff' && jiraPoller) {
+    jiraPoller.dispose()
+    jiraPoller = null
+    console.log('[svp:jira] poller stopped (member role does not poll)')
+  }
+}
+
 async function handleCIEvent(event: CIEvent): Promise<void> {
   try {
     const wikiRefs = await queryWiki(event)
@@ -240,6 +274,10 @@ app.whenReady().then(() => {
   createTray()
   startTransport()
 
+  // F1 — Jira polling is the main issue inflow (sheriff only); the CI WebSocket
+  // above stays as a dev-only path until fully replaced (ARCHITECTURE.md).
+  syncJiraPoller()
+
   ipcMain.handle(
     'state:get',
     (): AppState => ({ issues, team, user: userConfig, wsStatus, notificationsMuted })
@@ -258,6 +296,7 @@ app.whenReady().then(() => {
       saveUserConfig(userConfig)
       if (roleChanged) applyWindowMode(member.role)
       startTransport() // reconnect as the new clientId (hub filters per client)
+      syncJiraPoller()
     }
     return userConfig
   })
