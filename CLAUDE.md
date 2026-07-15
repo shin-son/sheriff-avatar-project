@@ -50,30 +50,28 @@ LLM-WIKI 기반 Sheriff Agent Windows 데스크톱 앱 (Electron + React + TypeS
 
 ```bash
 npm install          # 의존성 설치
-npm run dev          # 개발 모드 실행 (HMR)
-npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792) — 이슈 유입 메인 경로
-npm run mock:ci      # mock CI/CD WebSocket 서버 (별도 터미널, 포트 8790) — 개발용 병존
-npm run mock:push    # mock 중앙 서버 Socket.IO push (별도 터미널, 포트 8793) — push 수신 확인용
+npm run dev          # 개발 모드 실행 (HMR) — 로그인: admin/admin(당번), 아이디=비밀번호(팀원)
+npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792)
+npm run mock:server  # v3 서버 프로토타입 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로
 npm run typecheck    # 타입 체크
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
 
-로컬 개발은 `mock:jira`를 먼저 띄우고 `dev`를 실행한다. 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
+로컬 개발은 `mock:jira` → `mock:server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는 구세대 —
+정리 예정). 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
 
 ## 모듈 맵
 
 ```
-src/main/                        Electron 메인 프로세스
-  modules/jira/                  Jira 폴링 — 이슈 유입 메인 (F1, sheriff 역할일 때만 동작)
-  modules/websocket/             CI/CD WebSocket 수신 (재접속 포함, 개발용 병존)
-  modules/hub/                   당번 앱이 호스팅하는 WS 서버 (팀원별 이슈 push, F6)
-  modules/hub-client/            팀원 앱의 hub 접속 클라이언트 (배정 이슈 수신)
-  modules/push/                  중앙 서버 Socket.IO push 수신 (임시 구현 — 서버 계약 확정 시 교체)
-  modules/classifier/            LLM 이슈 분류 + 신뢰도 점수 (현재 stub, TODO: Claude API)
-  modules/wiki/                  LLM-WIKI 어댑터 (wiki-vault/ 읽기·케이스 로그 쓰기)
-  modules/assignment/            신뢰도 기반 담당자 라우팅 (>80 → feature owner, ≤80 → sheriff)
+src/main/                        Electron 메인 프로세스 (v3: 순수 클라이언트 — 로그인·push 수신·UI)
+  modules/push/                  중앙 서버 Socket.IO 접속 — 로그인·이슈 push 수신·ack (임시 계약)
   modules/notifications/         하단 팝업(toast) 알림 창 관리
+  modules/wiki/                  LLM-WIKI 어댑터 — 서버로 이동 예정 (v3 이행 3단계)
+  modules/jira|websocket|hub|hub-client|classifier|assignment/
+                                 v2 잔재 — 앱에서 더 이상 기동하지 않음. 서버(src/server/) 승격 시
+                                 이동/정리 (docs/ARCHITECTURE.md 이행 계획)
+mock/svp-server.mjs              v3 서버 프로토타입 — 폴링→assignee 배정→Socket.IO push (Linux 이전 전 임시)
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정

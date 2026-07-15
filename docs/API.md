@@ -6,6 +6,20 @@
 
 ## 1. 클라이언트 ↔ 서버 (WebSocket)
 
+> **2026-07-15 갱신 — 전송 계층 Socket.IO 확정.** 아래 raw-WS envelope 규격은 메시지의 **의미**(종류·필터링
+> 규칙) 명세로 유지하되, 실제 전송은 Socket.IO 이벤트다. 현행 프로토타입 계약
+> (`mock/svp-server.mjs` ↔ `src/main/modules/push/`):
+>
+> - 접속/로그인: `io(SVP_PUSH_URL, { auth: { username, password } })` — 데모 인증(SVP-5 전:
+>   admin/admin = sheriff, 아이디=비밀번호 = member). 실패 시 `connect_error("AUTH_FAILED")`,
+>   성공 시 S→C `session` `{ user: UserConfig, team: TeamMember[] }` 후 그 세션이 볼 미해결 이슈를
+>   `issue:new`로 재생(복원). 재접속은 socket.io-client 내장.
+> - S→C `issue:new` / `issue:updated` — payload는 `SheriffIssue` 그대로 (envelope 없음).
+>   서버 측 필터링: member = 본인 assignee분만, sheriff = 전체.
+> - C→S `issue:ack` `{ issueId }` — 서버가 Jira를 In Progress로 전이. 해결 메시지는 없다 (Done은 Jira에서만).
+> - 미이식: `issue:reassign` · `wiki:lint` · `wiki:feedback` · `server:error` — 아래 표의 의미 그대로
+>   W2에서 Socket.IO 이벤트로 추가한다.
+
 - 서버가 `ws://<server-host>:8791` 리슨 (v2 = 당번 앱, v3 = Linux headless 서버 — [ARCHITECTURE.md](./ARCHITECTURE.md)).
   포트는 `SVP_HUB_PORT`로 변경 가능.
 - 클라이언트는 `SVP_SERVER_URL` (예: `ws://192.168.0.10:8791`)로 접속. 끊기면 3초 간격 재접속 (기존 정책 유지).
