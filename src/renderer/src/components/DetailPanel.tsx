@@ -1,22 +1,22 @@
-import type { IssueStatus, SheriffIssue } from '@shared/types'
+import type { SheriffIssue } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
 interface Props {
   issue: SheriffIssue
   onClose: () => void
-  onSetStatus: (id: string, status: IssueStatus) => void
+  onAck: (id: string) => void
 }
 
 /** Floating glass panel with the selected issue's detail (reference: detached side card). */
-export default function DetailPanel({ issue, onClose, onSetStatus }: Props) {
+export default function DetailPanel({ issue, onClose, onAck }: Props) {
   const { event, classification, assignment, status } = issue
   const confClass = classification.confidence > 80 ? 'high' : 'low'
 
-  // "확인" = open the ticket; the first look also moves the issue to acknowledged.
-  // Resolution happens in Jira only — the app picks it up via polling (no resolve button).
+  // "확인" = open the ticket + ack (the server transitions it in Jira).
+  // Status is never written locally — it comes back once the server confirms it in Jira.
   const checkTicket = () => {
     window.svp.openTicket(event.url)
-    if (status === 'new') onSetStatus(event.id, 'acknowledged')
+    if (status === 'new') onAck(event.id)
   }
 
   return (

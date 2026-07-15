@@ -11,11 +11,10 @@ interface Props {
   user: UserConfig
   wsStatus: WsStatus
   muted: boolean
-  onSelectUser: (userId: string) => void
   onToggleMuted: () => void
 }
 
-export default function Sidebar({ team, user, wsStatus, muted, onSelectUser, onToggleMuted }: Props) {
+export default function Sidebar({ team, user, wsStatus, muted, onToggleMuted }: Props) {
   const me = team.find((m) => m.id === user.userId)
   return (
     <aside className="sidebar">
@@ -29,14 +28,11 @@ export default function Sidebar({ team, user, wsStatus, muted, onSelectUser, onT
         </div>
       </div>
 
-      <div className="section-title">팀 · 사용자 전환 (데모)</div>
+      {/* 로그인이 신원을 결정한다 (v3) — 명단은 표시만, 전환 없음 */}
+      <div className="section-title">팀</div>
       <div className="team-list">
         {team.map((m) => (
-          <button
-            key={m.id}
-            className={`team-item ${m.id === user.userId ? 'active' : ''}`}
-            onClick={() => onSelectUser(m.id)}
-          >
+          <div key={m.id} className={`team-item ${m.id === user.userId ? 'active' : ''}`}>
             <span className="avatar">{m.name.charAt(0)}</span>
             <span className="team-item-body">
               <span className="team-name">
@@ -45,7 +41,7 @@ export default function Sidebar({ team, user, wsStatus, muted, onSelectUser, onT
               </span>
               <span className="team-mods">{m.ownedModules.join(' · ')}</span>
             </span>
-          </button>
+          </div>
         ))}
       </div>
 

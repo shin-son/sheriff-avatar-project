@@ -87,7 +87,8 @@ function createTicket(scenarioId) {
     status: 'Open',
     created: now,
     updated: now,
-    assignee: null,
+    // Mirrors 사내 운용: CI가 만든 티켓은 bot 계정에 배정된 채 시작한다.
+    assignee: 'cicd_ap',
     comments: []
   }
   tickets.set(key, ticket)

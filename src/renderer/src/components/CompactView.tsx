@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { AppState, IssueStatus, SheriffIssue, WsStatus } from '@shared/types'
+import type { AppState, SheriffIssue, WsStatus } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
 // Members connect to the sheriff hub, not to CI directly (docs/API.md §1).
@@ -15,8 +15,7 @@ interface Props {
   focusId: string | null
   /** In acrylic mode the title bar renders inside this sheet (frameless: floats outside). */
   titlebar?: ReactNode
-  onSelectUser: (userId: string) => void
-  onSetStatus: (id: string, status: IssueStatus) => void
+  onAck: (id: string) => void
   onToggleMuted: () => void
 }
 
@@ -26,8 +25,7 @@ export default function CompactView({
   issues,
   focusId,
   titlebar,
-  onSelectUser,
-  onSetStatus,
+  onAck,
   onToggleMuted
 }: Props) {
   const openCount = issues.filter((i) => i.status !== 'resolved').length
@@ -46,19 +44,11 @@ export default function CompactView({
         >
           {state.notificationsMuted ? '알림 꺼짐' : '알림 켜짐'}
         </button>
-        <select
-          className="compact-user"
-          value={state.user.userId}
-          onChange={(e) => onSelectUser(e.target.value)}
-          title="사용자 전환 (데모)"
-        >
-          {state.team.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-              {m.role === 'sheriff' ? ' (당번)' : ''}
-            </option>
-          ))}
-        </select>
+        {/* 로그인이 신원을 결정한다 (v3) — 전환 UI 없음 */}
+        <span className="user-label" title="로그인 사용자">
+          <span className="avatar">{state.user.userId.charAt(0).toUpperCase()}</span>
+          {state.user.userId}
+        </span>
       </header>
 
       <div className="compact-sub">내 이슈 · 처리 필요 {openCount}건</div>
@@ -75,7 +65,7 @@ export default function CompactView({
             key={issue.event.id}
             issue={issue}
             highlighted={focusId === issue.event.id}
-            onSetStatus={onSetStatus}
+            onAck={onAck}
           />
         ))}
       </div>
@@ -86,16 +76,17 @@ export default function CompactView({
 function CompactItem({
   issue,
   highlighted,
-  onSetStatus
+  onAck
 }: {
   issue: SheriffIssue
   highlighted: boolean
-  onSetStatus: (id: string, status: IssueStatus) => void
+  onAck: (id: string) => void
 }) {
   const { event, classification, assignment, status } = issue
+  // ack는 서버에 Jira 전이를 요청할 뿐 — 상태는 Jira 확인 후 issue:updated로 반영된다.
   const checkTicket = () => {
     window.svp.openTicket(event.url)
-    if (status === 'new') onSetStatus(event.id, 'acknowledged')
+    if (status === 'new') onAck(event.id)
   }
   return (
     <article

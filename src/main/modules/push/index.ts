@@ -2,14 +2,14 @@
 // TEMPORARY (server contract not final) — swap it here when the real server
 // lands; callers only see the PushListener interface.
 import { SocketIoPushListener } from './socketio'
-import type { PushListener, PushListenerHandlers } from './types'
+import type { PushCredentials, PushListener, PushListenerHandlers } from './types'
 
-export type { PushListener, PushListenerHandlers } from './types'
+export type { PushCredentials, PushListener, PushListenerHandlers, PushSession } from './types'
 
 export function createPushListener(
   url: string,
-  clientId: string,
+  credentials: PushCredentials,
   handlers: PushListenerHandlers
 ): PushListener {
-  return new SocketIoPushListener(url, clientId, handlers)
+  return new SocketIoPushListener(url, credentials, handlers)
 }

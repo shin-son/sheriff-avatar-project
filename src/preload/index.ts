@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { IssueStatus } from '../shared/types'
 
 function subscribe(channel: string, cb: (payload: unknown) => void): () => void {
   const listener = (_e: IpcRendererEvent, payload: unknown): void => cb(payload)
@@ -11,8 +10,8 @@ function subscribe(channel: string, cb: (payload: unknown) => void): () => void 
 const api = {
   frameless: process.argv.includes('--svp-frameless'),
   getState: () => ipcRenderer.invoke('state:get'),
-  setUser: (userId: string) => ipcRenderer.invoke('user:set', userId),
-  setIssueStatus: (id: string, status: IssueStatus) => ipcRenderer.invoke('issue:setStatus', id, status),
+  login: (username: string, password: string) => ipcRenderer.invoke('auth:login', username, password),
+  ackIssue: (id: string) => ipcRenderer.send('issue:ack', id),
   onIssueNew: (cb: (payload: unknown) => void) => subscribe('issue:new', cb),
   onIssueUpdated: (cb: (payload: unknown) => void) => subscribe('issue:updated', cb),
   onStateRefresh: (cb: (payload: unknown) => void) => subscribe('state:refresh', cb),

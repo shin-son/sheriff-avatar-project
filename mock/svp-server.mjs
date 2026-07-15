@@ -1,23 +1,36 @@
 // v3 server prototype (docs/arch-v3-server-split demo) — a standalone headless
-// pipeline: polls mock Jira (8792) → classify (stub) → route → Socket.IO push
-// with SERVER-SIDE filtering (members get their own issues, sheriffs get all).
-// Speaks the temporary push contract of modules/push/socketio.ts, so the app
-// connects to it unchanged. Replaces mock/push-server.mjs for the full-cycle
-// demo: run mock:jira first, then this, then the app.
+// pipeline: polls Jira → routes by the ticket's ASSIGNEE → Socket.IO push with
+// SERVER-SIDE filtering. Clients log in (demo auth) and the server tells them
+// their role; the app renders member/sheriff view from that.
+//
+// Routing model (사내 운용 가정):
+//  - assignee == bot(cicd_ap) or empty  → 사람 배정 전 → sheriff(admin) queue
+//  - assignee == a human username       → pushed to that user's session
+//  - assignee/status changes are detected via `key in (...)` tracking, so a
+//    base JQL like `status != Resolved` still lets us see the Resolved event.
+//
+// Works against mock/jira-server.mjs (default) or a real Jira via .env:
+//   SVP_JIRA_BASE_URL, SVP_JIRA_JQL, SVP_JIRA_PAT, SVP_JIRA_BOT
+//   (+ NODE_EXTRA_CA_CERTS in the shell for corporate TLS)
 // Usage: npm run mock:server  (port 8793)
+import 'dotenv/config'
 import { Server } from 'socket.io'
 
-const PORT = 8793
+const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
+const PAT = process.env.SVP_JIRA_PAT
+const BOT = process.env.SVP_JIRA_BOT ?? 'cicd_ap'
+const BASE_JQL = process.env.SVP_JIRA_JQL ?? 'project = CIOPS AND labels = ci-failure'
 const POLL_MS = Number(process.env.SVP_SERVER_POLL_MS ?? 5000)
 
-// Mirrors src/shared/team.ts (mock territory — the real server will own the roster).
-const TEAM = [
-  { id: 'alice', name: 'Alice (A)', role: 'member', ownedModules: ['auth', 'login'] },
-  { id: 'bob', name: 'Bob (B)', role: 'member', ownedModules: ['payment', 'billing'] },
-  { id: 'carol', name: 'Carol (C)', role: 'sheriff', ownedModules: ['infra'] }
-]
-const SHERIFF = TEAM.find((m) => m.role === 'sheriff')
+// Demo auth until SVP-5: admin/admin → sheriff; any username with
+// password === username → member (e.g. shin.son / shin.son).
+function authenticate(username, password) {
+  if (!username || password !== username) return null
+  return username === 'admin'
+    ? { userId: 'admin', role: 'sheriff' }
+    : { userId: username, role: 'member' }
+}
 
 const SEVERITY_BY_TYPE = {
   build_failed: 'critical',
@@ -29,16 +42,12 @@ const STATUS_BY_CATEGORY = { new: 'new', indeterminate: 'acknowledged', done: 'r
 
 /** key → SheriffIssue (the server owns the issue store in v3). */
 const issues = new Map()
+/** userIds ever seen (logins + assignees) — for the roster sent on login. */
+const knownMembers = new Set()
 let lastPoll = null
 
-function hash(s) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
-
 // description contract: `key: value` header lines, then `log:` + raw log
-// (same parsing as src/main/modules/jira/poller.ts normalizeTicket).
+// (mock contract; real corporate tickets just fall back to defaults).
 function normalize(t) {
   const lines = (t.fields.description ?? '').split('\n')
   const fields = {}
@@ -65,83 +74,94 @@ function normalize(t) {
   }
 }
 
-// Stub classify+route (mirrors the app's classifier stub shape; no wiki here).
-function classifyAndRoute(event) {
-  const owner = TEAM.find((m) => m.ownedModules.includes(event.module) && m.role === 'member')
-  const confidence = owner ? Math.min(99, 84 + (hash(event.id) % 12)) : 40 + (hash(event.id) % 20)
-  const assignee = confidence > 80 && owner ? owner : SHERIFF
+function assigneeOf(t) {
+  return t.fields.assignee?.name ?? t.fields.assignee?.key ?? null
+}
+
+// Assignee-driven routing: Jira's assignee field is the single source of who
+// owns the issue. bot/empty = not yet given to a human → sheriff queue.
+function routeByAssignee(event, assignee) {
+  const human = assignee && assignee !== BOT
+  if (human) knownMembers.add(assignee)
   return {
     classification: {
-      category: owner ? event.module : 'unknown',
+      category: event.module,
       severity: SEVERITY_BY_TYPE[event.type] ?? 'major',
-      confidence,
-      summary:
-        confidence > 80
-          ? `'${event.module}' 모듈의 ${event.type} 이슈로 분류됨.`
-          : '확실한 근거 부족 — 당번의 직접 확인이 필요함.',
+      confidence: human ? 95 : 50,
+      summary: human
+        ? `Jira에서 ${assignee}에게 배정된 티켓.`
+        : `사람 배정 전 (assignee: ${assignee ?? '-'}) — 당번 확인 필요.`,
       wikiRefs: []
     },
-    assignment: {
-      assigneeId: assignee.id,
-      assigneeName: assignee.name,
-      routedTo: assignee === SHERIFF && !(owner && confidence > 80) ? 'sheriff' : 'feature-owner',
-      reason:
-        confidence > 80 && owner
-          ? `confidence ${confidence} > 80 → ${event.module} owner`
-          : `confidence ${confidence} ≤ 80 → sheriff`
-    }
+    assignment: human
+      ? { assigneeId: assignee, assigneeName: assignee, routedTo: 'feature-owner', reason: `Jira assignee = ${assignee}` }
+      : { assigneeId: 'admin', assigneeName: '당번 (admin)', routedTo: 'sheriff', reason: `assignee가 ${assignee ?? '없음'} (사람 배정 전) → 당번` }
   }
 }
 
-// ---- Socket.IO: one session per clientId, server-side filtering ----
+// ---- Socket.IO: login-authenticated sessions, server-side filtering ----
 const io = new Server(PORT)
-const sessions = new Map() // clientId → socket
+const sessions = new Map() // userId → { socket, role }
 
-function recipientsOf(issue) {
-  const ids = new Set(TEAM.filter((m) => m.role === 'sheriff').map((m) => m.id))
+io.use((socket, next) => {
+  const { username, password } = socket.handshake.auth ?? {}
+  const user = authenticate(String(username ?? ''), String(password ?? ''))
+  if (!user) return next(new Error('AUTH_FAILED'))
+  socket.data.user = user
+  next()
+})
+
+function roster() {
+  return [
+    { id: 'admin', name: '당번 (admin)', role: 'sheriff', ownedModules: [] },
+    ...[...knownMembers].map((id) => ({ id, name: id, role: 'member', ownedModules: [] }))
+  ]
+}
+
+function recipientsOf(issue, extra = []) {
+  const ids = new Set(extra)
   ids.add(issue.assignment.assigneeId)
+  for (const [id, s] of sessions) if (s.role === 'sheriff') ids.add(id)
   return ids
 }
 
-function emitIssue(type, issue) {
-  for (const id of recipientsOf(issue)) {
-    sessions.get(id)?.emit(type, issue)
-  }
-  console.log(`[svp-server] → ${type} ${issue.event.jira.key} (${issue.status}) → ${[...recipientsOf(issue)].join(', ')}`)
+function emitIssue(type, issue, extra = []) {
+  const targets = recipientsOf(issue, extra)
+  for (const id of targets) sessions.get(id)?.socket.emit(type, issue)
+  console.log(`[svp-server] → ${type} ${issue.event.jira.key} (${issue.status}, assignee=${issue.assignment.assigneeId}) → ${[...targets].join(', ')}`)
 }
 
 io.on('connection', (socket) => {
-  const clientId = String(socket.handshake.auth?.clientId ?? '')
-  const member = TEAM.find((m) => m.id === clientId)
-  if (!member) {
-    console.log(`[svp-server] unknown client rejected: ${clientId}`)
-    socket.disconnect(true)
-    return
-  }
-  sessions.get(clientId)?.disconnect(true)
-  sessions.set(clientId, socket)
-  // Replay this client's visible unresolved issues (reconnect restore).
+  const user = socket.data.user
+  if (user.role === 'member') knownMembers.add(user.userId)
+  sessions.get(user.userId)?.socket.disconnect(true)
+  sessions.set(user.userId, { socket, role: user.role })
+
+  socket.emit('session', { user, team: roster() })
+  // Replay this session's visible unresolved issues (login/reconnect restore).
   const visible = [...issues.values()].filter(
-    (i) => i.status !== 'resolved' && recipientsOf(i).has(clientId)
+    (i) => i.status !== 'resolved' && (user.role === 'sheriff' || i.assignment.assigneeId === user.userId)
   )
   visible.forEach((i) => socket.emit('issue:new', i))
-  console.log(`[svp-server] ${clientId} connected (${visible.length} issue(s) restored)`)
+  console.log(`[svp-server] ${user.userId} logged in as ${user.role} (${visible.length} issue(s) restored)`)
 
-  // C→S (v3): the assignee checked the ticket — transition it in Jira.
+  // C→S: the assignee checked the ticket — transition it in Jira.
   // Status flows back via polling, never written locally (Jira = source of truth).
   socket.on('issue:ack', async (payload) => {
     const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
     if (!issue || issue.status !== 'new') return
     try {
       const url = `${JIRA}/rest/api/2/issue/${issue.event.jira.key}/transitions`
-      const { transitions } = await (await fetch(url)).json()
+      const { transitions } = await (await fetch(url, { headers: auth() })).json()
+      // TODO(SVP-6): match by statusCategory once the corporate workflow is confirmed.
       const target = transitions.find((t) => t.name === 'In Progress')
+      if (!target) throw new Error('no "In Progress" transition')
       await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...auth(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ transition: { id: target.id } })
       })
-      console.log(`[svp-server] ack from ${clientId}: ${issue.event.jira.key} → In Progress`)
+      console.log(`[svp-server] ack from ${user.userId}: ${issue.event.jira.key} → In Progress`)
       void poll()
     } catch (err) {
       console.error(`[svp-server] ack transition failed: ${err.message}`)
@@ -149,12 +169,16 @@ io.on('connection', (socket) => {
   })
 
   socket.on('disconnect', () => {
-    if (sessions.get(clientId) === socket) sessions.delete(clientId)
-    console.log(`[svp-server] ${clientId} disconnected`)
+    if (sessions.get(user.userId)?.socket === socket) sessions.delete(user.userId)
+    console.log(`[svp-server] ${user.userId} disconnected`)
   })
 })
 
-// ---- Jira polling: new tickets + status changes ----
+// ---- Jira polling: new tickets (base JQL) + tracked-key sync ----
+function auth() {
+  return PAT ? { Authorization: `Bearer ${PAT}` } : {}
+}
+
 function toJqlMinute(iso) {
   const d = new Date(iso)
   const p = (n) => String(n).padStart(2, '0')
@@ -162,36 +186,51 @@ function toJqlMinute(iso) {
 }
 
 async function search(jql) {
-  const res = await fetch(`${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}`)
-  if (!res.ok) throw new Error(`search returned ${res.status}`)
-  return (await res.json()).issues
+  const url = `${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,created,updated,assignee`
+  const res = await fetch(url, { headers: auth() })
+  if (!res.ok) throw new Error(`search returned ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  return (await res.json()).issues ?? []
 }
 
 async function poll() {
   const cycleStart = new Date().toISOString()
   try {
+    // 1) New tickets matching the team's base JQL.
     const bound = lastPoll ? ` AND created >= "${toJqlMinute(lastPoll)}"` : ''
-    for (const t of await search(`project = CIOPS AND labels = ci-failure${bound} ORDER BY created ASC`)) {
+    for (const t of await search(`(${BASE_JQL})${bound} ORDER BY created ASC`)) {
       if (issues.has(t.key)) continue
       const event = normalize(t)
       const issue = {
         event,
-        ...classifyAndRoute(event),
+        ...routeByAssignee(event, assigneeOf(t)),
         status: STATUS_BY_CATEGORY[t.fields.status.statusCategory.key] ?? 'new',
         receivedAt: new Date().toISOString()
       }
       issues.set(t.key, issue)
-      console.log(`[svp-server] new ${t.key} → ${issue.assignment.assigneeId} (conf ${issue.classification.confidence})`)
+      console.log(`[svp-server] new ${t.key} assignee=${assigneeOf(t) ?? '-'} → ${issue.assignment.assigneeId}`)
       emitIssue('issue:new', issue)
     }
-    if (lastPoll) {
-      for (const t of await search(`project = CIOPS AND labels = ci-failure AND updated >= "${toJqlMinute(lastPoll)}"`)) {
+
+    // 2) Tracked tickets: status/assignee sync by key — independent of the base
+    //    JQL, so tickets that left it (e.g. `status != Resolved`) are still seen.
+    const tracked = [...issues.entries()].filter(([, i]) => i.status !== 'resolved').map(([k]) => k)
+    if (tracked.length > 0) {
+      for (const t of await search(`key in (${tracked.join(',')})`)) {
         const issue = issues.get(t.key)
+        if (!issue) continue
         const status = STATUS_BY_CATEGORY[t.fields.status.statusCategory.key]
-        if (!issue || !status || issue.status === status) continue
-        issue.status = status
+        const assignee = assigneeOf(t)
+        const statusChanged = status && issue.status !== status
+        const currentAssignee = issue.assignment.routedTo === 'sheriff' ? null : issue.assignment.assigneeId
+        const assigneeChanged = (assignee && assignee !== BOT ? assignee : null) !== currentAssignee
+        if (!statusChanged && !assigneeChanged) continue
+        const before = issue.assignment.assigneeId
+        if (assigneeChanged) Object.assign(issue, routeByAssignee(issue.event, assignee))
+        if (statusChanged) issue.status = status
         issue.event.jira.status = t.fields.status.statusCategory.key
-        emitIssue('issue:updated', issue)
+        console.log(`[svp-server] sync ${t.key}: status=${issue.status} assignee=${issue.assignment.assigneeId}${assigneeChanged ? ` (was ${before})` : ''}`)
+        // The previous holder also gets the update so their list drops/updates it.
+        emitIssue('issue:updated', issue, assigneeChanged ? [before] : [])
       }
     }
     lastPoll = cycleStart
@@ -200,6 +239,7 @@ async function poll() {
   }
 }
 
-console.log(`[svp-server] v3 prototype on http://localhost:${PORT}, polling ${JIRA} every ${POLL_MS}ms`)
+console.log(`[svp-server] v3 prototype on http://localhost:${PORT}`)
+console.log(`[svp-server] jira=${JIRA} bot=${BOT} jql=${BASE_JQL}`)
 void poll()
 setInterval(() => void poll(), POLL_MS)
