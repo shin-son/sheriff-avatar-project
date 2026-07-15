@@ -1,0 +1,20 @@
+# SVP v3 server — systemd unit (설치 절차: docs/SETUP.md "Linux 서버 배포")
+#   sudo cp server/svp-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now svp-server
+# 로그: journalctl -u svp-server -f
+[Unit]
+Description=Sheriff Avatar (SVP) v3 server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=svp
+WorkingDirectory=/opt/svp/sheriff-avatar-project
+ExecStart=/usr/bin/node server/index.mjs
+Restart=always
+RestartSec=5
+# 사내 자체 CA는 .env로 지정할 수 없다 (Node가 프로세스 시작 시점에 읽음) — 여기서 지정.
+#Environment=NODE_EXTRA_CA_CERTS=/etc/ssl/certs/corp-root-ca.pem
+
+[Install]
+WantedBy=multi-user.target

@@ -52,13 +52,13 @@ LLM-WIKI 기반 Sheriff Agent Windows 데스크톱 앱 (Electron + React + TypeS
 npm install          # 의존성 설치
 npm run dev          # 개발 모드 실행 (HMR) — 로그인: admin/admin(당번), 아이디=비밀번호(팀원)
 npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792)
-npm run mock:server  # v3 서버 프로토타입 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로
+npm run server       # v3 서버 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로. 운영은 Linux systemd
 npm run typecheck    # 타입 체크
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
 
-로컬 개발은 `mock:jira` → `mock:server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는 구세대 —
+로컬 개발은 `mock:jira` → `server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는 구세대 —
 정리 예정). 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
 
 ## 모듈 맵
@@ -71,7 +71,7 @@ src/main/                        Electron 메인 프로세스 (v3: 순수 클라
   modules/jira|websocket|hub|hub-client|classifier|assignment/
                                  v2 잔재 — 앱에서 더 이상 기동하지 않음. 서버(src/server/) 승격 시
                                  이동/정리 (docs/ARCHITECTURE.md 이행 계획)
-mock/svp-server.mjs              v3 서버 프로토타입 — 폴링→assignee 배정→Socket.IO push (Linux 이전 전 임시)
+server/index.mjs                 v3 서버 (headless Node) — 폴링→assignee 배정→Socket.IO push. Linux systemd 운영
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정

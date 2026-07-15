@@ -21,21 +21,21 @@ cp .env.example .env    # Windows: copy .env.example .env
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `SVP_JIRA_BASE_URL` | `http://localhost:8792` (mock) | Jira 베이스 URL |
-| `SVP_JIRA_PAT` | (없음) | Personal Access Token — Bearer 인증 |
-| `SVP_JIRA_PROJECT` / `SVP_JIRA_LABEL` | `CIOPS` / `ci-failure` | 기본 필터 (`project = X AND labels = Y`) |
-| `SVP_JIRA_JQL` | (없음) | 기본 필터를 통째로 대체하는 JQL. 설정 시 PROJECT/LABEL 무시. ORDER BY는 서버가 자동으로 붙이므로 **넣지 않는다** |
+| `SVP_JIRA_BASE_URL` | `http://localhost:8792` (mock) | Jira 베이스 URL (서버 전용) |
+| `SVP_JIRA_PAT` | (없음) | Personal Access Token — Bearer 인증 (서버 전용) |
+| `SVP_JIRA_JQL` | `project = CIOPS AND labels = ci-failure` (mock용) | 팀 CI 티켓 필터 JQL. ORDER BY는 서버가 자동으로 붙이므로 **넣지 않는다** |
 | `SVP_JIRA_BOT` | `cicd_ap` | "사람 배정 전" 취급하는 bot 계정 — 이 assignee면 당번 큐로 라우팅 |
-| `SVP_SERVER_POLL_MS` | `5000` | v3 서버 폴링 주기(ms) |
+| `SVP_SERVER_PORT` | `8793` | 서버 Socket.IO 리슨 포트 |
+| `SVP_SERVER_POLL_MS` | `5000` | 서버 폴링 주기(ms) |
 | `SVP_PUSH_URL` | `http://localhost:8793` | 중앙 서버 Socket.IO 주소 — **앱에 필요한 유일한 설정** (서버가 원격이면 그 주소로) |
-| `NODE_EXTRA_CA_CERTS` | (없음) | 사내 자체 CA pem 경로. **`.env`로는 동작하지 않음** — Node가 프로세스 시작 시 읽으므로 셸에서 직접 설정 |
+| `NODE_EXTRA_CA_CERTS` | (없음) | 사내 자체 CA pem 경로. **`.env`로는 동작하지 않음** — Node가 프로세스 시작 시 읽으므로 셸(systemd는 `Environment=`)에서 설정 |
 
 ## 사외 개발 (mock)
 
 ```bash
 npm install
 npm run mock:jira        # 터미널 1 — mock Jira (포트 8792, 시드 티켓 3건, assignee=cicd_ap)
-npm run mock:server      # 터미널 2 — v3 서버 프로토타입 (포트 8793) — 폴링·배정·push
+npm run server           # 터미널 2 — v3 서버 (포트 8793) — 폴링·배정·push
 npm run dev              # 터미널 3 — 앱 (로그인: admin/admin = 당번, 아이디=비밀번호 = 팀원)
 ```
 
@@ -66,7 +66,7 @@ curl -s -G -H "Authorization: Bearer $PAT" "$JIRA/rest/api/2/search" \
 
 ```powershell
 $env:NODE_EXTRA_CA_CERTS = "C:\path\사내CA.pem"   # 셸에서 — .env로는 동작하지 않음
-npm run mock:server
+npm run server
 ```
 
 - 정상 지표: `[svp-server] jira=https://<사내 Jira> ... jql=<팀 JQL>` + 초기 티켓 `new OOOO-...` 로그.
@@ -77,17 +77,47 @@ npm run mock:server
 
 - JQL의 상태명 등은 Jira에 등록된 정확한 이름이어야 한다 (`GET /rest/api/2/status`로 목록 확인 가능)
 
+## Linux 서버 배포 (사내 운영)
+
+서버의 정식 운영 위치는 사내 상시 가동 Linux 호스트다 (v3 — [ARCHITECTURE.md](./ARCHITECTURE.md)).
+요구사항: Node.js 20+, 아웃바운드 HTTPS(사내 Jira), 인바운드 8793/tcp (팀원 PC → 서버).
+
+```bash
+# 1) 코드 + 런타임 의존성만 설치 (Electron 등 devDependencies 제외 — GUI 불필요)
+sudo mkdir -p /opt/svp && cd /opt/svp
+git clone <repo-url> sheriff-avatar-project && cd sheriff-avatar-project   # 이후엔 git pull (pull-only)
+npm ci --omit=dev
+
+# 2) 설정 — .env에 실제 값 (커밋 금지)
+cp .env.example .env && vi .env    # SVP_JIRA_BASE_URL / SVP_JIRA_PAT / SVP_JIRA_JQL / SVP_JIRA_BOT
+
+# 3) 동작 확인 (포그라운드)
+npm run server
+#    [svp-server] jira=https://<사내 Jira> ... 로그와 초기 티켓 유입 확인 후 Ctrl-C
+
+# 4) systemd 서비스 등록 (서비스 계정 svp 기준 — server/svp-server.service의 User/경로를 환경에 맞게 수정)
+sudo cp server/svp-server.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now svp-server
+journalctl -u svp-server -f       # 로그 확인
+```
+
+- **사내 자체 CA**: `NODE_EXTRA_CA_CERTS`는 `.env`로 지정할 수 없으므로 유닛 파일의 `Environment=` 줄
+  (주석 참고)을 활성화한다.
+- **업데이트 배포**: `git pull && npm ci --omit=dev && sudo systemctl restart svp-server`
+- 서버는 이슈를 메모리로 추적하므로 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다 — 별도 백업 불필요.
+- 클라이언트(전원 Windows 앱)는 `.env`의 `SVP_PUSH_URL=http://<서버호스트>:8793` 한 줄만 바꾸면 된다.
+
 ## 트러블슈팅
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
 | `jira=http://localhost:8792` (사내인데 mock 주소) | env 미전달 — `.env` 없음 또는 루트 밖에서 실행 | 프로젝트 루트에서 `.env` 확인 후 재실행 |
-| 앱 로그인 실패 "서버에 연결할 수 없습니다" | 서버(8793) 미실행 | `npm run mock:server` 먼저 |
+| 앱 로그인 실패 "서버에 연결할 수 없습니다" | 서버(8793) 미실행 또는 `SVP_PUSH_URL` 오설정 | `npm run server`(원격이면 systemd 상태) 확인 |
 | 앱에 `[svp:push] connect error: xhr poll error` 반복 | 8793에 서버 없음 (또는 포트 충돌 — `mock:push`와 동시 실행 금지) | 서버 실행/포트 확인 |
 | `poll failed ...: fetch failed (cause: ...)` | 네트워크/TLS — cause 코드로 판별: `UNABLE_TO_VERIFY...`/`SELF_SIGNED...` = CA 미신뢰, `ECONNREFUSED` = 주소, `ENOTFOUND` = DNS | TLS면 **서버 터미널** 셸에서 `NODE_EXTRA_CA_CERTS=<사내CA.pem>` 설정 (경로 오타 시 시작 로그에 `Warning: ... load failed`) |
 | `poll failed ...: search returned 401` | PAT 누락/오류 | `.env`의 `SVP_JIRA_PAT` 확인 |
 | `poll failed ...: search returned 400` | JQL 문법·상태명 오류 | curl로 같은 JQL 실행해 `errorMessages` 확인 |
 | 배정했는데 팀원 앱에 안 옴 | 로그인 아이디 ≠ Jira assignee name | 서버 로그의 `sync ...: assignee=<값>`과 로그인 아이디 대조 |
 
-v3 서버 프로토타입은 이슈를 메모리로 추적한다 — 서버를 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다.
+v3 서버는 이슈를 메모리로 추적한다 — 서버를 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다.
 (v2 앱 내장 폴러의 중복 방지 저장소 `%APPDATA%\sheriff-avatar-project\svp-processed-tickets.json`은 v2 전용.)
