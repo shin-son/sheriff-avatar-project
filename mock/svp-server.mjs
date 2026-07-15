@@ -235,7 +235,9 @@ async function poll() {
     }
     lastPoll = cycleStart
   } catch (err) {
-    console.error(`[svp-server] poll failed: ${err.message}`)
+    // undici hides the real reason (TLS/DNS/refused) in err.cause — surface it.
+    const cause = err.cause ? ` (cause: ${err.cause.code ?? err.cause.message ?? err.cause})` : ''
+    console.error(`[svp-server] poll failed: ${err.message}${cause}`)
   }
 }
 
