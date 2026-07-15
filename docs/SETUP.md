@@ -27,6 +27,7 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_JIRA_JQL` | (없음) | 기본 필터를 통째로 대체하는 JQL. 설정 시 PROJECT/LABEL 무시. created 조건·ORDER BY는 폴러가 자동으로 붙이므로 **넣지 않는다** |
 | `SVP_JIRA_POLL_MS` | `30000` | 폴링 주기(ms). 테스트 시 10000 권장 |
 | `SVP_CI_WS_URL` | `ws://localhost:8790` | 기존 mock CI WebSocket (개발용 병존) |
+| `SVP_PUSH_URL` | `http://localhost:8793` | 중앙 서버 Socket.IO push 주소 (임시 계약 — mock은 `npm run mock:push`) |
 | `NODE_EXTRA_CA_CERTS` | (없음) | 사내 자체 CA pem 경로. **`.env`로는 동작하지 않음** — Node가 프로세스 시작 시 읽으므로 셸에서 직접 설정 |
 
 ## 사외 개발 (mock)
