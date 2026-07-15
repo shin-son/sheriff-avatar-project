@@ -6,9 +6,27 @@
 
 ## 1. 클라이언트 ↔ 서버 (WebSocket)
 
-- 서버(당번 앱)가 `ws://<sheriff-host>:8791` 리슨. 포트는 `SVP_HUB_PORT`로 변경 가능.
+> **2026-07-15 갱신 — 전송 계층 Socket.IO 확정.** 아래 raw-WS envelope 규격은 메시지의 **의미**(종류·필터링
+> 규칙) 명세로 유지하되, 실제 전송은 Socket.IO 이벤트다. 현행 프로토타입 계약
+> (`mock/svp-server.mjs` ↔ `src/main/modules/push/`):
+>
+> - 접속/로그인: `io(SVP_PUSH_URL, { auth: { username, password } })` — 데모 인증(SVP-5 전:
+>   admin/admin = sheriff, 아이디=비밀번호 = member). 실패 시 `connect_error("AUTH_FAILED")`,
+>   성공 시 S→C `session` `{ user: UserConfig, team: TeamMember[] }` 후 그 세션이 볼 미해결 이슈를
+>   `issue:new`로 재생(복원). 재접속은 socket.io-client 내장.
+> - S→C `issue:new` / `issue:updated` — payload는 `SheriffIssue` 그대로 (envelope 없음).
+>   서버 측 필터링: member = 본인 assignee분만, sheriff = 전체.
+> - C→S `issue:ack` `{ issueId }` — 서버가 Jira를 In Progress로 전이. 해결 메시지는 없다 (Done은 Jira에서만).
+> - 미이식: `issue:reassign` · `wiki:lint` · `wiki:feedback` · `server:error` — 아래 표의 의미 그대로
+>   W2에서 Socket.IO 이벤트로 추가한다.
+
+- 서버가 `ws://<server-host>:8791` 리슨 (v2 = 당번 앱, v3 = Linux headless 서버 — [ARCHITECTURE.md](./ARCHITECTURE.md)).
+  포트는 `SVP_HUB_PORT`로 변경 가능.
 - 클라이언트는 `SVP_SERVER_URL` (예: `ws://192.168.0.10:8791`)로 접속. 끊기면 3초 간격 재접속 (기존 정책 유지).
-- 인증: **v1은 사내망 신뢰 기반으로 `clientId`만** 사용. 토큰 인증은 Week 3 재검토 (TODO(SVP-5)).
+- **v3: 당번 대시보드도 이 프로토콜의 클라이언트다.** role은 클라이언트가 주장하지 않는다 —
+  서버가 `client:hello`의 `clientId`로 팀 설정에서 판별한다 (member/sheriff).
+- 인증: **v1은 사내망 신뢰 기반으로 `clientId`만** 사용. 토큰 인증은 Week 3 재검토 (TODO(SVP-5) —
+  v3에서 서버가 별도 호스트가 되면 우선순위 상향).
 
 ### 메시지 envelope
 
@@ -25,16 +43,21 @@
 | 방향 | type | payload | 설명 |
 |---|---|---|---|
 | C→S | `client:hello` | `{ clientId, appVersion }` | 접속 직후 1회. 서버는 `server:welcome`으로 응답 |
-| S→C | `server:welcome` | `{ user: UserConfig, team: TeamMember[], issues: SheriffIssue[] }` | 해당 클라이언트에 배정된 이슈 스냅샷 (재접속 시 상태 복원) |
-| S→C | `issue:assigned` | `{ issue: SheriffIssue }` | 새 이슈 배정 push — **본인 배정분만 전송** |
+| S→C | `server:welcome` | `{ user: UserConfig, team: TeamMember[], issues: SheriffIssue[] }` | 이슈 스냅샷 (재접속 시 상태 복원) — member는 본인 배정분, **v3: sheriff는 전체** |
+| S→C | `issue:assigned` | `{ issue: SheriffIssue }` | 새 이슈 배정 push — member 세션에는 **본인 배정분만**, **v3: sheriff 세션에는 전체** |
 | S→C | `issue:updated` | `{ issue: SheriffIssue }` | 상태 변경·재배정 반영. 재배정으로 자신이 제외되면 `issue.assignment`로 판별해 목록에서 제거 |
 | C→S | `issue:ack` | `{ issueId }` | "티켓 확인" 클릭(티켓 열림과 동시) → 서버가 Jira를 In Progress로 전이. **해결 메시지는 없다** — Done은 Jira에서만 일어나고 서버가 폴링으로 감지한다 |
+| C→S | `issue:reassign` | `{ issueId, assigneeId }` | **v3 신설, sheriff 전용** — 수동 재배정 (F4). 서버가 Jira assignee 갱신 + 기존/신규 담당자에게 `issue:updated` push. member 세션이 보내면 `server:error(FORBIDDEN)` |
+| C→S | `wiki:lint` | `{}` | **v3 신설, sheriff 전용** — WIKI 점검 실행 요청 (F8). 응답은 `wiki:lint:result` |
+| S→C | `wiki:lint:result` | `{ report: WikiLintReport }` | lint 보고서 — 요청한 sheriff 세션에만 전송 |
 | C→S | `wiki:feedback` | `{ noteTitle, helpful: boolean }` | 참조 노트 👍/👎 (서버의 feedback 저장소에 기록) |
-| S→C | `server:error` | `{ code, message }` | 요청 처리 실패 (예: `JIRA_TRANSITION_FAILED`) — 클라이언트는 토스트로 표시 |
+| S→C | `server:error` | `{ code, message }` | 요청 처리 실패 (예: `JIRA_TRANSITION_FAILED`, `FORBIDDEN`) — 클라이언트는 토스트로 표시 |
 
 - 하트비트: WS 표준 ping/pong, 서버가 30초 주기. 2회 무응답 시 세션 종료(클라이언트는 재접속 루프 진입).
 - `client:hello`의 `clientId`가 `TEAM`에 없으면 서버는 `server:error(UNKNOWN_CLIENT)` 후 연결 종료.
-- 당번 대시보드는 같은 프로세스이므로 이 프로토콜을 쓰지 않고 기존 IPC(`window.svp`)를 그대로 쓴다.
+- v2 이행기: 당번 대시보드는 같은 프로세스 IPC(`window.svp`)를 유지하며, v3 이행 1단계에서 위 sheriff
+  세션 규칙으로 대체한다 ([ARCHITECTURE.md — 이행 계획](./ARCHITECTURE.md)). sheriff 전용 메시지의 권한
+  판별은 서버가 세션 role로 한다 — 클라이언트 UI에서 숨기는 것은 편의일 뿐 보안 경계가 아니다.
 
 ## 2. 서버 ↔ Jira (REST)
 

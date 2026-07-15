@@ -6,38 +6,31 @@ import { join } from 'path'
 // NODE_EXTRA_CA_CERTS is the one exception: Node reads it at process start, so it
 // cannot come from .env (see docs/SETUP.md).
 loadDotenv({ quiet: true })
-import { TEAM } from '@shared/team'
-import type {
-  AppState,
-  CIEvent,
-  IssueStatus,
-  Role,
-  SheriffIssue,
-  TeamMember,
-  UserConfig,
-  WsStatus
-} from '@shared/types'
-import { loadNotificationsMuted, loadUserConfig, saveNotificationsMuted, saveUserConfig } from './config'
-import { notifyUpdated, pushIssue, startHub } from './modules/hub'
-import { route } from './modules/assignment/router'
-import { classify } from './modules/classifier'
-import { HubClient } from './modules/hub-client/client'
-import { JiraPoller } from './modules/jira/poller'
+import type { AppState, Role, SheriffIssue, TeamMember, UserConfig, WsStatus } from '@shared/types'
+import { loadNotificationsMuted, saveNotificationsMuted } from './config'
 import { ToastManager } from './modules/notifications/toast'
-import { CIWebSocketClient } from './modules/websocket/client'
-import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback, vaultDir } from './modules/wiki'
+import { createPushListener } from './modules/push'
+import type { PushListener, PushSession } from './modules/push'
+import { lintWiki, recordFeedback, vaultDir } from './modules/wiki'
+
+// v3 client (docs/arch-v3-server-split): the app is a pure client. Login
+// establishes the session; the server decides role/issues and pushes them.
+// No local Jira polling, hub, or status writes — Jira (via the server) is
+// the source of truth for everything, including issue status.
 
 const issues: SheriffIssue[] = []
 const toasts = new ToastManager()
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
-let wsStatus: WsStatus = 'connecting'
+let wsStatus: WsStatus = 'disconnected'
 let notificationsMuted = false
-let userConfig: UserConfig
-// Hardcoded TEAM until the first server:welcome replaces it (server owns the roster).
-let team: TeamMember[] = TEAM
-let transport: { dispose(): void } | null = null
+let authed = false
+// Placeholder until login — the login window uses the compact (member) size.
+let userConfig: UserConfig = { userId: '', role: 'member' }
+let team: TeamMember[] = []
+let pushListener: PushListener | null = null
+let sessionStartedAt = 0
 
 // Members get a small companion window; the sheriff gets the full dashboard.
 const WINDOW_SIZE: Record<Role, { width: number; height: number; minWidth: number; minHeight: number }> = {
@@ -161,154 +154,99 @@ function isRelevantTo(issue: SheriffIssue, cfg: UserConfig): boolean {
   return cfg.role === 'sheriff' || issue.assignment.assigneeId === cfg.userId
 }
 
-let jiraPoller: JiraPoller | null = null
-
-// Team decision: Jira polling runs only where the app acts as the server (sheriff).
-// Members never poll Jira themselves — they receive issues via push. Called on
-// startup and whenever the role changes ('user:set').
-function syncJiraPoller(): void {
-  if (userConfig.role === 'sheriff' && !jiraPoller) {
-    jiraPoller = new JiraPoller(
-      {
-        baseUrl: process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792',
-        project: process.env.SVP_JIRA_PROJECT ?? 'CIOPS',
-        label: process.env.SVP_JIRA_LABEL ?? 'ci-failure',
-        jql: process.env.SVP_JIRA_JQL,
-        pollMs: Number(process.env.SVP_JIRA_POLL_MS ?? 30000),
-        pat: process.env.SVP_JIRA_PAT,
-        storePath: join(app.getPath('userData'), 'svp-processed-tickets.json')
-      },
-      handleCIEvent
-    )
-    jiraPoller.start()
-  } else if (userConfig.role !== 'sheriff' && jiraPoller) {
-    jiraPoller.dispose()
-    jiraPoller = null
-    console.log('[svp:jira] poller stopped (member role does not poll)')
-  }
-}
-
-async function handleCIEvent(event: CIEvent): Promise<void> {
-  try {
-    const wikiRefs = await queryWiki(event)
-    const classification = await classify(event, wikiRefs)
-    const assignment = route(classification, TEAM)
-    const issue: SheriffIssue = {
-      event,
-      classification,
-      assignment,
-      status: 'new',
-      receivedAt: new Date().toISOString()
-    }
-    issues.unshift(issue)
-    mainWindow?.webContents.send('issue:new', issue) // 당번 대시보드 (same process, IPC)
-    pushIssue(issue) // 담당자 클라이언트 (hub — no-op when the assignee is offline; welcome restores)
-    if (!notificationsMuted && isRelevantTo(issue, userConfig)) toasts.show(issue)
-  } catch (err) {
-    console.error('[svp] failed to process CI event', err)
-  }
-}
-
 function setWsStatus(status: WsStatus): void {
   wsStatus = status
   mainWindow?.webContents.send('ws:status', status)
 }
 
-// member → sheriff hub (server-filtered push), sheriff → CI WS directly
-// (the sheriff app becomes the hub server itself once modules/hub/ lands — F6).
-// Restarted on user switch so the hub sees the new clientId.
-function startTransport(): void {
-  transport?.dispose()
-  if (userConfig.role === 'member') {
-    const url = process.env.SVP_SERVER_URL ?? 'ws://localhost:8791'
-    const client = new HubClient(
-      url,
-      { clientId: userConfig.userId, appVersion: app.getVersion() },
-      {
-        onWelcome: (snapshot) => {
-          team = snapshot.team
-          issues.splice(0, issues.length, ...snapshot.issues)
-          mainWindow?.webContents.send('state:refresh')
-        },
-        onIssueAssigned: ({ issue }) => {
-          issues.unshift(issue)
-          mainWindow?.webContents.send('issue:new', issue)
-          if (!notificationsMuted) toasts.show(issue)
-        },
-        onIssueUpdated: ({ issue }) => {
-          const idx = issues.findIndex((i) => i.event.id === issue.event.id)
-          if (idx === -1) return
-          // Reassigned-away issues keep flowing here; the renderer hides them
-          // by filtering on issue.assignment (docs/API.md §1).
-          issues[idx] = issue
-          mainWindow?.webContents.send('issue:updated', issue)
-        },
-        onServerError: (e) => {
-          // TODO(SVP-7): surface as a toast once C→S wiring lands in Week 2.
-          console.error(`[svp:hub-client] server error ${e.code}: ${e.message}`)
-        },
-        onStatus: setWsStatus
-      }
+// Upsert an issue pushed by the server into local state: the renderer
+// re-renders via issue:new / issue:updated, and relevant issues pop a toast.
+// The login replay burst stays quiet — those are restored, not new.
+function applyPushedIssue(issue: SheriffIssue): void {
+  const idx = issues.findIndex((i) => i.event.id === issue.event.id)
+  if (idx === -1) issues.unshift(issue)
+  else issues[idx] = issue
+  mainWindow?.webContents.send(idx === -1 ? 'issue:new' : 'issue:updated', issue)
+  const replaying = Date.now() - sessionStartedAt < 3000
+  if (!notificationsMuted && !replaying && isRelevantTo(issue, userConfig)) toasts.show(issue)
+}
+
+// Login = opening the push session. The server authenticates the credentials,
+// answers with { user, team } (role decides the view), then replays the
+// session's visible unresolved issues as issue:new.
+function connectAndLogin(username: string, password: string): Promise<PushSession> {
+  return new Promise((resolve, reject) => {
+    pushListener?.dispose()
+    const url = process.env.SVP_PUSH_URL ?? 'http://localhost:8793'
+    let settled = false
+    const settle = (fn: () => void): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      fn()
+    }
+    const timeout = setTimeout(
+      () =>
+        settle(() => {
+          listener.dispose()
+          pushListener = null
+          reject(new Error('서버에 연결할 수 없습니다 — 서버 상태를 확인하세요'))
+        }),
+      8000
     )
-    client.connect()
-    transport = client
-  } else {
-    // Server mode: the sheriff's app hosts the client hub (F6) and takes CI
-    // events directly. startHub is guarded, so re-entering after a user
-    // switch is a no-op; the hub stays up if the user later switches away.
-    startHub({
-      getIssuesFor: (clientId) =>
-        issues.filter((i) => i.assignment.assigneeId === clientId && i.status !== 'resolved')
+    const listener = createPushListener(url, { username, password }, {
+      onSession: (session) => {
+        sessionStartedAt = Date.now()
+        settle(() => resolve(session))
+      },
+      onAuthError: () => {
+        pushListener = null
+        settle(() => reject(new Error('아이디 또는 비밀번호가 올바르지 않습니다')))
+      },
+      onIssueNew: applyPushedIssue,
+      onIssueUpdated: applyPushedIssue,
+      onStatus: setWsStatus
     })
-    const wsUrl = process.env.SVP_CI_WS_URL ?? 'ws://localhost:8790'
-    const client = new CIWebSocketClient(wsUrl, handleCIEvent, setWsStatus)
-    client.connect()
-    transport = client
-  }
+    listener.connect()
+    pushListener = listener
+  })
 }
 
 app.whenReady().then(() => {
-  userConfig = loadUserConfig()
   notificationsMuted = loadNotificationsMuted()
   createMainWindow()
   createTray()
-  startTransport()
-
-  // F1 — Jira polling is the main issue inflow (sheriff only); the CI WebSocket
-  // above stays as a dev-only path until fully replaced (ARCHITECTURE.md).
-  syncJiraPoller()
 
   ipcMain.handle(
     'state:get',
-    (): AppState => ({ issues, team, user: userConfig, wsStatus, notificationsMuted })
+    (): AppState => ({ issues, team, user: userConfig, wsStatus, notificationsMuted, authed })
   )
+
+  ipcMain.handle('auth:login', async (_e, username: string, password: string) => {
+    try {
+      const session = await connectAndLogin(String(username ?? '').trim(), String(password ?? ''))
+      userConfig = session.user
+      team = session.team
+      authed = true
+      issues.splice(0, issues.length) // fresh session — the server replays what we should see
+      applyWindowMode(userConfig.role)
+      mainWindow?.webContents.send('state:refresh')
+      console.log(`[svp] logged in as ${userConfig.userId} (${userConfig.role})`)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // "티켓 확인" — never flips status locally. The server transitions the Jira
+  // ticket; the new status comes back through polling as issue:updated.
+  ipcMain.on('issue:ack', (_e, issueId: string) => {
+    pushListener?.ackIssue(issueId)
+  })
 
   ipcMain.handle('notify:setMuted', (_e, muted: boolean): boolean => {
     setNotificationsMuted(muted)
     return notificationsMuted
-  })
-
-  ipcMain.handle('user:set', (_e, userId: string): UserConfig => {
-    const member = team.find((m) => m.id === userId)
-    if (member && member.id !== userConfig.userId) {
-      const roleChanged = member.role !== userConfig.role
-      userConfig = { userId: member.id, role: member.role }
-      saveUserConfig(userConfig)
-      if (roleChanged) applyWindowMode(member.role)
-      startTransport() // reconnect as the new clientId (hub filters per client)
-      syncJiraPoller()
-    }
-    return userConfig
-  })
-
-  ipcMain.handle('issue:setStatus', async (_e, id: string, status: IssueStatus) => {
-    const issue = issues.find((i) => i.event.id === id)
-    if (!issue) return null
-    issue.status = status
-    if (status === 'resolved') await ingestResolvedIssue(issue)
-    mainWindow?.webContents.send('issue:updated', issue)
-    notifyUpdated(issue)
-    return issue
   })
 
   ipcMain.handle('wiki:lint', () => lintWiki())

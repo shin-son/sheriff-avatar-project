@@ -3,6 +3,7 @@ import type { AppState, IssueStatus, SheriffIssue, WikiLintReport } from '@share
 import CompactView from './components/CompactView'
 import DetailPanel from './components/DetailPanel'
 import IssueCard from './components/IssueCard'
+import LoginView from './components/LoginView'
 import Sidebar from './components/Sidebar'
 
 export default function App() {
@@ -59,13 +60,9 @@ export default function App() {
 
   if (!state) return null
 
-  const selectUser = async (userId: string) => {
-    const user = await window.svp.setUser(userId)
-    setState((s) => (s ? { ...s, user } : s))
-  }
-
-  const setStatus = (id: string, status: IssueStatus) => {
-    void window.svp.setIssueStatus(id, status)
+  // ack는 Jira 전이 요청일 뿐 — 상태는 서버가 Jira에서 확인한 뒤 issue:updated로 돌아온다.
+  const ackIssue = (id: string) => {
+    window.svp.ackIssue(id)
   }
 
   const toggleMuted = () => {
@@ -104,6 +101,16 @@ export default function App() {
     </div>
   )
 
+  // The server decides who we are (v3): until login succeeds, only the gate shows.
+  if (!state.authed) {
+    return (
+      <div className="shell">
+        {frameless && titlebar}
+        <LoginView />
+      </div>
+    )
+  }
+
   // Regular members get a small window with only their own issues.
   if (state.user.role === 'member') {
     const myIssues = sorted.filter((i) => i.assignment.assigneeId === state.user.userId)
@@ -115,8 +122,7 @@ export default function App() {
           issues={myIssues}
           focusId={focusId}
           titlebar={frameless ? undefined : titlebar}
-          onSelectUser={selectUser}
-          onSetStatus={setStatus}
+          onAck={ackIssue}
           onToggleMuted={toggleMuted}
         />
       </div>
@@ -147,7 +153,6 @@ export default function App() {
               user={state.user}
               wsStatus={state.wsStatus}
               muted={state.notificationsMuted}
-              onSelectUser={selectUser}
               onToggleMuted={toggleMuted}
             />
             <main className="content">
@@ -258,7 +263,7 @@ export default function App() {
         </div>
       </div>
       {selected && (
-        <DetailPanel issue={selected} onClose={() => setSelectedId(null)} onSetStatus={setStatus} />
+        <DetailPanel issue={selected} onClose={() => setSelectedId(null)} onAck={ackIssue} />
       )}
     </div>
   )

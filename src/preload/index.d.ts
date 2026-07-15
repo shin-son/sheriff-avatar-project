@@ -1,12 +1,14 @@
-import type { AppState, IssueStatus, SheriffIssue, UserConfig, WikiLintReport, WsStatus } from '../shared/types'
+import type { AppState, SheriffIssue, WikiLintReport, WsStatus } from '../shared/types'
 
 declare global {
   interface Window {
     svp: {
       frameless: boolean
       getState(): Promise<AppState>
-      setUser(userId: string): Promise<UserConfig>
-      setIssueStatus(id: string, status: IssueStatus): Promise<SheriffIssue | null>
+      /** Demo auth (SVP-5 전까지): 서버가 검증하고 role을 내려준다. */
+      login(username: string, password: string): Promise<{ ok: boolean; error?: string }>
+      /** "티켓 확인" — 상태는 서버가 Jira 전이 후 폴링으로 확정해 issue:updated로 돌아온다. */
+      ackIssue(id: string): void
       onIssueNew(cb: (issue: SheriffIssue) => void): () => void
       onIssueUpdated(cb: (issue: SheriffIssue) => void): () => void
       /** Whole-state invalidation (e.g. hub welcome snapshot) — re-fetch via getState(). */

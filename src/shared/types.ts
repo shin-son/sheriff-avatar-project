@@ -132,4 +132,6 @@ export interface AppState {
   user: UserConfig
   wsStatus: WsStatus
   notificationsMuted: boolean
+  /** False until the server accepts a login — the renderer shows the login view. */
+  authed: boolean
 }
