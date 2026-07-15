@@ -1,7 +1,12 @@
-# payment 모듈
+---
+type: module
+module: payment
+owner: bob
+tags: [checkout, billing, refund]
+updated: 2026-07-15
+---
 
-- owner: Bob (B)
-- scope: checkout, billing, refund
+# payment 모듈
 
 ## Known failures
 

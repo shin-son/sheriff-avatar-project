@@ -1,7 +1,12 @@
-# auth 모듈
+---
+type: module
+module: auth
+owner: alice
+tags: [login, session, token-refresh]
+updated: 2026-07-15
+---
 
-- owner: Alice (A)
-- scope: login, session, token refresh
+# auth 모듈
 
 ## Known failures
 
