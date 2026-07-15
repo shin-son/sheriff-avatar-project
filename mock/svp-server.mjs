@@ -44,7 +44,6 @@ const STATUS_BY_CATEGORY = { new: 'new', indeterminate: 'acknowledged', done: 'r
 const issues = new Map()
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
-let lastPoll = null
 
 // description contract: `key: value` header lines, then `log:` + raw log
 // (mock contract; real corporate tickets just fall back to defaults).
@@ -179,12 +178,6 @@ function auth() {
   return PAT ? { Authorization: `Bearer ${PAT}` } : {}
 }
 
-function toJqlMinute(iso) {
-  const d = new Date(iso)
-  const p = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
-
 async function search(jql) {
   const url = `${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,created,updated,assignee`
   const res = await fetch(url, { headers: auth() })
@@ -193,11 +186,12 @@ async function search(jql) {
 }
 
 async function poll() {
-  const cycleStart = new Date().toISOString()
   try {
-    // 1) New tickets matching the team's base JQL.
-    const bound = lastPoll ? ` AND created >= "${toJqlMinute(lastPoll)}"` : ''
-    for (const t of await search(`(${BASE_JQL})${bound} ORDER BY created ASC`)) {
+    // 1) New tickets: fetch the full base JQL and skip known keys. A `created >=`
+    //    bound would be interpreted in the JIRA PROFILE timezone (not this PC's),
+    //    which silently drops new tickets — and the active set is small anyway
+    //    (the team JQL excludes Resolved).
+    for (const t of await search(`(${BASE_JQL}) ORDER BY created ASC`)) {
       if (issues.has(t.key)) continue
       const event = normalize(t)
       const issue = {
@@ -233,7 +227,6 @@ async function poll() {
         emitIssue('issue:updated', issue, assigneeChanged ? [before] : [])
       }
     }
-    lastPoll = cycleStart
   } catch (err) {
     // undici hides the real reason (TLS/DNS/refused) in err.cause — surface it.
     const cause = err.cause ? ` (cause: ${err.cause.code ?? err.cause.message ?? err.cause})` : ''
