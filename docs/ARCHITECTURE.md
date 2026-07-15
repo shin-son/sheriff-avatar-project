@@ -104,7 +104,7 @@ src/main/
 - **이 repo의 `wiki-vault/`는 시드·데모 데이터 전용.** 운영 vault에는 사내 CI 로그·이슈 내용·해결 코멘트가 쌓이므로
   **사내 git 저장소에 별도로 두고, 이 repo(GitHub)로는 절대 push하지 않는다** (CLAUDE.md 절대 규칙 2·4).
 - 리뷰는 파일 두 계층으로 나눈다:
-  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
+  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`, `raw/jira/*.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
     해결 건마다 PR을 만드는 것은 비현실적.
   - **사람이 관리하는 노트** (`modules/*.md`의 known-failure) — 수정·삭제는 PR 리뷰를 거친다.
     lint가 지목한 노트의 diff를 리뷰하는 이 시점이 사람이 사실성을 검토하는 지점이다.

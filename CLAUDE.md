@@ -116,7 +116,7 @@ mock/                            mock CI/CD 서버
 ## LLM-WIKI 규칙 (`wiki-vault/`)
 
 - Karpathy의 llm-wiki 컨셉을 따른다 (원문: [docs/llm-wiki-concept.md](./docs/llm-wiki-concept.md)): **1차 독자는 사람이 아니라 LLM이다.** 애매한 표현 대신 명시적 사실·조건·담당자를 쓴다.
-- 3계층 매핑 — raw sources: CI 로그/이슈 이벤트(불변), wiki: `wiki-vault/`(LLM이 작성·유지), schema: 이 섹션 + [wiki-vault/README.md](./wiki-vault/README.md)(상세 스키마: 구조·노트 템플릿·역할).
+- 3계층 매핑 — raw sources: CI 로그/이슈 이벤트(불변, 해결 확정 시 `wiki-vault/raw/`에 원문 사본 동결), wiki: `wiki-vault/`(LLM이 작성·유지), schema: 이 섹션 + [wiki-vault/README.md](./wiki-vault/README.md)(상세 스키마: 구조·노트 템플릿·역할).
 - 노트 하나 = 주제 하나 (모듈별 known-failure, case-log). 사람용 절차 문서는 vault가 아니라 `docs/`에 둔다.
 - 핵심 동작 4가지 (`src/main/modules/wiki/`):
   - **query** — 분류 시 관련 노트 검색 (`index.md`를 카탈로그로 사용)
