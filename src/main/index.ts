@@ -24,6 +24,7 @@ import { classify } from './modules/classifier'
 import { HubClient } from './modules/hub-client/client'
 import { JiraPoller } from './modules/jira/poller'
 import { ToastManager } from './modules/notifications/toast'
+import { createPushListener } from './modules/push'
 import { CIWebSocketClient } from './modules/websocket/client'
 import { ingestResolvedIssue, lintWiki, queryWiki, recordFeedback, vaultDir } from './modules/wiki'
 
@@ -38,6 +39,7 @@ let userConfig: UserConfig
 // Hardcoded TEAM until the first server:welcome replaces it (server owns the roster).
 let team: TeamMember[] = TEAM
 let transport: { dispose(): void } | null = null
+let pushListener: { dispose(): void } | null = null
 
 // Members get a small companion window; the sheriff gets the full dashboard.
 const WINDOW_SIZE: Record<Role, { width: number; height: number; minWidth: number; minHeight: number }> = {
@@ -267,12 +269,37 @@ function startTransport(): void {
   }
 }
 
+// Upsert an issue pushed by the server into local state: the renderer
+// re-renders via issue:new / issue:updated, and relevant issues pop a toast.
+function applyPushedIssue(issue: SheriffIssue): void {
+  const idx = issues.findIndex((i) => i.event.id === issue.event.id)
+  if (idx === -1) issues.unshift(issue)
+  else issues[idx] = issue
+  mainWindow?.webContents.send(idx === -1 ? 'issue:new' : 'issue:updated', issue)
+  if (!notificationsMuted && isRelevantTo(issue, userConfig)) toasts.show(issue)
+}
+
+// Socket.IO push channel from the central server (Jira updates). The listener
+// implementation is temporary (modules/push/, swapped when the server contract
+// lands). Restarted on user switch so the server sees the new clientId.
+function startPushListener(): void {
+  pushListener?.dispose()
+  const url = process.env.SVP_PUSH_URL ?? 'http://localhost:8793'
+  const listener = createPushListener(url, userConfig.userId, {
+    onIssueNew: applyPushedIssue,
+    onIssueUpdated: applyPushedIssue
+  })
+  listener.connect()
+  pushListener = listener
+}
+
 app.whenReady().then(() => {
   userConfig = loadUserConfig()
   notificationsMuted = loadNotificationsMuted()
   createMainWindow()
   createTray()
   startTransport()
+  startPushListener()
 
   // F1 — Jira polling is the main issue inflow (sheriff only); the CI WebSocket
   // above stays as a dev-only path until fully replaced (ARCHITECTURE.md).
@@ -296,6 +323,7 @@ app.whenReady().then(() => {
       saveUserConfig(userConfig)
       if (roleChanged) applyWindowMode(member.role)
       startTransport() // reconnect as the new clientId (hub filters per client)
+      startPushListener()
       syncJiraPoller()
     }
     return userConfig

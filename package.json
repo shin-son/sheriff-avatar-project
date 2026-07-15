@@ -12,10 +12,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist": "electron-vite build && electron-builder --win",
     "mock:ci": "node mock/ci-server.mjs",
-    "mock:jira": "node mock/jira-server.mjs"
+    "mock:jira": "node mock/jira-server.mjs",
+    "mock:push": "node mock/push-server.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
+    "socket.io-client": "^4.8.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -29,6 +31,7 @@
     "electron-vite": "^3.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "socket.io": "^4.8.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
   }
