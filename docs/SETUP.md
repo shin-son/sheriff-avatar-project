@@ -119,6 +119,68 @@ journalctl -u svp-server -f       # 로그 확인
 - 서버는 이슈를 메모리로 추적하므로 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다 — 별도 백업 불필요.
 - 클라이언트(전원 Windows 앱)는 `.env`의 `SVP_PUSH_URL=http://<서버호스트>:8793` 한 줄만 바꾸면 된다.
 
+## 사내 검증 시나리오 — 가짜 티켓으로 자동 배정+댓글 확인
+
+실 Jira에서 write(배정·댓글·전이)가 실제로 동작하는지, **가짜 티켓 하나만으로** 안전하게 확인하는 절차.
+예시는 reporter=shin.son, 기대 배정 결과=min5eok.kim 기준 — 계정명은 환경에 맞게 바꾼다.
+
+> **중요**: 가짜 티켓의 시작 assignee는 **비워두거나 bot(cicd_ap)** 이어야 한다.
+> 사람이 이미 배정된 티켓은 분류 대상에서 제외된다 — min5eok.kim은 티켓에 미리 넣는 값이 아니라
+> **자동 배정의 기대 결과**이고, 그 근거는 vault 노트의 `owner:` 필드다.
+
+1. **vault에 테스트 노트** — 서버의 `SVP_WIKI_DIR` 안에 `modules/svp-selftest.md`:
+
+   ```markdown
+   ---
+   type: module
+   module: svp-selftest
+   owner: min5eok.kim
+   tags: [selftest]
+   updated: 2026-07-16
+   ---
+
+   # svp-selftest 모듈
+
+   ## Known failures
+
+   ### SVP selftest marker
+
+   - symptom: SvpSelftest.test_auto_assign 실패 — ERROR_SVP_SELFTEST_MARKER
+   - cause: SVP 자동 배정 파이프라인 검증용 가짜 실패
+   - fix: 없음 (검증 후 티켓/노트 삭제)
+   - confidence-hint: 이 마커가 보이면 svp-selftest로 확정 배정 가능
+   ```
+
+2. **실 Jira에 가짜 티켓 생성** (본인 계정으로 → reporter 자동):
+   - assignee: **비움 또는 cicd_ap**, label: `svp-test`
+   - summary: `SvpSelftest.test_auto_assign 실패 (ERROR_SVP_SELFTEST_MARKER)`
+     — wiki 검색은 **제목 단어 기준**이라 노트 symptom의 원문 단어가 제목에 있어야 매칭된다
+   - description (선택 — module +3점 매칭용):
+
+     ```
+     type: test_failed
+     module: svp-selftest
+     log:
+     AssertionError: ERROR_SVP_SELFTEST_MARKER — SVP 파이프라인 검증용
+     ```
+
+3. **서버 env — 이중 안전장치** (테스트 세션 동안만):
+
+   ```bash
+   SVP_JIRA_JQL=project = <프로젝트> AND reporter = shin.son AND labels = svp-test  # ① 이 티켓만 보임
+   SVP_JIRA_WRITE_MODE=label                                                       # ② 그중 svp-test만 write
+   AWS_REGION=<리전>
+   ```
+
+4. **기대 결과** (`journalctl -u svp-server -f` 또는 포그라운드 로그):
+   1. `new <KEY> assignee=- → admin` — 당번 큐 유입
+   2. 수 초 내 `classified <KEY>: svp-selftest/9x → assignee=min5eok.kim`
+   3. **Jira 화면**: assignee=min5eok.kim + "🤖 Sheriff Avatar 자동 분석" 댓글 + In Progress
+   4. `min5eok.kim`(=비밀번호) 로그인 앱에 티켓 push
+   - 음성 대조군: 노트와 무관한 가짜 티켓 하나 더 → `→ 당번 유지` 로그만, write 없음
+
+5. **정리**: 가짜 티켓 Done/삭제, `modules/svp-selftest.md` 삭제, `.env`를 팀 JQL + `dry-run`으로 복귀.
+
 ## 트러블슈팅
 
 | 증상 | 원인 | 조치 |
