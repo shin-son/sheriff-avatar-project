@@ -155,8 +155,9 @@ vault 모듈 노트 목록에서 생성한다 — 모델이 모듈을 지어낼 
 
 - `GET /rest/api/2/search` — 시드 티켓 + 트리거된 티켓 반환 (JQL은 created/updated 시각만 해석)
 - `GET /rest/api/2/issue/{key}` / `POST .../comment` / `PUT .../assignee` / `POST .../transitions`
-- 데모 트리거: `POST /demo/trigger` body `{ "scenario": "auth-token-401" | "payment-build" | "snapshot-diff" | ... }`
-  → 해당 시나리오 티켓을 즉시 생성 (데모 진행자가 curl로 호출, [DEMO-SCENARIO.md](./DEMO-SCENARIO.md) 참고)
+- 데모 트리거: `POST /demo/trigger` body `{ "scenario": "auth-token-401" | ..., "labels": ["svp-test"]? }`
+  → 해당 시나리오 티켓을 즉시 생성. 선택 필드 `labels`는 기본 라벨(ci-failure)에 추가된다 —
+  `SVP_JIRA_WRITE_MODE=label` 검증용 (데모 진행자가 curl로 호출, [DEMO-SCENARIO.md](./DEMO-SCENARIO.md) 참고)
 - 데모 해결: `POST /demo/resolve` body `{ "key": "CIOPS-1234", "comment": "token refresh 재시도 로직 수정" }`
   → 티켓에 해결 코멘트를 달고 상태를 Done으로 전이. 담당자가 실제 Jira에서 resolve하는 행위를 재현하며,
   서버가 폴링으로 감지해 ingest를 트리거하는 흐름을 데모에서 보여주기 위한 것 (DEMO-SCENARIO.md 장면 2)
