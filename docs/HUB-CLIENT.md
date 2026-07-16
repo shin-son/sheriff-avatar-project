@@ -1,5 +1,9 @@
 # hub-client — 서버(hub) 개발자를 위한 클라이언트 통신 명세
 
+> **⚠️ DEPRECATED (2026-07-15 회의)** — 전송 계층이 Socket.IO로 확정되면서 hub/hub-client(raw WS)는
+> 더 이상 앱에서 기동하지 않는다. 현행 계약은 [API.md §1](./API.md)의 Socket.IO 절
+> (`session`/`issue:new`/`issue:updated`/`issue:ack`). 이 문서는 hub 모듈 정리 PR에서 코드와 함께 삭제 예정.
+
 > 프로토콜 계약의 원본은 [API.md §1](./API.md)이다. 이 문서는 **클라이언트(`src/main/modules/hub-client/`)가
 > 실제로 구현한 동작**을 서버(`modules/hub/`, F6) 구현자 관점에서 기술한다.
 > 메시지 타입 정의는 `src/shared/types.ts`(`HubMessage`, `Hub*Payload`)에 있고, 서버도 같은 타입을 사용한다.

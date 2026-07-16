@@ -15,13 +15,15 @@
 - **role은 로그인이 결정한다.** 서버가 로그인 세션에 `{ user, team }`을 내려주고 앱은 그 role의 뷰만
   렌더링한다. 현행 인증은 데모용(admin/admin = 당번, 아이디=비밀번호 = 팀원) — SVP-5에서 실인증으로 교체.
 - **배정 원장은 Jira의 assignee 필드.** bot 계정(`cicd_ap`, `SVP_JIRA_BOT`)이면 "사람 배정 전" = 당번 큐.
-  **분류기(F3)는 유지** — W2에서 서버 파이프라인에 들어가, 신뢰도 **>80**이면 서버가 assignee를 직접
-  지정하고(+요약 댓글), ≤80이면 bot 유지로 당번 큐에 남긴다. 앱은 항상 assignee만 따라간다.
+  **분류기(F3) — W2에서 구현됨** (`server/classifier.mjs`): 신뢰도 **>80**이고 vault 모듈 노트의
+  `owner:`로 담당자가 해석되면 서버가 Jira에 assignee 지정 + 요약 댓글 + In Progress 전이,
+  ≤80이면 bot 유지로 당번 큐. 앱은 항상 assignee만 따라간다. 모든 서버발 write는
+  `SVP_JIRA_WRITE_MODE`(기본 dry-run) 게이트를 거친다 — [API.md §3](./API.md).
 - **Obsidian/vault 열기**: 운영 vault가 서버로 가면, 당번 PC에서 서버의 vault 폴더를 열 수 있게
   연결(공유 폴더 등)하는 단순안으로 간다.
-- **프로토타입 현황**: `mock/svp-server.mjs`가 위 구조(폴링 → assignee 라우팅 → Socket.IO push →
-  상태 동기화 → ack 전이)를 구현했고 사내 Jira로 검증 완료. `src/server/` 승격 전 임시 위치이며,
-  남은 승격 작업: 이슈 저장 영속화 · 실인증(SVP-5) · TypeScript화 · classifier/wiki 통합.
+- **서버 현황**: `server/`(headless Node, systemd — #13에서 승격)가 폴링 → LLM 분류(F3) →
+  assignee 라우팅 → Socket.IO push → 상태 동기화 → ack 전이까지 구현, 사내 Jira·표준 Bedrock으로
+  검증됨. 남은 승격 작업: 이슈 저장 영속화 · 실인증(SVP-5) · TypeScript화 · wiki ingest/lint 통합(F7·F8).
 
 ## 토폴로지
 
@@ -101,7 +103,7 @@ src/
   server/                  headless Node 서버 (Linux) — Electron import 금지
     index.ts               서버 엔트리: 아래 모듈 배선 (폴링→분류→배정→push)
     modules/jira/          Jira 폴링·댓글·assignee·transition (F1·F5·F7)
-    modules/classifier/    LLM 분류 — Claude API (stub → 실구현)
+    modules/classifier/    LLM 분류 — Claude on Bedrock (구현됨: server/classifier.mjs, TS 이동 예정)
     modules/wiki/          LLM-WIKI 4대 동작 (query/ingest/lint/feedback)
     modules/assignment/    신뢰도 라우팅 + 당번 수동 재배정
     modules/push/          Socket.IO push 서버 — 로그인 세션·role 필터링 (F6)
@@ -139,9 +141,9 @@ src/
 - v3에서 운영 vault는 **Linux 서버 호스트에 위치**한다 — 서버 프로세스가 유일한 읽기/쓰기 주체이고,
   사내 git remote로 백업·리뷰한다. 클라이언트(당번 포함)는 vault 파일에 직접 접근하지 않는다.
 - 리뷰는 파일 두 계층으로 나눈다:
-  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
+  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`, `raw/jira/*.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
     해결 건마다 PR을 만드는 것은 비현실적.
-  - **사람이 관리하는 노트** (`modules/*.md`의 known-failure, playbook) — 수정·삭제는 PR 리뷰를 거친다.
+  - **사람이 관리하는 노트** (`modules/*.md`의 known-failure) — 수정·삭제는 PR 리뷰를 거친다.
     lint가 지목한 노트의 diff를 리뷰하는 이 시점이 사람이 사실성을 검토하는 지점이다.
 
 ## 현재 구현과의 차이

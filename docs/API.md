@@ -104,9 +104,23 @@
 
 ## 3. 서버 ↔ Claude API (LLM 분류)
 
-`classifier/`가 담당. 모델·프롬프트 세부는 Week 2 구현 시 확정하되, 계약은 다음과 같다.
+**구현: `server/classifier.mjs` (W2, F3).** 모델은 **Claude Opus 4.8 on AWS Bedrock**
+(`anthropic.claude-opus-4-8`, `@anthropic-ai/bedrock-sdk`의 `AnthropicBedrockMantle` 클라이언트,
+자격증명은 표준 AWS 체인). adaptive thinking 사용, `temperature`/`top_p`는 보내지 않는다(Opus 4.8에서 400).
+structured output은 `output_config.format`(json_schema)으로 강제하고, `category` enum은 호출 시점에
+vault 모듈 노트 목록에서 생성한다 — 모델이 모듈을 지어낼 수 없다.
 
-- **입력**: 티켓 정보(summary, description, CI 로그 발췌 — 로그는 앞뒤 잘라 토큰 제한 내로) + `queryWiki()` 상위 3개 노트 본문
+| 변수 | 기본값 | 설명 |
+|---|---|---|
+| `SVP_LLM_PROVIDER` | `bedrock` | `bedrock`(Messages 엔드포인트) / `bedrock-invoke`(표준 InvokeModel — structured output 미지원이라 프롬프트 JSON 강제+파싱으로 대체) / `anthropic`(사외 dev) |
+| `AWS_REGION` | (없음 — bedrock 필수) | 미설정이면 분류기 비활성(티켓은 당번 큐 유지) |
+| `SVP_ANTHROPIC_API_KEY` | (없음) | provider=anthropic일 때 필수 |
+| `SVP_LLM_MODEL` | provider별 기본 | 모델 override |
+| `SVP_LLM_TIMEOUT_MS` | `30000` | SDK 클라이언트 타임아웃 |
+| `SVP_LLM_CONFIDENCE_MIN` | `80` | 자동 배정 게이트 (초과 시에만) |
+| `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 읽는 vault 경로 |
+
+- **입력**: 티켓 정보(summary, description, CI 로그 발췌 — head 4000자+tail 2000자 캡) + `queryWiki()` 상위 3개 노트 본문(개당 3000자 캡)
 - **출력**: 아래 JSON만 (structured output 강제):
 
 ```json
@@ -119,11 +133,20 @@
 }
 ```
 
-- `category`는 `TEAM[].ownedModules`에 존재하는 값 또는 `"unknown"`. `confidence`는 wiki 근거 강도를 반영해야 한다
-  (근거 없는 고신뢰 금지 — 프롬프트에 명시).
+- `category`는 **vault 모듈 노트의 frontmatter `module:` 값** 또는 `"unknown"` (schema enum으로 강제).
+  담당자는 같은 노트의 `owner:` frontmatter로 해석한다 — **owner 값은 Jira username과 동일해야**
+  자동 배정이 push까지 이어진다 (사내: `owner: shin.son`).
+- `confidence`는 wiki 근거 강도를 반영해야 한다 (근거 없는 고신뢰 금지 — 프롬프트에 명시).
+- **모든 서버발 Jira write는 `SVP_JIRA_WRITE_MODE`를 따른다** (기본 `dry-run` — 로그만.
+  `label` = `SVP_TEST_LABEL` 티켓만, `live` = 전면. 앱 ack로 인한 전이도 동일 게이트).
+- **자동 배정 (confidence > 80 AND owner 해석 가능)**: 서버가 Jira에 순서대로 write —
+  ① `PUT assignee`(실패 시 전체 중단 — 배정 없이 "자동 배정" 댓글 금지) → ② §2 템플릿 댓글 →
+  ③ In Progress 전이(②③ 실패는 경고 후 진행) → poll()이 변경을 되읽어 담당자 앱으로 push.
+  ≤80 / unknown / owner 미해석: **Jira write 없음** (댓글은 배정 시 1회 원칙), 판단 근거는
+  `issue:updated`로 당번 앱에만 표시.
 - **fallback**: API 호출 실패·파싱 실패·타임아웃(30초) 시 `{ category: "unknown", confidence: 0 }`으로 처리
-  → 자동으로 당번 배정. **LLM 장애가 파이프라인을 멈추지 않는다.**
-- API key는 `.env`(`SVP_ANTHROPIC_API_KEY`). 사내망에서는 프록시 경유 여부를 Week 2에 확인.
+  → 자동으로 당번 배정. **LLM 장애가 파이프라인을 멈추지 않는다.** 자격증명 미설정 시 분류 시도 자체를 생략.
+- 사내망 프록시/CA: 서버 셸의 `NODE_EXTRA_CA_CERTS`는 Bedrock 호출에도 적용된다.
 
 ## 4. mock Jira 서버 (개발·데모용)
 
@@ -132,8 +155,9 @@
 
 - `GET /rest/api/2/search` — 시드 티켓 + 트리거된 티켓 반환 (JQL은 created/updated 시각만 해석)
 - `GET /rest/api/2/issue/{key}` / `POST .../comment` / `PUT .../assignee` / `POST .../transitions`
-- 데모 트리거: `POST /demo/trigger` body `{ "scenario": "auth-token-401" | "payment-build" | "snapshot-diff" | ... }`
-  → 해당 시나리오 티켓을 즉시 생성 (데모 진행자가 curl로 호출, [DEMO-SCENARIO.md](./DEMO-SCENARIO.md) 참고)
+- 데모 트리거: `POST /demo/trigger` body `{ "scenario": "auth-token-401" | ..., "labels": ["svp-test"]? }`
+  → 해당 시나리오 티켓을 즉시 생성. 선택 필드 `labels`는 기본 라벨(ci-failure)에 추가된다 —
+  `SVP_JIRA_WRITE_MODE=label` 검증용 (데모 진행자가 curl로 호출, [DEMO-SCENARIO.md](./DEMO-SCENARIO.md) 참고)
 - 데모 해결: `POST /demo/resolve` body `{ "key": "CIOPS-1234", "comment": "token refresh 재시도 로직 수정" }`
   → 티켓에 해결 코멘트를 달고 상태를 Done으로 전이. 담당자가 실제 Jira에서 resolve하는 행위를 재현하며,
   서버가 폴링으로 감지해 ingest를 트리거하는 흐름을 데모에서 보여주기 위한 것 (DEMO-SCENARIO.md 장면 2)

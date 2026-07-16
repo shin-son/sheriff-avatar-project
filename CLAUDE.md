@@ -52,13 +52,13 @@ LLM-WIKI 기반 Sheriff Agent Windows 데스크톱 앱 (Electron + React + TypeS
 npm install          # 의존성 설치
 npm run dev          # 개발 모드 실행 (HMR) — 로그인: admin/admin(당번), 아이디=비밀번호(팀원)
 npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792)
-npm run mock:server  # v3 서버 프로토타입 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로
+npm run server       # v3 서버 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로. 운영은 Linux systemd
 npm run typecheck    # 타입 체크
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
 
-로컬 개발은 `mock:jira` → `mock:server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는 구세대 —
+로컬 개발은 `mock:jira` → `server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는 구세대 —
 정리 예정). 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
 
 ## 모듈 맵
@@ -67,11 +67,15 @@ npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 src/main/                        Electron 메인 프로세스 (v3: 순수 클라이언트 — 로그인·push 수신·UI)
   modules/push/                  중앙 서버 Socket.IO 접속 — 로그인·이슈 push 수신·ack (임시 계약)
   modules/notifications/         하단 팝업(toast) 알림 창 관리
-  modules/wiki/                  LLM-WIKI 어댑터 — 서버로 이동 예정 (v3 이행 3단계)
+  modules/wiki/                  LLM-WIKI 어댑터 — query는 server/wiki-query.mjs로 포팅됨, ingest/lint는 서버 이동 예정
   modules/jira|websocket|hub|hub-client|classifier|assignment/
                                  v2 잔재 — 앱에서 더 이상 기동하지 않음. 서버(src/server/) 승격 시
                                  이동/정리 (docs/ARCHITECTURE.md 이행 계획)
-mock/svp-server.mjs              v3 서버 프로토타입 — 폴링→assignee 배정→Socket.IO push (Linux 이전 전 임시)
+server/                          v3 서버 (headless Node, plain .mjs) — Linux systemd 운영
+  index.mjs                      폴링 → 라우팅 → Socket.IO push + SVP_JIRA_WRITE_MODE 게이트
+  classifier.mjs                 F3 — Claude 분류 (bedrock/bedrock-invoke/anthropic, 실패 시 fallback)
+  wiki-query.mjs                 vault 검색 + 노트 frontmatter owner 해석 (담당자 매핑)
+  jira.mjs                       Jira write 3종 (assignee·댓글 템플릿·전이)
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정
@@ -118,8 +122,8 @@ mock/                            mock CI/CD 서버
 ## LLM-WIKI 규칙 (`wiki-vault/`)
 
 - Karpathy의 llm-wiki 컨셉을 따른다 (원문: [docs/llm-wiki-concept.md](./docs/llm-wiki-concept.md)): **1차 독자는 사람이 아니라 LLM이다.** 애매한 표현 대신 명시적 사실·조건·담당자를 쓴다.
-- 3계층 매핑 — raw sources: CI 로그/이슈 이벤트(불변), wiki: `wiki-vault/`(LLM이 작성·유지), schema: 이 섹션.
-- 노트 하나 = 주제 하나 (모듈별 known-failure, playbook, case-log).
+- 3계층 매핑 — raw sources: CI 로그/이슈 이벤트(불변, 해결 확정 시 `wiki-vault/raw/`에 원문 사본 동결), wiki: `wiki-vault/`(LLM이 작성·유지), schema: 이 섹션 + [wiki-vault/README.md](./wiki-vault/README.md)(상세 스키마: 구조·노트 템플릿·역할).
+- 노트 하나 = 주제 하나 (모듈별 known-failure, case-log). 사람용 절차 문서는 vault가 아니라 `docs/`에 둔다.
 - 핵심 동작 4가지 (`src/main/modules/wiki/`):
   - **query** — 분류 시 관련 노트 검색 (`index.md`를 카탈로그로 사용)
   - **ingest** — 해결된 이슈를 case-log에 기록 + `index.md`/`log.md` 자동 갱신

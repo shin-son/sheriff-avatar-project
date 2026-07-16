@@ -23,7 +23,7 @@
 
 | 담당 | 개발 | 검토(리뷰) |
 |---|---|---|
-| 손신 | `classifier/`: **F3 실제 LLM(Claude API) 연동** — wiki 노트를 컨텍스트로 분류/요약/신뢰도 산출 ([API.md §3](./API.md) 계약: 30초 타임아웃, 실패 시 `confidence: 0` fallback), API key 보안(.env, 사내 프록시 고려) | 김병재의 PR |
+| 손신 | `classifier/`: **F3 실제 LLM 연동 — ✅ 구현 완료 (PR #14, 7/16)** — Claude on Bedrock(표준 InvokeModel 검증), wiki 노트 컨텍스트 분류 + >80 자동 배정(assignee·댓글·전이) + `SVP_JIRA_WRITE_MODE` 안전 게이트 | 김병재의 PR |
 | 김병재 | `assignment/` + `hub/` + `ui/`: **F4 당번 수동 재배정**(human-in-the-loop — hub push로 기존/신규 담당자 양쪽 반영, Jira assignee 갱신 + 갱신 댓글), 배정 이력 표시 | 김민석의 PR |
 | 김민석 | `wiki/` + `jira/`: **F7 해결 감지→ingest**(Jira Done 폴링 단일 경로 — [ARCHITECTURE.md](./ARCHITECTURE.md), 중복 ingest 방지) + **F8 lint/feedback 고도화**(해결 확정 시 원인 일치/불일치 toast, 감점 임계값, feedback의 hub 경유 배선) + 이슈 해결 시 LLM이 해결 코멘트 기반 case-log 작성 | 손신의 PR |
 

@@ -35,6 +35,9 @@
 
 ## F3 — LLM 분류기 (Claude API)
 
+- **구현: `server/classifier.mjs` (W2)** — Claude Opus 4.8, provider 3종(bedrock/bedrock-invoke/anthropic).
+  담당자 해석은 vault 모듈 노트 frontmatter `owner:` (`server/wiki-query.mjs`), write는
+  `SVP_JIRA_WRITE_MODE` 게이트 경유. 세부: [API.md §3](./API.md).
 - **책임**: 티켓 + wiki 노트를 읽고 `{category, severity, confidence, summary, evidence}` 산출 ([API.md §3](./API.md) 계약).
 - **핵심 규칙**:
   - `confidence`는 wiki 근거 강도에 비례해야 한다. **근거 없이 80점을 넘기지 않는다** (프롬프트로 강제 + 상한 로직).

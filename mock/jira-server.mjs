@@ -193,9 +193,10 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/demo/trigger') {
-    const { scenario } = await readBody(req)
+    const { scenario, labels } = await readBody(req)
     const ticket = createTicket(scenario)
     if (!ticket) return send(res, 400, { error: `unknown scenario. one of: ${Object.keys(SCENARIOS).join(', ')}` })
+    if (Array.isArray(labels)) ticket.labels.push(...labels) // e.g. svp-test (write-mode=label 검증용)
     return send(res, 201, toApi(ticket))
   }
 

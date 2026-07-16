@@ -1,7 +1,8 @@
-// v3 server prototype (docs/arch-v3-server-split demo) — a standalone headless
-// pipeline: polls Jira → routes by the ticket's ASSIGNEE → Socket.IO push with
-// SERVER-SIDE filtering. Clients log in (demo auth) and the server tells them
-// their role; the app renders member/sheriff view from that.
+// SVP v3 server — a standalone headless pipeline: polls Jira → routes by the
+// ticket's ASSIGNEE → Socket.IO push with SERVER-SIDE filtering. Clients log in
+// (demo auth until SVP-5) and the server tells them their role; the app renders
+// member/sheriff view from that. Runs anywhere Node 20+ runs — production home
+// is a Linux host under systemd (docs/SETUP.md "Linux 서버 배포").
 //
 // Routing model (사내 운용 가정):
 //  - assignee == bot(cicd_ap) or empty  → 사람 배정 전 → sheriff(admin) queue
@@ -12,9 +13,12 @@
 // Works against mock/jira-server.mjs (default) or a real Jira via .env:
 //   SVP_JIRA_BASE_URL, SVP_JIRA_JQL, SVP_JIRA_PAT, SVP_JIRA_BOT
 //   (+ NODE_EXTRA_CA_CERTS in the shell for corporate TLS)
-// Usage: npm run mock:server  (port 8793)
+// Usage: npm run server  (port 8793)
 import 'dotenv/config'
 import { Server } from 'socket.io'
+import { classifierEnabled, classify } from './classifier.mjs'
+import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
+import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -22,6 +26,13 @@ const PAT = process.env.SVP_JIRA_PAT
 const BOT = process.env.SVP_JIRA_BOT ?? 'cicd_ap'
 const BASE_JQL = process.env.SVP_JIRA_JQL ?? 'project = CIOPS AND labels = ci-failure'
 const POLL_MS = Number(process.env.SVP_SERVER_POLL_MS ?? 5000)
+/** Auto-assign gate — strictly greater (ARCHITECTURE.md: >80 → owner, ≤80 → sheriff). */
+const CONFIDENCE_MIN = Number(process.env.SVP_LLM_CONFIDENCE_MIN ?? 80)
+// Every server-initiated Jira write (auto-assign trio AND app-ack transition)
+// obeys this mode. Safe by default: 테스트 단계에서 실티켓이 바뀌면 안 된다.
+//   dry-run(기본) → 로그만 | label → SVP_TEST_LABEL 붙은 티켓만 | live → 전면 허용
+const WRITE_MODE = process.env.SVP_JIRA_WRITE_MODE ?? 'dry-run'
+const TEST_LABEL = process.env.SVP_TEST_LABEL ?? 'svp-test'
 
 // Demo auth until SVP-5: admin/admin → sheriff; any username with
 // password === username → member (e.g. shin.son / shin.son).
@@ -42,6 +53,16 @@ const STATUS_BY_CATEGORY = { new: 'new', indeterminate: 'acknowledged', done: 'r
 
 /** key → SheriffIssue (the server owns the issue store in v3). */
 const issues = new Map()
+/** key → LLM Classification — survives sync-loop re-routing (routeByAssignee consults it). */
+const llmResults = new Map()
+/** key → Jira labels (server-internal; the app contract doesn't carry labels). */
+const ticketLabels = new Map()
+
+function canWrite(key) {
+  if (WRITE_MODE === 'live') return true
+  if (WRITE_MODE === 'label') return (ticketLabels.get(key) ?? []).includes(TEST_LABEL)
+  return false
+}
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
@@ -79,11 +100,14 @@ function assigneeOf(t) {
 
 // Assignee-driven routing: Jira's assignee field is the single source of who
 // owns the issue. bot/empty = not yet given to a human → sheriff queue.
-function routeByAssignee(event, assignee) {
+// An LLM classification (llmResults) outlives re-routing — without this the
+// sync loop would overwrite the real confidence/summary with the placeholder.
+function routeByAssignee(event, assignee, key) {
   const human = assignee && assignee !== BOT
   if (human) knownMembers.add(assignee)
+  const llm = llmResults.get(key)
   return {
-    classification: {
+    classification: llm ?? {
       category: event.module,
       severity: SEVERITY_BY_TYPE[event.type] ?? 'major',
       confidence: human ? 95 : 50,
@@ -93,9 +117,72 @@ function routeByAssignee(event, assignee) {
       wikiRefs: []
     },
     assignment: human
-      ? { assigneeId: assignee, assigneeName: assignee, routedTo: 'feature-owner', reason: `Jira assignee = ${assignee}` }
+      ? {
+          assigneeId: assignee,
+          assigneeName: assignee,
+          routedTo: 'feature-owner',
+          reason: `Jira assignee = ${assignee}${llm ? ` (LLM 분류 ${llm.category} · 신뢰도 ${llm.confidence})` : ''}`
+        }
       : { assigneeId: 'admin', assigneeName: '당번 (admin)', routedTo: 'sheriff', reason: `assignee가 ${assignee ?? '없음'} (사람 배정 전) → 당번` }
   }
+}
+
+// F3 — async classification: never blocks ingest. The server does not move
+// local state itself: on a confident match it WRITES to Jira (assignee →
+// comment → In Progress) and lets poll() read the change back and push it.
+async function classifyAndAct(key) {
+  const issue = issues.get(key)
+  if (!issue) return
+  const matches = queryWiki(issue.event)
+  const llm = await classify(issue.event, matches, listModules())
+  const wikiRefs = llm.evidence
+    .map((e) => matches.find((m) => m.file === e) ?? { file: e, title: e, score: 0 })
+    .map(({ file, title, score }) => ({ file, title, score }))
+  const classification = {
+    category: llm.category,
+    severity: llm.severity,
+    confidence: llm.confidence,
+    summary: llm.summary,
+    wikiRefs
+  }
+  llmResults.set(key, classification)
+  issue.classification = classification
+  emitIssue('issue:updated', issue) // ≤80이어도 당번 화면에 LLM 판단 근거가 보인다
+
+  // State may have moved during the LLM call (ack, manual assignment) — don't write over it.
+  if (issue.assignment.routedTo !== 'sheriff' || issue.status !== 'new') return
+  const owner =
+    llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown' ? resolveOwner(llm.category) : null
+  if (!owner) {
+    console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → 당번 유지`)
+    return
+  }
+  if (!canWrite(key)) {
+    console.log(
+      `[svp-server] [${WRITE_MODE}] ${key}: would assign → ${owner} (${llm.category}/${llm.confidence}, +댓글, In Progress) — Jira 변경 안 함`
+    )
+    return
+  }
+  try {
+    // Assignee first — never post an "자동 배정" comment without an actual assignment.
+    await setAssignee(key, owner)
+  } catch (err) {
+    console.error(`[svp-server] auto-assign failed for ${key}: ${err.message}`)
+    return
+  }
+  console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → assignee=${owner}`)
+  const reason = `LLM 분류 ${llm.category} (신뢰도 ${llm.confidence}) → ${llm.category} owner ${owner}`
+  try {
+    await postComment(key, buildComment(issue.event, llm, wikiRefs, `${llm.category} 담당 ${owner} 자동 배정`, reason))
+  } catch (err) {
+    console.error(`[svp-server] comment failed for ${key}: ${err.message}`) // 배정은 이미 성공 — 계속
+  }
+  try {
+    await transitionTo(key, 'In Progress')
+  } catch (err) {
+    console.error(`[svp-server] transition failed for ${key}: ${err.message}`)
+  }
+  void poll() // sync 루프가 assignee/status 변경을 읽어 담당자에게 push한다
 }
 
 // ---- Socket.IO: login-authenticated sessions, server-side filtering ----
@@ -149,17 +236,14 @@ io.on('connection', (socket) => {
   socket.on('issue:ack', async (payload) => {
     const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
     if (!issue || issue.status !== 'new') return
+    if (!canWrite(issue.event.jira.key)) {
+      console.log(
+        `[svp-server] [${WRITE_MODE}] ack from ${user.userId}: would transition ${issue.event.jira.key} → In Progress — Jira 변경 안 함`
+      )
+      return
+    }
     try {
-      const url = `${JIRA}/rest/api/2/issue/${issue.event.jira.key}/transitions`
-      const { transitions } = await (await fetch(url, { headers: auth() })).json()
-      // TODO(SVP-6): match by statusCategory once the corporate workflow is confirmed.
-      const target = transitions.find((t) => t.name === 'In Progress')
-      if (!target) throw new Error('no "In Progress" transition')
-      await fetch(url, {
-        method: 'POST',
-        headers: { ...auth(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transition: { id: target.id } })
-      })
+      await transitionTo(issue.event.jira.key, 'In Progress')
       console.log(`[svp-server] ack from ${user.userId}: ${issue.event.jira.key} → In Progress`)
       void poll()
     } catch (err) {
@@ -179,7 +263,7 @@ function auth() {
 }
 
 async function search(jql) {
-  const url = `${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,created,updated,assignee`
+  const url = `${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,created,updated,assignee,labels`
   const res = await fetch(url, { headers: auth() })
   if (!res.ok) throw new Error(`search returned ${res.status}: ${(await res.text()).slice(0, 200)}`)
   return (await res.json()).issues ?? []
@@ -192,17 +276,29 @@ async function poll() {
     //    which silently drops new tickets — and the active set is small anyway
     //    (the team JQL excludes Resolved).
     for (const t of await search(`(${BASE_JQL}) ORDER BY created ASC`)) {
+      ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
       const event = normalize(t)
       const issue = {
         event,
-        ...routeByAssignee(event, assigneeOf(t)),
+        ...routeByAssignee(event, assigneeOf(t), t.key),
         status: STATUS_BY_CATEGORY[t.fields.status.statusCategory.key] ?? 'new',
         receivedAt: new Date().toISOString()
       }
       issues.set(t.key, issue)
       console.log(`[svp-server] new ${t.key} assignee=${assigneeOf(t) ?? '-'} → ${issue.assignment.assigneeId}`)
       emitIssue('issue:new', issue)
+      // Classify only bot-assigned open tickets. Human-assigned tickets skip it,
+      // which also makes restarts idempotent: an already-auto-assigned ticket
+      // re-ingests with its human assignee and never gets a second comment.
+      if (
+        classifierEnabled() &&
+        issue.assignment.routedTo === 'sheriff' &&
+        issue.status === 'new' &&
+        !llmResults.has(t.key)
+      ) {
+        void classifyAndAct(t.key)
+      }
     }
 
     // 2) Tracked tickets: status/assignee sync by key — independent of the base
@@ -210,6 +306,7 @@ async function poll() {
     const tracked = [...issues.entries()].filter(([, i]) => i.status !== 'resolved').map(([k]) => k)
     if (tracked.length > 0) {
       for (const t of await search(`key in (${tracked.join(',')})`)) {
+        ticketLabels.set(t.key, t.fields.labels ?? [])
         const issue = issues.get(t.key)
         if (!issue) continue
         const status = STATUS_BY_CATEGORY[t.fields.status.statusCategory.key]
@@ -219,7 +316,7 @@ async function poll() {
         const assigneeChanged = (assignee && assignee !== BOT ? assignee : null) !== currentAssignee
         if (!statusChanged && !assigneeChanged) continue
         const before = issue.assignment.assigneeId
-        if (assigneeChanged) Object.assign(issue, routeByAssignee(issue.event, assignee))
+        if (assigneeChanged) Object.assign(issue, routeByAssignee(issue.event, assignee, t.key))
         if (statusChanged) issue.status = status
         issue.event.jira.status = t.fields.status.statusCategory.key
         console.log(`[svp-server] sync ${t.key}: status=${issue.status} assignee=${issue.assignment.assigneeId}${assigneeChanged ? ` (was ${before})` : ''}`)
@@ -234,7 +331,19 @@ async function poll() {
   }
 }
 
-console.log(`[svp-server] v3 prototype on http://localhost:${PORT}`)
+console.log(`[svp-server] v3 server listening on :${PORT}`)
 console.log(`[svp-server] jira=${JIRA} bot=${BOT} jql=${BASE_JQL}`)
+console.log(
+  `[svp-server] classifier: ${classifierEnabled() ? `on (>${CONFIDENCE_MIN} → auto-assign)` : 'off — LLM 자격증명 없음, 티켓은 당번 큐에 유지'}`
+)
+console.log(
+  `[svp-server] write-mode: ${WRITE_MODE}${
+    WRITE_MODE === 'dry-run'
+      ? ' — Jira 변경 없음 (로그로만 관찰)'
+      : WRITE_MODE === 'label'
+        ? ` — "${TEST_LABEL}" 라벨 티켓만 write`
+        : ' — 전면 허용'
+  }`
+)
 void poll()
 setInterval(() => void poll(), POLL_MS)
