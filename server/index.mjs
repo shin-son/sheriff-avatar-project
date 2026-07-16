@@ -1,7 +1,8 @@
-// v3 server prototype (docs/arch-v3-server-split demo) — a standalone headless
-// pipeline: polls Jira → routes by the ticket's ASSIGNEE → Socket.IO push with
-// SERVER-SIDE filtering. Clients log in (demo auth) and the server tells them
-// their role; the app renders member/sheriff view from that.
+// SVP v3 server — a standalone headless pipeline: polls Jira → routes by the
+// ticket's ASSIGNEE → Socket.IO push with SERVER-SIDE filtering. Clients log in
+// (demo auth until SVP-5) and the server tells them their role; the app renders
+// member/sheriff view from that. Runs anywhere Node 20+ runs — production home
+// is a Linux host under systemd (docs/SETUP.md "Linux 서버 배포").
 //
 // Routing model (사내 운용 가정):
 //  - assignee == bot(cicd_ap) or empty  → 사람 배정 전 → sheriff(admin) queue
@@ -12,7 +13,7 @@
 // Works against mock/jira-server.mjs (default) or a real Jira via .env:
 //   SVP_JIRA_BASE_URL, SVP_JIRA_JQL, SVP_JIRA_PAT, SVP_JIRA_BOT
 //   (+ NODE_EXTRA_CA_CERTS in the shell for corporate TLS)
-// Usage: npm run mock:server  (port 8793)
+// Usage: npm run server  (port 8793)
 import 'dotenv/config'
 import { Server } from 'socket.io'
 
@@ -234,7 +235,7 @@ async function poll() {
   }
 }
 
-console.log(`[svp-server] v3 prototype on http://localhost:${PORT}`)
+console.log(`[svp-server] v3 server listening on :${PORT}`)
 console.log(`[svp-server] jira=${JIRA} bot=${BOT} jql=${BASE_JQL}`)
 void poll()
 setInterval(() => void poll(), POLL_MS)
