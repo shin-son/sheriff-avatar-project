@@ -16,6 +16,7 @@
 // Usage: npm run server  (port 8793)
 import 'dotenv/config'
 import { Server } from 'socket.io'
+import { transitionTo } from './jira.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -151,16 +152,7 @@ io.on('connection', (socket) => {
     const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
     if (!issue || issue.status !== 'new') return
     try {
-      const url = `${JIRA}/rest/api/2/issue/${issue.event.jira.key}/transitions`
-      const { transitions } = await (await fetch(url, { headers: auth() })).json()
-      // TODO(SVP-6): match by statusCategory once the corporate workflow is confirmed.
-      const target = transitions.find((t) => t.name === 'In Progress')
-      if (!target) throw new Error('no "In Progress" transition')
-      await fetch(url, {
-        method: 'POST',
-        headers: { ...auth(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transition: { id: target.id } })
-      })
+      await transitionTo(issue.event.jira.key, 'In Progress')
       console.log(`[svp-server] ack from ${user.userId}: ${issue.event.jira.key} → In Progress`)
       void poll()
     } catch (err) {
