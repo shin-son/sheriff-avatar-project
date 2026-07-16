@@ -13,10 +13,15 @@ import Anthropic from '@anthropic-ai/sdk'
 const PROVIDER = process.env.SVP_LLM_PROVIDER ?? 'bedrock'
 const IS_BEDROCK = PROVIDER === 'bedrock' || PROVIDER === 'bedrock-invoke'
 const TIMEOUT_MS = Number(process.env.SVP_LLM_TIMEOUT_MS ?? 30000)
-// bedrock-invoke: 사내 콘솔의 모델 ID(inference profile일 수 있음 — 예: apac.anthropic....)를
-// SVP_LLM_MODEL로 지정하는 것을 권장.
+// bedrock-invoke 기본값은 global inference profile — on-demand ID(anthropic.claude-opus-4-8)는
+// InvokeModel에서 400을 반환하는 것이 사내 Bedrock에서 확인됨. 환경이 다르면 SVP_LLM_MODEL로 교체.
 const MODEL =
-  process.env.SVP_LLM_MODEL ?? (IS_BEDROCK ? 'anthropic.claude-opus-4-8' : 'claude-opus-4-8')
+  process.env.SVP_LLM_MODEL ??
+  (PROVIDER === 'bedrock-invoke'
+    ? 'global.anthropic.claude-opus-4-8'
+    : PROVIDER === 'bedrock'
+      ? 'anthropic.claude-opus-4-8'
+      : 'claude-opus-4-8')
 
 const SEVERITY_BY_TYPE = {
   build_failed: 'critical',

@@ -26,7 +26,7 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_JIRA_JQL` | `project = CIOPS AND labels = ci-failure` (mock용) | 팀 CI 티켓 필터 JQL. ORDER BY는 서버가 자동으로 붙이므로 **넣지 않는다** |
 | `SVP_JIRA_BOT` | `cicd_ap` | "사람 배정 전" 취급하는 bot 계정 — 이 assignee면 당번 큐로 라우팅 |
 | `SVP_LLM_PROVIDER` | `bedrock` | 분류기 LLM 경로 — `bedrock`(Messages 엔드포인트) / **`bedrock-invoke`(표준 Bedrock InvokeModel — 사내처럼 Mantle이 막힌 환경)** / `anthropic`(사외 dev) |
-| `SVP_LLM_MODEL` | provider별 기본 | `bedrock-invoke`는 사내 Bedrock 콘솔의 모델 ID를 그대로 지정 권장 (inference profile이면 `apac.anthropic....` 형태) |
+| `SVP_LLM_MODEL` | provider별 기본 | `bedrock-invoke` 기본값은 `global.anthropic.claude-opus-4-8` (global inference profile — on-demand ID는 400). 환경이 다르면 콘솔의 ID로 교체 |
 | `AWS_REGION` | (없음) | Bedrock 리전. **미설정이면 분류기 비활성** — 티켓은 당번 큐에 유지되고 서버는 정상 동작 |
 | `SVP_ANTHROPIC_API_KEY` | (없음) | `SVP_LLM_PROVIDER=anthropic`일 때만 |
 | `SVP_LLM_CONFIDENCE_MIN` | `80` | 이 점수 **초과**여야 자동 배정 (assignee+댓글+In Progress) |
