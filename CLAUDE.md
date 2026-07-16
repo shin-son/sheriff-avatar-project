@@ -67,11 +67,15 @@ npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 src/main/                        Electron 메인 프로세스 (v3: 순수 클라이언트 — 로그인·push 수신·UI)
   modules/push/                  중앙 서버 Socket.IO 접속 — 로그인·이슈 push 수신·ack (임시 계약)
   modules/notifications/         하단 팝업(toast) 알림 창 관리
-  modules/wiki/                  LLM-WIKI 어댑터 — 서버로 이동 예정 (v3 이행 3단계)
+  modules/wiki/                  LLM-WIKI 어댑터 — query는 server/wiki-query.mjs로 포팅됨, ingest/lint는 서버 이동 예정
   modules/jira|websocket|hub|hub-client|classifier|assignment/
                                  v2 잔재 — 앱에서 더 이상 기동하지 않음. 서버(src/server/) 승격 시
                                  이동/정리 (docs/ARCHITECTURE.md 이행 계획)
-server/index.mjs                 v3 서버 (headless Node) — 폴링→assignee 배정→Socket.IO push. Linux systemd 운영
+server/                          v3 서버 (headless Node, plain .mjs) — Linux systemd 운영
+  index.mjs                      폴링 → 라우팅 → Socket.IO push + SVP_JIRA_WRITE_MODE 게이트
+  classifier.mjs                 F3 — Claude 분류 (bedrock/bedrock-invoke/anthropic, 실패 시 fallback)
+  wiki-query.mjs                 vault 검색 + 노트 frontmatter owner 해석 (담당자 매핑)
+  jira.mjs                       Jira write 3종 (assignee·댓글 템플릿·전이)
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정
