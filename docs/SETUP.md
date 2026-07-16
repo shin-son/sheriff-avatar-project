@@ -151,8 +151,11 @@ journalctl -u svp-server -f       # 로그 확인
    - confidence-hint: 이 마커가 보이면 svp-selftest로 확정 배정 가능
    ```
 
-2. **실 Jira에 가짜 티켓 생성** (본인 계정으로 → reporter 자동):
-   - assignee: **비움 또는 cicd_ap**, label: `svp-test`
+2. **테스트 티켓 준비** — 새로 만들거나, **기존 티켓(assignee=cicd_ap) 하나를 재활용**해
+   내용을 편집해도 된다. 어느 쪽이든:
+   - assignee: **비움 또는 cicd_ap** (사람 배정 상태면 분류가 안 돈다), label: `svp-test`
+   - 재활용 시에도 3번의 JQL에 `labels = svp-test`를 꼭 포함 — reporter/assignee 조건만으로는
+     매칭 티켓 전부가 LLM 분류 대상이 된다 (write는 안 나가지만 호출 비용·로그 홍수)
    - summary: `SvpSelftest.test_auto_assign 실패 (ERROR_SVP_SELFTEST_MARKER)`
      — wiki 검색은 **제목 단어 기준**이라 노트 symptom의 원문 단어가 제목에 있어야 매칭된다
    - description (선택 — module +3점 매칭용):
