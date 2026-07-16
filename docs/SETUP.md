@@ -25,6 +25,11 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_JIRA_PAT` | (없음) | Personal Access Token — Bearer 인증 (서버 전용) |
 | `SVP_JIRA_JQL` | `project = CIOPS AND labels = ci-failure` (mock용) | 팀 CI 티켓 필터 JQL. ORDER BY는 서버가 자동으로 붙이므로 **넣지 않는다** |
 | `SVP_JIRA_BOT` | `cicd_ap` | "사람 배정 전" 취급하는 bot 계정 — 이 assignee면 당번 큐로 라우팅 |
+| `SVP_LLM_PROVIDER` | `bedrock` | 분류기 LLM 경로 — `bedrock`(사내 AWS) / `anthropic`(사외 dev, 직접 API 키) |
+| `AWS_REGION` | (없음) | Bedrock 리전. **미설정이면 분류기 비활성** — 티켓은 당번 큐에 유지되고 서버는 정상 동작 |
+| `SVP_ANTHROPIC_API_KEY` | (없음) | `SVP_LLM_PROVIDER=anthropic`일 때만 |
+| `SVP_LLM_CONFIDENCE_MIN` | `80` | 이 점수 **초과**여야 자동 배정 (assignee+댓글+In Progress) |
+| `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 분류 근거로 읽는 vault 경로 |
 | `SVP_SERVER_PORT` | `8793` | 서버 Socket.IO 리슨 포트 |
 | `SVP_SERVER_POLL_MS` | `5000` | 서버 폴링 주기(ms) |
 | `SVP_PUSH_URL` | `http://localhost:8793` | 중앙 서버 Socket.IO 주소 — **앱에 필요한 유일한 설정** (서버가 원격이면 그 주소로) |
@@ -90,6 +95,7 @@ npm ci --omit=dev
 
 # 2) 설정 — .env에 실제 값 (커밋 금지)
 cp .env.example .env && vi .env    # SVP_JIRA_BASE_URL / SVP_JIRA_PAT / SVP_JIRA_JQL / SVP_JIRA_BOT
+                                   # + LLM 분류기: AWS_REGION (Bedrock 자격증명은 인스턴스 프로필/env 체인)
 
 # 3) 동작 확인 (포그라운드)
 npm run server
