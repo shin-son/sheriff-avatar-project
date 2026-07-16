@@ -29,6 +29,8 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `AWS_REGION` | (없음) | Bedrock 리전. **미설정이면 분류기 비활성** — 티켓은 당번 큐에 유지되고 서버는 정상 동작 |
 | `SVP_ANTHROPIC_API_KEY` | (없음) | `SVP_LLM_PROVIDER=anthropic`일 때만 |
 | `SVP_LLM_CONFIDENCE_MIN` | `80` | 이 점수 **초과**여야 자동 배정 (assignee+댓글+In Progress) |
+| `SVP_JIRA_WRITE_MODE` | **`dry-run`** | 서버발 Jira write 전부(자동 배정 + ack 전이)의 게이트: `dry-run`=로그만 / `label`=`SVP_TEST_LABEL` 티켓만 / `live`=전면 |
+| `SVP_TEST_LABEL` | `svp-test` | `label` 모드에서 write를 허용하는 Jira 라벨 |
 | `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 분류 근거로 읽는 vault 경로 |
 | `SVP_SERVER_PORT` | `8793` | 서버 Socket.IO 리슨 포트 |
 | `SVP_SERVER_POLL_MS` | `5000` | 서버 폴링 주기(ms) |
@@ -109,6 +111,10 @@ journalctl -u svp-server -f       # 로그 확인
 
 - **사내 자체 CA**: `NODE_EXTRA_CA_CERTS`는 `.env`로 지정할 수 없으므로 유닛 파일의 `Environment=` 줄
   (주석 참고)을 활성화한다.
+- **사내 도입은 3단계로**: ① 기본값 `SVP_JIRA_WRITE_MODE=dry-run`으로 가동 — 실티켓은 하나도 안 바뀌고
+  `journalctl`의 `would assign → <담당자> (<모듈>/<신뢰도>)` 로그로 분류 품질만 관찰 →
+  ② 테스트 티켓에 `svp-test` 라벨을 붙이고 `label` 모드로 전체 루프(배정·댓글·전이·push) 검증 →
+  ③ 팀 합의 후 `live`.
 - **업데이트 배포**: `git pull && npm ci --omit=dev && sudo systemctl restart svp-server`
 - 서버는 이슈를 메모리로 추적하므로 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다 — 별도 백업 불필요.
 - 클라이언트(전원 Windows 앱)는 `.env`의 `SVP_PUSH_URL=http://<서버호스트>:8793` 한 줄만 바꾸면 된다.

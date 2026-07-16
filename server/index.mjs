@@ -28,6 +28,11 @@ const BASE_JQL = process.env.SVP_JIRA_JQL ?? 'project = CIOPS AND labels = ci-fa
 const POLL_MS = Number(process.env.SVP_SERVER_POLL_MS ?? 5000)
 /** Auto-assign gate — strictly greater (ARCHITECTURE.md: >80 → owner, ≤80 → sheriff). */
 const CONFIDENCE_MIN = Number(process.env.SVP_LLM_CONFIDENCE_MIN ?? 80)
+// Every server-initiated Jira write (auto-assign trio AND app-ack transition)
+// obeys this mode. Safe by default: 테스트 단계에서 실티켓이 바뀌면 안 된다.
+//   dry-run(기본) → 로그만 | label → SVP_TEST_LABEL 붙은 티켓만 | live → 전면 허용
+const WRITE_MODE = process.env.SVP_JIRA_WRITE_MODE ?? 'dry-run'
+const TEST_LABEL = process.env.SVP_TEST_LABEL ?? 'svp-test'
 
 // Demo auth until SVP-5: admin/admin → sheriff; any username with
 // password === username → member (e.g. shin.son / shin.son).
@@ -50,6 +55,14 @@ const STATUS_BY_CATEGORY = { new: 'new', indeterminate: 'acknowledged', done: 'r
 const issues = new Map()
 /** key → LLM Classification — survives sync-loop re-routing (routeByAssignee consults it). */
 const llmResults = new Map()
+/** key → Jira labels (server-internal; the app contract doesn't carry labels). */
+const ticketLabels = new Map()
+
+function canWrite(key) {
+  if (WRITE_MODE === 'live') return true
+  if (WRITE_MODE === 'label') return (ticketLabels.get(key) ?? []).includes(TEST_LABEL)
+  return false
+}
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
@@ -144,6 +157,12 @@ async function classifyAndAct(key) {
     console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → 당번 유지`)
     return
   }
+  if (!canWrite(key)) {
+    console.log(
+      `[svp-server] [${WRITE_MODE}] ${key}: would assign → ${owner} (${llm.category}/${llm.confidence}, +댓글, In Progress) — Jira 변경 안 함`
+    )
+    return
+  }
   try {
     // Assignee first — never post an "자동 배정" comment without an actual assignment.
     await setAssignee(key, owner)
@@ -217,6 +236,12 @@ io.on('connection', (socket) => {
   socket.on('issue:ack', async (payload) => {
     const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
     if (!issue || issue.status !== 'new') return
+    if (!canWrite(issue.event.jira.key)) {
+      console.log(
+        `[svp-server] [${WRITE_MODE}] ack from ${user.userId}: would transition ${issue.event.jira.key} → In Progress — Jira 변경 안 함`
+      )
+      return
+    }
     try {
       await transitionTo(issue.event.jira.key, 'In Progress')
       console.log(`[svp-server] ack from ${user.userId}: ${issue.event.jira.key} → In Progress`)
@@ -238,7 +263,7 @@ function auth() {
 }
 
 async function search(jql) {
-  const url = `${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,created,updated,assignee`
+  const url = `${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,created,updated,assignee,labels`
   const res = await fetch(url, { headers: auth() })
   if (!res.ok) throw new Error(`search returned ${res.status}: ${(await res.text()).slice(0, 200)}`)
   return (await res.json()).issues ?? []
@@ -251,6 +276,7 @@ async function poll() {
     //    which silently drops new tickets — and the active set is small anyway
     //    (the team JQL excludes Resolved).
     for (const t of await search(`(${BASE_JQL}) ORDER BY created ASC`)) {
+      ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
       const event = normalize(t)
       const issue = {
@@ -280,6 +306,7 @@ async function poll() {
     const tracked = [...issues.entries()].filter(([, i]) => i.status !== 'resolved').map(([k]) => k)
     if (tracked.length > 0) {
       for (const t of await search(`key in (${tracked.join(',')})`)) {
+        ticketLabels.set(t.key, t.fields.labels ?? [])
         const issue = issues.get(t.key)
         if (!issue) continue
         const status = STATUS_BY_CATEGORY[t.fields.status.statusCategory.key]
@@ -308,6 +335,15 @@ console.log(`[svp-server] v3 server listening on :${PORT}`)
 console.log(`[svp-server] jira=${JIRA} bot=${BOT} jql=${BASE_JQL}`)
 console.log(
   `[svp-server] classifier: ${classifierEnabled() ? `on (>${CONFIDENCE_MIN} → auto-assign)` : 'off — LLM 자격증명 없음, 티켓은 당번 큐에 유지'}`
+)
+console.log(
+  `[svp-server] write-mode: ${WRITE_MODE}${
+    WRITE_MODE === 'dry-run'
+      ? ' — Jira 변경 없음 (로그로만 관찰)'
+      : WRITE_MODE === 'label'
+        ? ` — "${TEST_LABEL}" 라벨 티켓만 write`
+        : ' — 전면 허용'
+  }`
 )
 void poll()
 setInterval(() => void poll(), POLL_MS)

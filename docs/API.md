@@ -137,6 +137,8 @@ vault 모듈 노트 목록에서 생성한다 — 모델이 모듈을 지어낼 
   담당자는 같은 노트의 `owner:` frontmatter로 해석한다 — **owner 값은 Jira username과 동일해야**
   자동 배정이 push까지 이어진다 (사내: `owner: shin.son`).
 - `confidence`는 wiki 근거 강도를 반영해야 한다 (근거 없는 고신뢰 금지 — 프롬프트에 명시).
+- **모든 서버발 Jira write는 `SVP_JIRA_WRITE_MODE`를 따른다** (기본 `dry-run` — 로그만.
+  `label` = `SVP_TEST_LABEL` 티켓만, `live` = 전면. 앱 ack로 인한 전이도 동일 게이트).
 - **자동 배정 (confidence > 80 AND owner 해석 가능)**: 서버가 Jira에 순서대로 write —
   ① `PUT assignee`(실패 시 전체 중단 — 배정 없이 "자동 배정" 댓글 금지) → ② §2 템플릿 댓글 →
   ③ In Progress 전이(②③ 실패는 경고 후 진행) → poll()이 변경을 되읽어 담당자 앱으로 push.
