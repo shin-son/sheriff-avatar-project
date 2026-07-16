@@ -139,9 +139,9 @@ src/
 - v3에서 운영 vault는 **Linux 서버 호스트에 위치**한다 — 서버 프로세스가 유일한 읽기/쓰기 주체이고,
   사내 git remote로 백업·리뷰한다. 클라이언트(당번 포함)는 vault 파일에 직접 접근하지 않는다.
 - 리뷰는 파일 두 계층으로 나눈다:
-  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
+  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`, `raw/jira/*.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
     해결 건마다 PR을 만드는 것은 비현실적.
-  - **사람이 관리하는 노트** (`modules/*.md`의 known-failure, playbook) — 수정·삭제는 PR 리뷰를 거친다.
+  - **사람이 관리하는 노트** (`modules/*.md`의 known-failure) — 수정·삭제는 PR 리뷰를 거친다.
     lint가 지목한 노트의 diff를 리뷰하는 이 시점이 사람이 사실성을 검토하는 지점이다.
 
 ## 현재 구현과의 차이
