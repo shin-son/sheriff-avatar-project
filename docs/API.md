@@ -112,7 +112,7 @@ vault 모듈 노트 목록에서 생성한다 — 모델이 모듈을 지어낼 
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `SVP_LLM_PROVIDER` | `bedrock` | `bedrock`(사내) / `anthropic`(사외 dev — 직접 API 키) |
+| `SVP_LLM_PROVIDER` | `bedrock` | `bedrock`(Messages 엔드포인트) / `bedrock-invoke`(표준 InvokeModel — structured output 미지원이라 프롬프트 JSON 강제+파싱으로 대체) / `anthropic`(사외 dev) |
 | `AWS_REGION` | (없음 — bedrock 필수) | 미설정이면 분류기 비활성(티켓은 당번 큐 유지) |
 | `SVP_ANTHROPIC_API_KEY` | (없음) | provider=anthropic일 때 필수 |
 | `SVP_LLM_MODEL` | provider별 기본 | 모델 override |

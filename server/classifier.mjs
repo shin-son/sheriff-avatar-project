@@ -1,15 +1,22 @@
 // F3 — LLM classifier (docs/API.md §3 contract). Given a normalized CIEvent and
 // the top wiki matches, Claude scores the failure 0–100 and names the module.
-// Providers: AWS Bedrock (사내, default) or the direct Anthropic API (사외 dev).
+// Providers:
+//   bedrock         — Bedrock Messages 엔드포인트 (Mantle 클라이언트, 신형)
+//   bedrock-invoke  — 표준 Bedrock InvokeModel 경로 (구형 — 사내처럼 Mantle이 막힌 환경).
+//                     structured output 미지원이라 프롬프트로 JSON을 강제하고 파싱한다.
+//   anthropic       — 직접 Anthropic API (사외 dev)
 // Every failure path returns the §3 fallback — an LLM outage must never stop
 // the pipeline; unclassified tickets simply stay in the sheriff queue.
-import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk'
+import { AnthropicBedrock, AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk'
 import Anthropic from '@anthropic-ai/sdk'
 
 const PROVIDER = process.env.SVP_LLM_PROVIDER ?? 'bedrock'
+const IS_BEDROCK = PROVIDER === 'bedrock' || PROVIDER === 'bedrock-invoke'
 const TIMEOUT_MS = Number(process.env.SVP_LLM_TIMEOUT_MS ?? 30000)
+// bedrock-invoke: 사내 콘솔의 모델 ID(inference profile일 수 있음 — 예: apac.anthropic....)를
+// SVP_LLM_MODEL로 지정하는 것을 권장.
 const MODEL =
-  process.env.SVP_LLM_MODEL ?? (PROVIDER === 'bedrock' ? 'anthropic.claude-opus-4-8' : 'claude-opus-4-8')
+  process.env.SVP_LLM_MODEL ?? (IS_BEDROCK ? 'anthropic.claude-opus-4-8' : 'claude-opus-4-8')
 
 const SEVERITY_BY_TYPE = {
   build_failed: 'critical',
@@ -22,16 +29,19 @@ let client = null
 
 /** False when no credentials are configured — classify() then falls back instantly. */
 export function classifierEnabled() {
-  if (PROVIDER === 'bedrock') return Boolean(process.env.AWS_REGION)
+  if (IS_BEDROCK) return Boolean(process.env.AWS_REGION)
   return Boolean(process.env.SVP_ANTHROPIC_API_KEY)
 }
 
 function getClient() {
   if (client) return client
+  const opts = { timeout: TIMEOUT_MS, maxRetries: 1 }
   client =
     PROVIDER === 'bedrock'
-      ? new AnthropicBedrockMantle({ awsRegion: process.env.AWS_REGION, timeout: TIMEOUT_MS, maxRetries: 1 })
-      : new Anthropic({ apiKey: process.env.SVP_ANTHROPIC_API_KEY, timeout: TIMEOUT_MS, maxRetries: 1 })
+      ? new AnthropicBedrockMantle({ awsRegion: process.env.AWS_REGION, ...opts })
+      : PROVIDER === 'bedrock-invoke'
+        ? new AnthropicBedrock({ awsRegion: process.env.AWS_REGION, ...opts })
+        : new Anthropic({ apiKey: process.env.SVP_ANTHROPIC_API_KEY, ...opts })
   return client
 }
 
@@ -67,7 +77,7 @@ function buildSchema(categories) {
 }
 
 function buildSystem(categories) {
-  return [
+  const lines = [
     'You are the CI-failure classifier of Sheriff Avatar, an issue-triage agent.',
     'Given a Jira ticket (from a CI failure) and the team wiki notes that matched it,',
     'classify the failure and score how confidently it can be auto-assigned.',
@@ -81,7 +91,25 @@ function buildSystem(categories) {
     '- "summary": 한국어 2~3문장. 담당자가 로그를 열기 전에 상황을 파악할 수 있게 — 무엇이 실패했고,',
     '  어떤 known-failure 패턴과 일치하며(있다면), 예상 원인/해결 방향까지.',
     '- "severity": build/deploy 실패는 critical 성향, test는 major, lint는 minor — 단 내용으로 판단하라.'
-  ].join('\n')
+  ]
+  if (PROVIDER === 'bedrock-invoke') {
+    // 표준 Bedrock(InvokeModel)은 structured output 미지원 — 프롬프트로 강제한다.
+    lines.push(
+      '',
+      'Respond with EXACTLY ONE JSON object matching this schema — no prose before or after, no code fences:',
+      JSON.stringify(buildSchema(categories))
+    )
+  }
+  return lines.join('\n')
+}
+
+/** 모델이 코드펜스/설명을 붙여도 JSON 본체만 건진다 (invoke 경로 + 방어용). */
+function extractJson(text = '') {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  const body = fenced ? fenced[1] : text
+  const start = body.indexOf('{')
+  const end = body.lastIndexOf('}')
+  return start >= 0 && end > start ? body.slice(start, end + 1) : body
 }
 
 function buildUser(event, matches) {
@@ -115,16 +143,20 @@ export async function classify(event, matches, modules) {
   if (!classifierEnabled()) return fallback(event, '자격증명 미설정')
   const categories = modules.map((m) => m.module)
   try {
-    const response = await getClient().messages.create({
+    const request = {
       model: MODEL,
       max_tokens: 3000,
-      thinking: { type: 'adaptive' },
-      output_config: { format: { type: 'json_schema', schema: buildSchema(categories) } },
       system: buildSystem(categories),
       messages: [{ role: 'user', content: buildUser(event, matches) }]
-    })
+    }
+    if (PROVIDER !== 'bedrock-invoke') {
+      // 신형 경로에서만: InvokeModel은 이 파라미터들을 거부한다.
+      request.thinking = { type: 'adaptive' }
+      request.output_config = { format: { type: 'json_schema', schema: buildSchema(categories) } }
+    }
+    const response = await getClient().messages.create(request)
     const text = response.content.find((b) => b.type === 'text')?.text
-    const parsed = JSON.parse(text)
+    const parsed = JSON.parse(extractJson(text))
     // Belt-and-braces even with structured output: clamp/coerce before acting on it.
     if (!categories.includes(parsed.category)) parsed.category = 'unknown'
     parsed.confidence = Math.max(0, Math.min(100, Math.round(Number(parsed.confidence) || 0)))
