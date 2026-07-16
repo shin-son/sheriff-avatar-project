@@ -16,7 +16,9 @@
 // Usage: npm run server  (port 8793)
 import 'dotenv/config'
 import { Server } from 'socket.io'
-import { transitionTo } from './jira.mjs'
+import { classifierEnabled, classify } from './classifier.mjs'
+import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
+import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -24,6 +26,8 @@ const PAT = process.env.SVP_JIRA_PAT
 const BOT = process.env.SVP_JIRA_BOT ?? 'cicd_ap'
 const BASE_JQL = process.env.SVP_JIRA_JQL ?? 'project = CIOPS AND labels = ci-failure'
 const POLL_MS = Number(process.env.SVP_SERVER_POLL_MS ?? 5000)
+/** Auto-assign gate — strictly greater (ARCHITECTURE.md: >80 → owner, ≤80 → sheriff). */
+const CONFIDENCE_MIN = Number(process.env.SVP_LLM_CONFIDENCE_MIN ?? 80)
 
 // Demo auth until SVP-5: admin/admin → sheriff; any username with
 // password === username → member (e.g. shin.son / shin.son).
@@ -44,6 +48,8 @@ const STATUS_BY_CATEGORY = { new: 'new', indeterminate: 'acknowledged', done: 'r
 
 /** key → SheriffIssue (the server owns the issue store in v3). */
 const issues = new Map()
+/** key → LLM Classification — survives sync-loop re-routing (routeByAssignee consults it). */
+const llmResults = new Map()
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
@@ -81,11 +87,14 @@ function assigneeOf(t) {
 
 // Assignee-driven routing: Jira's assignee field is the single source of who
 // owns the issue. bot/empty = not yet given to a human → sheriff queue.
-function routeByAssignee(event, assignee) {
+// An LLM classification (llmResults) outlives re-routing — without this the
+// sync loop would overwrite the real confidence/summary with the placeholder.
+function routeByAssignee(event, assignee, key) {
   const human = assignee && assignee !== BOT
   if (human) knownMembers.add(assignee)
+  const llm = llmResults.get(key)
   return {
-    classification: {
+    classification: llm ?? {
       category: event.module,
       severity: SEVERITY_BY_TYPE[event.type] ?? 'major',
       confidence: human ? 95 : 50,
@@ -95,9 +104,66 @@ function routeByAssignee(event, assignee) {
       wikiRefs: []
     },
     assignment: human
-      ? { assigneeId: assignee, assigneeName: assignee, routedTo: 'feature-owner', reason: `Jira assignee = ${assignee}` }
+      ? {
+          assigneeId: assignee,
+          assigneeName: assignee,
+          routedTo: 'feature-owner',
+          reason: `Jira assignee = ${assignee}${llm ? ` (LLM 분류 ${llm.category} · 신뢰도 ${llm.confidence})` : ''}`
+        }
       : { assigneeId: 'admin', assigneeName: '당번 (admin)', routedTo: 'sheriff', reason: `assignee가 ${assignee ?? '없음'} (사람 배정 전) → 당번` }
   }
+}
+
+// F3 — async classification: never blocks ingest. The server does not move
+// local state itself: on a confident match it WRITES to Jira (assignee →
+// comment → In Progress) and lets poll() read the change back and push it.
+async function classifyAndAct(key) {
+  const issue = issues.get(key)
+  if (!issue) return
+  const matches = queryWiki(issue.event)
+  const llm = await classify(issue.event, matches, listModules())
+  const wikiRefs = llm.evidence
+    .map((e) => matches.find((m) => m.file === e) ?? { file: e, title: e, score: 0 })
+    .map(({ file, title, score }) => ({ file, title, score }))
+  const classification = {
+    category: llm.category,
+    severity: llm.severity,
+    confidence: llm.confidence,
+    summary: llm.summary,
+    wikiRefs
+  }
+  llmResults.set(key, classification)
+  issue.classification = classification
+  emitIssue('issue:updated', issue) // ≤80이어도 당번 화면에 LLM 판단 근거가 보인다
+
+  // State may have moved during the LLM call (ack, manual assignment) — don't write over it.
+  if (issue.assignment.routedTo !== 'sheriff' || issue.status !== 'new') return
+  const owner =
+    llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown' ? resolveOwner(llm.category) : null
+  if (!owner) {
+    console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → 당번 유지`)
+    return
+  }
+  try {
+    // Assignee first — never post an "자동 배정" comment without an actual assignment.
+    await setAssignee(key, owner)
+  } catch (err) {
+    console.error(`[svp-server] auto-assign failed for ${key}: ${err.message}`)
+    return
+  }
+  console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → assignee=${owner}`)
+  const reason = `LLM 분류 ${llm.category} (신뢰도 ${llm.confidence}) → ${llm.category} owner ${owner}`
+  try {
+    await postComment(key, buildComment(issue.event, llm, wikiRefs, `${llm.category} 담당 ${owner} 자동 배정`, reason))
+  } catch (err) {
+    console.error(`[svp-server] comment failed for ${key}: ${err.message}`) // 배정은 이미 성공 — 계속
+  }
+  try {
+    await transitionTo(key, 'In Progress')
+  } catch (err) {
+    console.error(`[svp-server] transition failed for ${key}: ${err.message}`)
+  }
+  void poll() // sync 루프가 assignee/status 변경을 읽어 담당자에게 push한다
 }
 
 // ---- Socket.IO: login-authenticated sessions, server-side filtering ----
@@ -189,13 +255,24 @@ async function poll() {
       const event = normalize(t)
       const issue = {
         event,
-        ...routeByAssignee(event, assigneeOf(t)),
+        ...routeByAssignee(event, assigneeOf(t), t.key),
         status: STATUS_BY_CATEGORY[t.fields.status.statusCategory.key] ?? 'new',
         receivedAt: new Date().toISOString()
       }
       issues.set(t.key, issue)
       console.log(`[svp-server] new ${t.key} assignee=${assigneeOf(t) ?? '-'} → ${issue.assignment.assigneeId}`)
       emitIssue('issue:new', issue)
+      // Classify only bot-assigned open tickets. Human-assigned tickets skip it,
+      // which also makes restarts idempotent: an already-auto-assigned ticket
+      // re-ingests with its human assignee and never gets a second comment.
+      if (
+        classifierEnabled() &&
+        issue.assignment.routedTo === 'sheriff' &&
+        issue.status === 'new' &&
+        !llmResults.has(t.key)
+      ) {
+        void classifyAndAct(t.key)
+      }
     }
 
     // 2) Tracked tickets: status/assignee sync by key — independent of the base
@@ -212,7 +289,7 @@ async function poll() {
         const assigneeChanged = (assignee && assignee !== BOT ? assignee : null) !== currentAssignee
         if (!statusChanged && !assigneeChanged) continue
         const before = issue.assignment.assigneeId
-        if (assigneeChanged) Object.assign(issue, routeByAssignee(issue.event, assignee))
+        if (assigneeChanged) Object.assign(issue, routeByAssignee(issue.event, assignee, t.key))
         if (statusChanged) issue.status = status
         issue.event.jira.status = t.fields.status.statusCategory.key
         console.log(`[svp-server] sync ${t.key}: status=${issue.status} assignee=${issue.assignment.assigneeId}${assigneeChanged ? ` (was ${before})` : ''}`)
@@ -229,5 +306,8 @@ async function poll() {
 
 console.log(`[svp-server] v3 server listening on :${PORT}`)
 console.log(`[svp-server] jira=${JIRA} bot=${BOT} jql=${BASE_JQL}`)
+console.log(
+  `[svp-server] classifier: ${classifierEnabled() ? `on (>${CONFIDENCE_MIN} → auto-assign)` : 'off — LLM 자격증명 없음, 티켓은 당번 큐에 유지'}`
+)
 void poll()
 setInterval(() => void poll(), POLL_MS)
