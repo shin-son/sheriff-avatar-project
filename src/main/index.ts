@@ -56,10 +56,12 @@ function supportsAcrylic(): boolean {
 // Default chrome: transparent frameless window — panels float directly over the
 // desktop with a fully custom silhouette (no drag-resize/snap: Windows disables
 // thickFrame on transparent windows). SVP_GLASS=acrylic switches to the standard
-// window with desktop blur-behind.
+// window with desktop blur-behind. SVP_GLASS=solid forces the opaque background
+// (screen recording: keeps the desktop behind the window out of the capture).
 type GlassMode = 'frameless' | 'acrylic' | 'solid'
 
 function glassMode(): GlassMode {
+  if (process.env.SVP_GLASS === 'solid') return 'solid'
   if (process.env.SVP_GLASS === 'acrylic') return supportsAcrylic() ? 'acrylic' : 'solid'
   return 'frameless'
 }
