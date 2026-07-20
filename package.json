@@ -13,6 +13,7 @@
     "dist": "electron-vite build && electron-builder --win",
     "mock:ci": "node mock/ci-server.mjs",
     "mock:jira": "node mock/jira-server.mjs",
+    "mock:jenkins": "node mock/jenkins-server.mjs",
     "mock:push": "node mock/push-server.mjs",
     "server": "node server/index.mjs"
   },

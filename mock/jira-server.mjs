@@ -79,7 +79,7 @@ function createTicket(scenarioId) {
       `type: ${s.type}`,
       `module: ${s.module}`,
       `branch: ${s.branch}`,
-      `ci-url: https://ci.example.internal/builds/${seq}`,
+      `ci-url: http://localhost:8794/job/ci-${s.module}/${seq}/`,
       'log:',
       s.log
     ].join('\n'),
