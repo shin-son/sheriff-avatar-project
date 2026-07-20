@@ -1,16 +1,18 @@
-// F7 (P0a) — ingest a resolved issue back into the vault. This is the sink the
+// F7 — ingest a resolved issue back into the vault. This is the sink the
 // polling loop was missing: on a ticket's transition into `resolved`, freeze the
-// raw evidence (raw/jira, raw/ci) and file a case-log entry, then refresh
-// index.md/log.md. Mirrors src/main/modules/wiki/index.ts ingest/index/log,
-// minus Electron, plus the multi-source raw schema (wiki-vault/README.md).
+// raw evidence (raw/jira, raw/ci), have the LLM fill the case-log symptom/cause/
+// resolution from that evidence, then refresh index.md/log.md. Mirrors
+// src/main/modules/wiki/index.ts ingest/index/log, minus Electron, plus the
+// multi-source raw schema (wiki-vault/README.md).
 //
-// Scope note (P0a): case-log symptom/cause/resolution are best-effort — the LLM
-// fill (summarizeResolution) lands in P0b. raw/gerrit is written only when a
-// Change-Id is supplied; the Gerrit fetch is a later source adapter.
+// Scope note: raw/gerrit is written only when a Change-Id is supplied; the
+// Gerrit fetch is a later source adapter. Without LLM credentials the case-log
+// symptom is still captured (summarizeResolution fallback), cause/resolution 불명.
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { appendFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { summarizeResolution } from './classifier.mjs'
 import { getIssueRaw } from './jira.mjs'
 
 const VAULT_DIR =
@@ -44,9 +46,11 @@ export async function ingestResolved(issue) {
       console.log(`[svp-server] [${INGEST_MODE}] ingest ${key}: would freeze raw/jira + raw/ci, case-log append — vault 변경 안 함`)
       return
     }
+    // P0b: LLM reads the raw evidence to fill symptom/cause/resolution.
+    const filled = await summarizeResolution(issue.event, { comments: jiraRaw.comments })
     await freezeJiraRaw(key, issue, jiraRaw, capturedAt)
     await freezeCiRaw(key, issue, capturedAt)
-    await appendCaseLog(issue, capturedAt)
+    await appendCaseLog(issue, capturedAt, filled)
     await appendLog('ingest', `${key} ${issue.event.title}`)
     await rebuildIndex()
     console.log(`[svp-server] ingested ${key}: raw/jira + raw/ci 동결, case-log 기록`)
@@ -110,12 +114,13 @@ function freezeCiRaw(key, issue, capturedAt) {
 
 /* ── case-log / index.md / log.md ───────────────────────────────────────── */
 
-function appendCaseLog(issue, capturedAt) {
+function appendCaseLog(issue, capturedAt, filled) {
   const key = issue.event.jira.key
   const refs = issue.classification.wikiRefs?.length
     ? issue.classification.wikiRefs.map((r) => r.title).join(', ')
     : '(없음)'
-  // symptom/cause/resolution: P0a best-effort — P0b에서 LLM(summarizeResolution)이 채운다.
+  // symptom/cause/resolution: LLM(summarizeResolution)이 raw를 읽어 채운다 (P0b).
+  // 자격증명 없으면 fallback으로 symptom만 채워진 채 들어온다.
   const entry = [
     `\n## ${issue.event.id} — ${issue.event.title}`,
     `- date: ${capturedAt}`,
@@ -125,9 +130,9 @@ function appendCaseLog(issue, capturedAt) {
     `- assignee: ${issue.assignment.assigneeName} (${issue.assignment.routedTo})`,
     `- jira: ${key} — 원문 사본은 raw/jira/${key}.md`,
     `- ci-build: ${key} — 원문 사본은 raw/ci/${key}.md`,
-    `- symptom: ${issue.event.title}`,
-    '- cause: (미확인 — F7 LLM 채움 예정)',
-    '- resolution: (미확인 — F7 LLM 채움 예정)',
+    `- symptom: ${filled.symptom}`,
+    `- cause: ${filled.cause}`,
+    `- resolution: ${filled.resolution}`,
     `- wiki-refs: ${refs}`,
     ''
   ].join('\n')
