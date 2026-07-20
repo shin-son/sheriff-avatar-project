@@ -67,28 +67,32 @@ function canWrite(key) {
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
-// description contract: `key: value` header lines, then `log:` + raw log
-// (mock contract; real corporate tickets just fall back to defaults).
+// Real corporate description contract (SVP-6) — ` : `-separated key-value lines:
+//   [DEV_CICD][<project>][T<seq>] : <TC명> Failed   ← first line (= summary)
+//   CICD Project : ... / Step : TEST / Category : ... / TC name or file : ...
+//   Link / CICD : <대시보드 URL> / TEST : <Jenkins 빌드 URL> / IMAGE·DUMP DIR : ...
+// description에 실패 로그는 없다 — 로그는 poll()의 Jenkins consoleText 보강이 맡는다.
+const STEP_TO_TYPE = {
+  TEST: 'test_failed',
+  BUILD: 'build_failed',
+  DEPLOY: 'deploy_failed',
+  LINT: 'lint_failed'
+}
+
 function normalize(t) {
-  const lines = (t.fields.description ?? '').split('\n')
   const fields = {}
-  let log = ''
-  for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i] === 'log:') {
-      log = lines.slice(i + 1).join('\n')
-      break
-    }
-    const sep = lines[i].indexOf(': ')
-    if (sep > 0) fields[lines[i].slice(0, sep)] = lines[i].slice(sep + 2)
+  for (const line of (t.fields.description ?? '').split('\n')) {
+    const sep = line.indexOf(' : ')
+    if (sep > 0) fields[line.slice(0, sep).trim()] = line.slice(sep + 3).trim()
   }
   return {
     id: t.key,
-    type: fields['type'] ?? 'test_failed',
+    type: STEP_TO_TYPE[(fields['Step'] ?? '').toUpperCase()] ?? 'test_failed',
     title: t.fields.summary,
-    module: fields['module'] ?? 'unknown',
-    branch: fields['branch'] ?? '',
-    log: log || (t.fields.description ?? ''),
-    url: fields['ci-url'] ?? `${JIRA}/browse/${t.key}`,
+    module: 'unknown', // description에 모듈 정보 없음 — LLM 분류가 결정
+    branch: fields['CICD Project'] ?? '',
+    log: t.fields.description ?? '',
+    url: fields['CICD'] ?? `${JIRA}/browse/${t.key}`,
     timestamp: t.fields.created,
     source: 'jira',
     jira: { key: t.key, url: `${JIRA}/browse/${t.key}`, status: t.fields.status.statusCategory.key }
