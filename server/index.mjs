@@ -288,7 +288,8 @@ async function poll() {
       // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
       // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
       const buildUrl = extractBuildUrl(t.fields.description)
-      const jenkins = buildUrl ? await fetchFailureLog(buildUrl) : null
+      const tc = (t.fields.description ?? '').match(/TC name or file\s*:\s*(\S+)/)?.[1]
+      const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
       if (jenkins) {
         event.log = `${event.log}\n\n${jenkins.log}`
         event.url = jenkins.url
