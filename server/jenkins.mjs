@@ -7,6 +7,9 @@
 // Works against mock/jenkins-server.mjs (auth 없이) or a real Jenkins via .env:
 //   SVP_JENKINS_USER, SVP_JENKINS_TOKEN (+ NODE_EXTRA_CA_CERTS for corporate TLS)
 
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+
 const USER = process.env.SVP_JENKINS_USER
 const TOKEN = process.env.SVP_JENKINS_TOKEN
 // 실측: 샤드 콘솔이 ~9MB — 다운로드 여유를 둔다.
@@ -25,29 +28,53 @@ export function extractBuildUrl(text) {
 }
 
 function auth() {
-  // 사내 게이트웨이가 User-Agent 없는 요청을 차단(500 HTML)한다 — curl은 되고
-  // Node fetch(undici, UA 미전송)만 막히던 원인. curl과 같은 헤더를 단다.
-  const headers = { 'User-Agent': 'curl/8.5.0', Accept: '*/*' }
-  if (USER && TOKEN) headers.Authorization = `Basic ${Buffer.from(`${USER}:${TOKEN}`).toString('base64')}`
-  return headers
+  return USER && TOKEN
+    ? { Authorization: `Basic ${Buffer.from(`${USER}:${TOKEN}`).toString('base64')}` }
+    : {}
+}
+
+/**
+ * 직통 GET → { ok, status, text }. fetch(undici)가 아니라 node:http를 쓰는
+ * 이유: Bedrock 때문에 NODE_USE_ENV_PROXY=1로 서버를 띄우는 사내 환경에서
+ * fetch는 사내 프록시를 타고, 프록시는 내부 Jenkins IP를 차단(500 HTML)한다.
+ * Jenkins는 항상 사내 내부 — 프록시 설정과 무관하게 무조건 직통으로 간다.
+ */
+function rawGet(url) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const req = (u.protocol === 'https:' ? httpsRequest : httpRequest)(
+      u,
+      { headers: auth(), timeout: TIMEOUT_MS },
+      (res) => {
+        const chunks = []
+        res.on('data', (c) => chunks.push(c))
+        res.on('end', () =>
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode,
+            text: Buffer.concat(chunks).toString('utf-8')
+          })
+        )
+      }
+    )
+    req.on('timeout', () => req.destroy(new Error(`timeout after ${TIMEOUT_MS}ms idle`)))
+    req.on('error', reject)
+    req.end()
+  })
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/**
- * GET with one retry after backoff. 사내 게이트웨이가 단발 요청은 통과시키고
- * 연속 요청을 간헐적으로 차단(500 HTML)한다 — 잠깐 쉬었다 한 번 더 간다.
- */
+/** GET with one retry after backoff — 순간 장애·간헐 차단 대비. */
 async function jenkinsGet(url) {
   try {
-    const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+    const res = await rawGet(url)
     if (res.ok) return res
-    await res.text().catch(() => {}) // drain before retry
   } catch {
     // network error — retry below
   }
   await sleep(1500)
-  return fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+  return rawGet(url)
 }
 
 /**
@@ -59,9 +86,9 @@ async function fetchConsole(buildUrl) {
   try {
     const res = await jenkinsGet(`${buildUrl.replace(/\/+$/, '')}/consoleText`)
     if (!res.ok) throw new Error(`consoleText returned ${res.status}`)
-    return await res.text()
+    return res.text
   } catch (err) {
-    const cause = err.cause ? ` (cause: ${err.cause.code ?? err.cause.message ?? err.cause})` : ''
+    const cause = err.code ? ` (cause: ${err.code})` : ''
     console.error(`[svp-server] jenkins consoleText failed ${buildUrl}: ${err.message}${cause}`)
     return null
   }
@@ -106,11 +133,11 @@ async function buildMeta(buildUrl) {
     const url = `${buildUrl.replace(/\/+$/, '')}/api/json?tree=description,result`
     const res = await jenkinsGet(url)
     if (!res.ok) {
-      const body = (await res.text()).slice(0, 200).replace(/\s+/g, ' ')
+      const body = res.text.slice(0, 200).replace(/\s+/g, ' ')
       console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${res.status} ${body}`)
       return {}
     }
-    return await res.json()
+    return JSON.parse(res.text)
   } catch (err) {
     console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${err.message}`)
     return {}
@@ -121,8 +148,7 @@ async function buildMeta(buildUrl) {
 async function fetchPage(buildUrl) {
   try {
     const res = await jenkinsGet(buildUrl)
-    if (!res.ok) return null
-    return await res.text()
+    return res.ok ? res.text : null
   } catch {
     return null
   }

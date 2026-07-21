@@ -198,6 +198,7 @@ journalctl -u svp-server -f       # 로그 확인
 | `poll failed ...: fetch failed (cause: ...)` | 네트워크/TLS — cause 코드로 판별: `UNABLE_TO_VERIFY...`/`SELF_SIGNED...` = CA 미신뢰, `ECONNREFUSED` = 주소, `ENOTFOUND` = DNS | TLS면 **서버 터미널** 셸에서 `NODE_EXTRA_CA_CERTS=<사내CA.pem>` 설정 (경로 오타 시 시작 로그에 `Warning: ... load failed`) |
 | `poll failed ...: search returned 401` | PAT 누락/오류 | `.env`의 `SVP_JIRA_PAT` 확인 |
 | `poll failed ...: search returned 400` | JQL 문법·상태명 오류 | curl로 같은 JQL 실행해 `errorMessages` 확인 |
+| `jenkins api/json failed ...: 500 <!DOCTYPE HTML>...` (차단 페이지) | `NODE_USE_ENV_PROXY=1`(Bedrock용)로 인해 fetch가 사내 프록시를 타고, 프록시가 내부 Jenkins IP를 차단 | 서버 코드가 Jenkins만 `node:http` 직통으로 호출하므로 최신 코드면 발생하지 않음. 단발 `node -e "fetch(...)"` 진단은 플래그 유무에 따라 결과가 달라지니 주의 |
 | 배정했는데 팀원 앱에 안 옴 | 로그인 아이디 ≠ Jira assignee name | 서버 로그의 `sync ...: assignee=<값>`과 로그인 아이디 대조 |
 
 v3 서버는 이슈를 메모리로 추적한다 — 서버를 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다.
