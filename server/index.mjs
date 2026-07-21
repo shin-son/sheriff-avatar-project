@@ -292,6 +292,7 @@ async function poll() {
       if (jenkins) {
         event.log = `${event.log}\n\n${jenkins.log}`
         event.url = jenkins.url
+        console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
       }
       const issue = {
         event,
