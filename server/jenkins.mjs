@@ -34,7 +34,7 @@ function auth() {
  * failure. Never throws — a dead Jenkins must not break the poll loop; the
  * caller falls back to the description log.
  */
-export async function fetchConsoleTail(buildUrl) {
+async function fetchConsoleTail(buildUrl) {
   try {
     const url = `${buildUrl.replace(/\/+$/, '')}/consoleText`
     const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
@@ -46,4 +46,42 @@ export async function fetchConsoleTail(buildUrl) {
     console.error(`[svp-server] jenkins consoleText failed ${buildUrl}: ${err.message}${cause}`)
     return null
   }
+}
+
+// 티켓의 TEST 링크(CI_MAIN_JOB)는 중계 콘솔이다 — 리소스별 CI_TEST 빌드 링크
+// (`CI TEST RESULT : <url>`)만 나열되고, 실제 실패 로그는 그 빌드들의 콘솔에 있다.
+const TEST_RESULT_RE = /CI TEST RESULT\s*:\s*(https?:\/\/[^\s|\]"'()]+\/job\/[^\s|\]"'()]+?\/\d+\/?)/g
+
+/** GET <buildUrl>/api/json → result ('SUCCESS'|'FAILURE'|'UNSTABLE'...), or null. */
+async function buildResult(buildUrl) {
+  try {
+    const url = `${buildUrl.replace(/\/+$/, '')}/api/json?tree=result`
+    const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+    if (!res.ok) return null
+    return (await res.json()).result ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Failure log for the build linked in a ticket → { url, log } or null.
+ * The console is the log itself when it has no CI TEST RESULT links; otherwise
+ * follow them one hop and keep only failing shards (result !== 'SUCCESS' —
+ * 테스트 실패는 UNSTABLE로 찍히기도 한다; result 조회 불능 시 전부 유지).
+ */
+export async function fetchFailureLog(buildUrl) {
+  const main = await fetchConsoleTail(buildUrl)
+  if (main === null) return null
+  const linked = [...new Set([...main.matchAll(TEST_RESULT_RE)].map((m) => m[1]))]
+  if (linked.length === 0) return { url: buildUrl, log: `[jenkins console tail] ${buildUrl}\n${main}` }
+  const withResult = await Promise.all(linked.map(async (u) => ({ u, result: await buildResult(u) })))
+  const failing = withResult.filter((b) => b.result !== 'SUCCESS')
+  const parts = []
+  for (const { u } of failing.length > 0 ? failing : withResult) {
+    const tail = await fetchConsoleTail(u)
+    if (tail !== null) parts.push({ url: u, text: `[jenkins console tail] ${u}\n${tail}` })
+  }
+  if (parts.length === 0) return { url: buildUrl, log: `[jenkins console tail] ${buildUrl}\n${main}` }
+  return { url: parts[0].url, log: parts.map((p) => p.text).join('\n\n') }
 }

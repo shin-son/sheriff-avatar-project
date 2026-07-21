@@ -17,7 +17,7 @@
 import 'dotenv/config'
 import { Server } from 'socket.io'
 import { classifierEnabled, classify } from './classifier.mjs'
-import { extractBuildUrl, fetchConsoleTail } from './jenkins.mjs'
+import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
 
@@ -284,16 +284,14 @@ async function poll() {
       ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
       const event = normalize(t)
-      // Jenkins 콘솔 꼬리로 로그 보강 — 실티켓 description은 비정형이라 분류·
-      // ingest의 로그 근거는 티켓에 링크된 빌드의 콘솔이 맡는다. 실패(다운·
-      // 타임아웃·링크 없음) 시 description 로그 그대로 진행.
+      // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
+      // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
+      // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
       const buildUrl = extractBuildUrl(t.fields.description)
-      if (buildUrl) {
-        const tail = await fetchConsoleTail(buildUrl)
-        if (tail) {
-          event.log = `${event.log}\n\n[jenkins console tail] ${buildUrl}\n${tail}`
-          event.url = buildUrl
-        }
+      const jenkins = buildUrl ? await fetchFailureLog(buildUrl) : null
+      if (jenkins) {
+        event.log = `${event.log}\n\n${jenkins.log}`
+        event.url = jenkins.url
       }
       const issue = {
         event,
