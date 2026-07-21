@@ -48,40 +48,63 @@ async function fetchConsoleTail(buildUrl) {
   }
 }
 
-// 티켓의 TEST 링크(CI_MAIN_JOB)는 중계 콘솔이다 — 리소스별 CI_TEST 빌드 링크
-// (`CI TEST RESULT : <url>`)만 나열되고, 실제 실패 로그는 그 빌드들의 콘솔에 있다.
-const TEST_RESULT_RE = /CI TEST RESULT\s*:\s*(https?:\/\/[^\s|\]"'()]+\/job\/[^\s|\]"'()]+?\/\d+\/?)/g
+// 티켓의 TEST 링크(CI_MAIN_JOB)는 중계 빌드다 — 리소스별 CI_TEST 빌드 링크
+// (`CI TEST RESULT : <url>`)는 빌드 description(api/json)에 있고(사내 확인),
+// 실제 실패 로그는 그 빌드들의 콘솔에 있다.
+const TEST_RESULT_RE = /CI TEST RESULT\s*:\s*(https?:\/\/[^\s|\]"'()<>]+\/job\/[^\s|\]"'()<>]+?\/\d+\/?)/g
+const ANY_BUILD_RE = /https?:\/\/[^\s|\]"'()<>]+\/job\/[^\s|\]"'()<>]+?\/\d+\/?/g
 
-/** GET <buildUrl>/api/json → result ('SUCCESS'|'FAILURE'|'UNSTABLE'...), or null. */
-async function buildResult(buildUrl) {
+/** GET <buildUrl>/api/json → { description?, result? }, or {} on any failure. */
+async function buildMeta(buildUrl) {
   try {
-    const url = `${buildUrl.replace(/\/+$/, '')}/api/json?tree=result`
+    const url = `${buildUrl.replace(/\/+$/, '')}/api/json?tree=description,result`
     const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
-    if (!res.ok) return null
-    return (await res.json()).result ?? null
+    if (!res.ok) return {}
+    return await res.json()
   } catch {
-    return null
+    return {}
   }
 }
 
 /**
+ * Shard build links in a relay build's description: `CI TEST RESULT : <url>`
+ * 우선, description이 HTML(<a href>)로 감싸 텍스트 패턴이 깨지는 경우엔 모든
+ * /job/ 빌드 URL로 폴백. 자기 자신은 제외.
+ */
+function shardLinksIn(text, selfUrl) {
+  const named = [...text.matchAll(TEST_RESULT_RE)].map((m) => m[1])
+  const urls = named.length > 0 ? named : (text.match(ANY_BUILD_RE) ?? [])
+  const self = selfUrl.replace(/\/+$/, '')
+  return [...new Set(urls)].filter((u) => u.replace(/\/+$/, '') !== self)
+}
+
+/**
  * Failure log for the build linked in a ticket → { url, log } or null.
- * The console is the log itself when it has no CI TEST RESULT links; otherwise
- * follow them one hop and keep only failing shards (result !== 'SUCCESS' —
+ * Shard links are read from the relay build's description (api/json), falling
+ * back to its console (잡 구성에 따라 콘솔에 찍는 경우). No links → the console
+ * IS the log. With links, keep only failing shards (result !== 'SUCCESS' —
  * 테스트 실패는 UNSTABLE로 찍히기도 한다; result 조회 불능 시 전부 유지).
  */
 export async function fetchFailureLog(buildUrl) {
-  const main = await fetchConsoleTail(buildUrl)
-  if (main === null) return null
-  const linked = [...new Set([...main.matchAll(TEST_RESULT_RE)].map((m) => m[1]))]
-  if (linked.length === 0) return { url: buildUrl, log: `[jenkins console tail] ${buildUrl}\n${main}` }
-  const withResult = await Promise.all(linked.map(async (u) => ({ u, result: await buildResult(u) })))
+  const meta = await buildMeta(buildUrl)
+  let linked = shardLinksIn(meta.description ?? '', buildUrl)
+  let main = null
+  if (linked.length === 0) {
+    main = await fetchConsoleTail(buildUrl)
+    if (main === null) return null
+    linked = [...new Set([...main.matchAll(TEST_RESULT_RE)].map((m) => m[1]))]
+    if (linked.length === 0) return { url: buildUrl, log: `[jenkins console tail] ${buildUrl}\n${main}` }
+  }
+  const withResult = await Promise.all(linked.map(async (u) => ({ u, result: (await buildMeta(u)).result ?? null })))
   const failing = withResult.filter((b) => b.result !== 'SUCCESS')
   const parts = []
   for (const { u } of failing.length > 0 ? failing : withResult) {
     const tail = await fetchConsoleTail(u)
     if (tail !== null) parts.push({ url: u, text: `[jenkins console tail] ${u}\n${tail}` })
   }
-  if (parts.length === 0) return { url: buildUrl, log: `[jenkins console tail] ${buildUrl}\n${main}` }
+  if (parts.length === 0) {
+    main = main ?? (await fetchConsoleTail(buildUrl))
+    return main === null ? null : { url: buildUrl, log: `[jenkins console tail] ${buildUrl}\n${main}` }
+  }
   return { url: parts[0].url, log: parts.map((p) => p.text).join('\n\n') }
 }

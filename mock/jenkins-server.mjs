@@ -43,22 +43,25 @@ const TAILS = {
 }
 
 // 실사내 2단 구조를 재현한다: 티켓이 가리키는 ci-<module>(=CI_MAIN_JOB 역할)
-// 콘솔에는 리소스 배정과 CI TEST RESULT 링크만 있고 실로그가 없다. 실패 로그는
-// 링크된 CI_TEST_<module> 샤드 콘솔에 있다 (CI_TEST_pass는 성공 샤드 —
-// result 필터링 검증용).
+// 빌드의 CI TEST RESULT 링크는 콘솔이 아니라 build description(api/json)에
+// 있다 (사내 확인). 실패 로그는 링크된 CI_TEST_<module> 샤드 콘솔에 있다
+// (CI_TEST_pass는 성공 샤드 — result 필터링 검증용).
+function descriptionFor(job, num) {
+  if (!job.startsWith('ci-')) return null
+  const module = job.slice(3)
+  return [
+    'CI_MAIN_JOB Resource: n132_mock_res',
+    'CI_MAIN_JOB Resource: n131_mock_res',
+    `CI TEST RESULT : http://localhost:${PORT}/job/CI_TEST_pass/${num}/`,
+    `- CI TEST REPORT URL : http://localhost:${PORT}/ci/tc/reportUrl/${num}`,
+    `CI TEST RESULT : http://localhost:${PORT}/job/CI_TEST_${module}/${num}/`,
+    `- CI TEST REPORT URL : http://localhost:${PORT}/ci/tc/reportUrl/${num}`
+  ].join('\n')
+}
+
 function consoleFor(job, num) {
   if (job.startsWith('ci-')) {
-    const module = job.slice(3)
-    return [
-      `Started by timer`,
-      'CI_MAIN_JOB Resource: n132_mock_res',
-      'CI_MAIN_JOB Resource: n131_mock_res',
-      `CI TEST RESULT : http://localhost:${PORT}/job/CI_TEST_pass/${num}/`,
-      `- CI TEST REPORT URL : http://localhost:${PORT}/ci/tc/reportUrl/${num}`,
-      `CI TEST RESULT : http://localhost:${PORT}/job/CI_TEST_${module}/${num}/`,
-      `- CI TEST REPORT URL : http://localhost:${PORT}/ci/tc/reportUrl/${num}`,
-      'Finished: FAILURE'
-    ].join('\n')
+    return ['Started by timer', 'Triggering CI_TEST shards...', 'Finished: FAILURE'].join('\n')
   }
   if (job === 'CI_TEST_pass') {
     return ['+ run test shard on n132_mock_res', 'All 42 tests passed', 'Finished: SUCCESS'].join('\n')
@@ -98,6 +101,7 @@ const server = createServer((req, res) => {
       JSON.stringify({
         fullDisplayName: `${job} #${num}`,
         number: Number(num),
+        description: descriptionFor(job, num),
         result: job === 'CI_TEST_pass' ? 'SUCCESS' : 'FAILURE'
       })
     )
