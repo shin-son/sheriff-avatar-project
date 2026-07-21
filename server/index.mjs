@@ -274,7 +274,13 @@ async function search(jql) {
   return (await res.json()).issues ?? []
 }
 
+// Jenkins fetch가 끼면서 poll 한 사이클이 수 초를 넘을 수 있다 — setInterval
+// 겹침으로 같은 티켓이 두 번 ingest되는 것을 막는다 (single-flight).
+let polling = false
+
 async function poll() {
+  if (polling) return
+  polling = true
   try {
     // 1) New tickets: fetch the full base JQL and skip known keys. A `created >=`
     //    bound would be interpreted in the JIRA PROFILE timezone (not this PC's),
@@ -344,6 +350,8 @@ async function poll() {
     // undici hides the real reason (TLS/DNS/refused) in err.cause — surface it.
     const cause = err.cause ? ` (cause: ${err.cause.code ?? err.cause.message ?? err.cause})` : ''
     console.error(`[svp-server] poll failed: ${err.message}${cause}`)
+  } finally {
+    polling = false
   }
 }
 

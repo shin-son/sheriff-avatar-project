@@ -86,9 +86,13 @@ async function buildMeta(buildUrl) {
   try {
     const url = `${buildUrl.replace(/\/+$/, '')}/api/json?tree=description,result`
     const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
-    if (!res.ok) return {}
+    if (!res.ok) {
+      console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${res.status}`)
+      return {}
+    }
     return await res.json()
-  } catch {
+  } catch (err) {
+    console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${err.message}`)
     return {}
   }
 }
