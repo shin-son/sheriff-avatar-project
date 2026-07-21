@@ -25,9 +25,11 @@ export function extractBuildUrl(text) {
 }
 
 function auth() {
-  return USER && TOKEN
-    ? { Authorization: `Basic ${Buffer.from(`${USER}:${TOKEN}`).toString('base64')}` }
-    : {}
+  // 사내 게이트웨이가 User-Agent 없는 요청을 차단(500 HTML)한다 — curl은 되고
+  // Node fetch(undici, UA 미전송)만 막히던 원인. curl과 같은 헤더를 단다.
+  const headers = { 'User-Agent': 'curl/8.5.0', Accept: '*/*' }
+  if (USER && TOKEN) headers.Authorization = `Basic ${Buffer.from(`${USER}:${TOKEN}`).toString('base64')}`
+  return headers
 }
 
 /**
