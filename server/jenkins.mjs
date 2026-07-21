@@ -32,6 +32,24 @@ function auth() {
   return headers
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * GET with one retry after backoff. 사내 게이트웨이가 단발 요청은 통과시키고
+ * 연속 요청을 간헐적으로 차단(500 HTML)한다 — 잠깐 쉬었다 한 번 더 간다.
+ */
+async function jenkinsGet(url) {
+  try {
+    const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+    if (res.ok) return res
+    await res.text().catch(() => {}) // drain before retry
+  } catch {
+    // network error — retry below
+  }
+  await sleep(1500)
+  return fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+}
+
 /**
  * GET <buildUrl>/consoleText → full text, or null on any failure. Never
  * throws — a dead Jenkins must not break the poll loop; the caller falls
@@ -39,8 +57,7 @@ function auth() {
  */
 async function fetchConsole(buildUrl) {
   try {
-    const url = `${buildUrl.replace(/\/+$/, '')}/consoleText`
-    const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+    const res = await jenkinsGet(`${buildUrl.replace(/\/+$/, '')}/consoleText`)
     if (!res.ok) throw new Error(`consoleText returned ${res.status}`)
     return await res.text()
   } catch (err) {
@@ -87,7 +104,7 @@ const ANY_BUILD_RE = /https?:\/\/[^\s|\]"'()<>]+\/job\/[^\s|\]"'()<>]+?\/\d+\/?/
 async function buildMeta(buildUrl) {
   try {
     const url = `${buildUrl.replace(/\/+$/, '')}/api/json?tree=description,result`
-    const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+    const res = await jenkinsGet(url)
     if (!res.ok) {
       const body = (await res.text()).slice(0, 200).replace(/\s+/g, ' ')
       console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${res.status} ${body}`)
@@ -103,7 +120,7 @@ async function buildMeta(buildUrl) {
 /** GET <buildUrl>/ (HTML build page) → text, or null. api/json 500 폴백용. */
 async function fetchPage(buildUrl) {
   try {
-    const res = await fetch(buildUrl, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+    const res = await jenkinsGet(buildUrl)
     if (!res.ok) return null
     return await res.text()
   } catch {
@@ -155,7 +172,9 @@ export async function fetchFailureLog(buildUrl, tc) {
     linked = [...new Set([...main.matchAll(TEST_RESULT_RE)].map((m) => m[1]))]
     if (linked.length === 0) return { url: buildUrl, log: `[jenkins console tail] ${buildUrl}\n${tailOf(main)}` }
   }
-  const withResult = await Promise.all(linked.map(async (u) => ({ u, result: (await buildMeta(u)).result ?? null })))
+  // 병렬 버스트가 게이트웨이 차단을 부른다 — 샤드 메타는 직렬로 조회.
+  const withResult = []
+  for (const u of linked) withResult.push({ u, result: (await buildMeta(u)).result ?? null })
   const failing = withResult.filter((b) => b.result !== 'SUCCESS')
   const parts = []
   for (const { u } of failing.length > 0 ? failing : withResult) {
