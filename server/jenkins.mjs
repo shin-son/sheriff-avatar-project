@@ -87,7 +87,8 @@ async function buildMeta(buildUrl) {
     const url = `${buildUrl.replace(/\/+$/, '')}/api/json?tree=description,result`
     const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
     if (!res.ok) {
-      console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${res.status}`)
+      const body = (await res.text()).slice(0, 200).replace(/\s+/g, ' ')
+      console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${res.status} ${body}`)
       return {}
     }
     return await res.json()
@@ -95,6 +96,23 @@ async function buildMeta(buildUrl) {
     console.error(`[svp-server] jenkins api/json failed ${buildUrl}: ${err.message}`)
     return {}
   }
+}
+
+/** GET <buildUrl>/ (HTML build page) → text, or null. api/json 500 폴백용. */
+async function fetchPage(buildUrl) {
+  try {
+    const res = await fetch(buildUrl, { headers: auth(), signal: AbortSignal.timeout(TIMEOUT_MS) })
+    if (!res.ok) return null
+    return await res.text()
+  } catch {
+    return null
+  }
+}
+
+/** 같은 잡의 다른 빌드인지 (빌드 페이지 HTML의 히스토리 링크 제외용). */
+function sameJob(a, b) {
+  const jobOf = (u) => u.replace(/\/+$/, '').replace(/\/\d+$/, '')
+  return jobOf(a) === jobOf(b)
 }
 
 /**
@@ -121,6 +139,13 @@ function shardLinksIn(text, selfUrl) {
 export async function fetchFailureLog(buildUrl, tc) {
   const meta = await buildMeta(buildUrl)
   let linked = shardLinksIn(meta.description ?? '', buildUrl)
+  if (linked.length === 0 && meta.description === undefined) {
+    // 사내 사례: api/json은 500인데 빌드 페이지(HTML)는 열리고 description의
+    // CI TEST RESULT 링크도 보인다 — 페이지에서 긁되, 같은 잡의 다른 빌드
+    // (히스토리 링크)는 제외한다.
+    const page = await fetchPage(buildUrl)
+    if (page) linked = shardLinksIn(page, buildUrl).filter((u) => !sameJob(u, buildUrl))
+  }
   let main = null
   if (linked.length === 0) {
     main = await fetchConsole(buildUrl)
