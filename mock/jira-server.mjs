@@ -87,7 +87,8 @@ function toApi(t) {
       created: t.created,
       updated: t.updated,
       assignee: t.assignee ? { name: t.assignee } : null,
-      status: { name: t.status, statusCategory: { key: STATUS[t.status] } }
+      status: { name: t.status, statusCategory: { key: STATUS[t.status] } },
+      comment: { comments: t.comments }
     }
   }
 }

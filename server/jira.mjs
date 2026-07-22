@@ -20,6 +20,16 @@ export function postComment(key, body) {
   return request(`/rest/api/2/issue/${key}/comment`, { method: 'POST', body: JSON.stringify({ body }) })
 }
 
+/** Raw ticket text for ingest freezing (F7): description + resolution comments. */
+export async function getIssueRaw(key) {
+  const res = await request(`/rest/api/2/issue/${key}?fields=description,comment`)
+  const { fields } = await res.json()
+  return {
+    description: fields.description ?? '',
+    comments: (fields.comment?.comments ?? []).map((c) => c.body ?? '')
+  }
+}
+
 export function setAssignee(key, name) {
   return request(`/rest/api/2/issue/${key}/assignee`, { method: 'PUT', body: JSON.stringify({ name }) })
 }

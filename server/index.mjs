@@ -18,6 +18,7 @@ import 'dotenv/config'
 import { Server } from 'socket.io'
 import { classifierEnabled, classify } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
+import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
 
@@ -344,6 +345,10 @@ async function poll() {
         console.log(`[svp-server] sync ${t.key}: status=${issue.status} assignee=${issue.assignment.assigneeId}${assigneeChanged ? ` (was ${before})` : ''}`)
         // The previous holder also gets the update so their list drops/updates it.
         emitIssue('issue:updated', issue, assigneeChanged ? [before] : [])
+        // F7: on entering `resolved`, freeze evidence into the vault (once per key).
+        if (statusChanged && status === 'resolved' && !alreadyIngested(t.key)) {
+          void ingestResolved(issue) // fire-and-forget — never block the poll loop
+        }
       }
     }
   } catch (err) {
@@ -368,6 +373,9 @@ console.log(
         ? ` — "${TEST_LABEL}" 라벨 티켓만 write`
         : ' — 전면 허용'
   }`
+)
+console.log(
+  `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}`
 )
 void poll()
 setInterval(() => void poll(), POLL_MS)
