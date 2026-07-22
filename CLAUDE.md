@@ -52,14 +52,15 @@ LLM-WIKI 기반 Sheriff Agent Windows 데스크톱 앱 (Electron + React + TypeS
 npm install          # 의존성 설치
 npm run dev          # 개발 모드 실행 (HMR) — 로그인: admin/admin(당번), 아이디=비밀번호(팀원)
 npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792)
+npm run mock:jenkins # mock Jenkins 서버 (별도 터미널, 포트 8794) — 콘솔 로그 소스
 npm run server       # v3 서버 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로. 운영은 Linux systemd
 npm run typecheck    # 타입 체크
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
 
-로컬 개발은 `mock:jira` → `server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는 구세대 —
-정리 예정). 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
+로컬 개발은 `mock:jira` → `mock:jenkins` → `server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는
+구세대 — 정리 예정). 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
 
 ## 모듈 맵
 
@@ -76,6 +77,7 @@ server/                          v3 서버 (headless Node, plain .mjs) — Linux
   classifier.mjs                 F3 — Claude 분류 (bedrock/bedrock-invoke/anthropic, 실패 시 fallback)
   wiki-query.mjs                 vault 검색 + 노트 frontmatter owner 해석 (담당자 매핑)
   jira.mjs                       Jira write 3종 (assignee·댓글 템플릿·전이)
+  jenkins.mjs                    티켓 링크의 Jenkins 빌드 콘솔 로그(consoleText 꼬리) 수집 — 분류·ingest 로그 보강
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정

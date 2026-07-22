@@ -7,53 +7,25 @@ const PORT = 8792
 const PROJECT = 'CIOPS'
 const BROWSE_BASE = `http://localhost:${PORT}/browse`
 
-// Scenario pool mirrors mock/ci-server.mjs. The description encodes the fields the
-// poller normalizes into a CIEvent — this is the dev contract until the real ticket
-// schema is confirmed (TODO(SVP-6)).
+// Scenario pool. The description mirrors the REAL corporate ticket format
+// (SVP-6, hosts anonymized): ` : `-separated key-value lines, NO failure log —
+// the log lives in the linked Jenkins build (mock/jenkins-server.mjs TAILS,
+// keyed by `module`). `type` drives the Step field; `tc` is the TC name.
 const SCENARIOS = {
-  'auth-token-401': {
-    type: 'test_failed',
-    summary: 'LoginFlowTest.test_token_refresh 실패 (401 Unauthorized)',
-    module: 'auth',
-    branch: 'feature/auth-refresh',
-    log: 'AssertionError: expected status 200 but got 401\n  at LoginFlowTest.test_token_refresh (auth/tests/login_flow.py:88)'
-  },
-  'payment-build': {
-    type: 'build_failed',
-    summary: 'payment-service 빌드 실패: BillingClient::retry 심볼 누락',
-    module: 'payment',
-    branch: 'main',
-    log: "ld.lld: error: undefined symbol: BillingClient::retry()\n>>> referenced by checkout.cc:412"
-  },
-  'snapshot-diff': {
-    type: 'test_failed',
-    summary: 'SnapshotTest.ui_diff 스냅샷 불일치',
-    module: 'renderer-core',
-    branch: 'feature/dark-mode',
-    log: 'Snapshot mismatch: 3 pixels differ (threshold 0)\n  at SnapshotTest.ui_diff (ui/tests/snapshot.spec.ts:41)'
-  },
-  'auth-lint': {
-    type: 'lint_failed',
-    summary: 'eslint: no-floating-promises 위반 (auth/session.ts)',
-    module: 'auth',
-    branch: 'feature/session-cleanup',
-    log: 'auth/session.ts:57:3  error  Promises must be awaited  @typescript-eslint/no-floating-promises'
-  },
-  'payment-e2e': {
-    type: 'test_failed',
-    summary: 'CheckoutE2E.test_refund_flow 타임아웃 (30s)',
-    module: 'payment',
-    branch: 'release/2.4',
-    log: 'TimeoutError: waiting for selector "#refund-done" failed: timeout 30000ms exceeded'
-  },
-  'infra-deploy': {
-    type: 'deploy_failed',
-    summary: 'staging 배포 실패: helm upgrade 타임아웃',
-    module: 'infra',
-    branch: 'main',
-    log: 'Error: UPGRADE FAILED: timed out waiting for the condition (release: svp-staging)'
-  }
+  'auth-token-401': { type: 'test_failed', module: 'auth', tc: 'linux.auth-token-refresh-088.sh' },
+  'payment-build': { type: 'build_failed', module: 'payment', tc: 'payment/checkout.cc' },
+  'snapshot-diff': { type: 'test_failed', module: 'renderer-core', tc: 'linux.ui-snapshot-diff-041.sh' },
+  'auth-lint': { type: 'lint_failed', module: 'auth', tc: 'linux.auth-session-lint-057.sh' },
+  'payment-e2e': { type: 'test_failed', module: 'payment', tc: 'linux.payment-refund-e2e-030.sh' },
+  'infra-deploy': { type: 'deploy_failed', module: 'infra', tc: 'linux.infra-staging-deploy-005.sh' }
 }
+const STEP_BY_TYPE = {
+  test_failed: 'TEST',
+  build_failed: 'BUILD',
+  deploy_failed: 'DEPLOY',
+  lint_failed: 'LINT'
+}
+const PLATFORM = 'idcevo_mock_100'
 
 const STATUS = {
   Open: 'new',
@@ -72,16 +44,21 @@ function createTicket(scenarioId) {
   seq += 1
   const key = `${PROJECT}-${seq}`
   const now = new Date().toISOString()
+  const headline = `[DEV_CICD][${PLATFORM}][T${seq}] : ${s.tc} Failed`
   const ticket = {
     key,
-    summary: s.summary,
+    summary: headline,
     description: [
-      `type: ${s.type}`,
-      `module: ${s.module}`,
-      `branch: ${s.branch}`,
-      `ci-url: https://ci.example.internal/builds/${seq}`,
-      'log:',
-      s.log
+      headline,
+      `CICD Project : ${PLATFORM}`,
+      `Step : ${STEP_BY_TYPE[s.type]}`,
+      'Category : SPECIAL',
+      `TC name or file : ${s.tc}`,
+      'Link',
+      `CICD : https://cicd.example.internal:1234/detail?type=test-pipeline&seq=${seq}&platform_version=${PLATFORM.toUpperCase()}`,
+      `TEST : http://localhost:8794/job/ci-${s.module}/${seq}`,
+      'IMAGE DIR : None',
+      'DUMP DIR : None'
     ].join('\n'),
     labels: ['ci-failure'],
     status: 'Open',
@@ -92,7 +69,7 @@ function createTicket(scenarioId) {
     comments: []
   }
   tickets.set(key, ticket)
-  console.log(`[mock-jira] created ${key} (${scenarioId}): ${s.summary}`)
+  console.log(`[mock-jira] created ${key} (${scenarioId}): ${s.tc} Failed`)
   return ticket
 }
 

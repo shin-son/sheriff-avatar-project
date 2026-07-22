@@ -17,6 +17,7 @@
 import 'dotenv/config'
 import { Server } from 'socket.io'
 import { classifierEnabled, classify } from './classifier.mjs'
+import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
@@ -67,28 +68,32 @@ function canWrite(key) {
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
-// description contract: `key: value` header lines, then `log:` + raw log
-// (mock contract; real corporate tickets just fall back to defaults).
+// Real corporate description contract (SVP-6) — ` : `-separated key-value lines:
+//   [DEV_CICD][<project>][T<seq>] : <TC명> Failed   ← first line (= summary)
+//   CICD Project : ... / Step : TEST / Category : ... / TC name or file : ...
+//   Link / CICD : <대시보드 URL> / TEST : <Jenkins 빌드 URL> / IMAGE·DUMP DIR : ...
+// description에 실패 로그는 없다 — 로그는 poll()의 Jenkins consoleText 보강이 맡는다.
+const STEP_TO_TYPE = {
+  TEST: 'test_failed',
+  BUILD: 'build_failed',
+  DEPLOY: 'deploy_failed',
+  LINT: 'lint_failed'
+}
+
 function normalize(t) {
-  const lines = (t.fields.description ?? '').split('\n')
   const fields = {}
-  let log = ''
-  for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i] === 'log:') {
-      log = lines.slice(i + 1).join('\n')
-      break
-    }
-    const sep = lines[i].indexOf(': ')
-    if (sep > 0) fields[lines[i].slice(0, sep)] = lines[i].slice(sep + 2)
+  for (const line of (t.fields.description ?? '').split('\n')) {
+    const sep = line.indexOf(' : ')
+    if (sep > 0) fields[line.slice(0, sep).trim()] = line.slice(sep + 3).trim()
   }
   return {
     id: t.key,
-    type: fields['type'] ?? 'test_failed',
+    type: STEP_TO_TYPE[(fields['Step'] ?? '').toUpperCase()] ?? 'test_failed',
     title: t.fields.summary,
-    module: fields['module'] ?? 'unknown',
-    branch: fields['branch'] ?? '',
-    log: log || (t.fields.description ?? ''),
-    url: fields['ci-url'] ?? `${JIRA}/browse/${t.key}`,
+    module: 'unknown', // description에 모듈 정보 없음 — LLM 분류가 결정
+    branch: fields['CICD Project'] ?? '',
+    log: t.fields.description ?? '',
+    url: fields['CICD'] ?? `${JIRA}/browse/${t.key}`,
     timestamp: t.fields.created,
     source: 'jira',
     jira: { key: t.key, url: `${JIRA}/browse/${t.key}`, status: t.fields.status.statusCategory.key }
@@ -270,7 +275,13 @@ async function search(jql) {
   return (await res.json()).issues ?? []
 }
 
+// Jenkins fetch가 끼면서 poll 한 사이클이 수 초를 넘을 수 있다 — setInterval
+// 겹침으로 같은 티켓이 두 번 ingest되는 것을 막는다 (single-flight).
+let polling = false
+
 async function poll() {
+  if (polling) return
+  polling = true
   try {
     // 1) New tickets: fetch the full base JQL and skip known keys. A `created >=`
     //    bound would be interpreted in the JIRA PROFILE timezone (not this PC's),
@@ -280,6 +291,17 @@ async function poll() {
       ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
       const event = normalize(t)
+      // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
+      // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
+      // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
+      const buildUrl = extractBuildUrl(t.fields.description)
+      const tc = (t.fields.description ?? '').match(/TC name or file\s*:\s*(\S+)/)?.[1]
+      const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
+      if (jenkins) {
+        event.log = `${event.log}\n\n${jenkins.log}`
+        event.url = jenkins.url
+        console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
+      }
       const issue = {
         event,
         ...routeByAssignee(event, assigneeOf(t), t.key),
@@ -333,6 +355,8 @@ async function poll() {
     // undici hides the real reason (TLS/DNS/refused) in err.cause — surface it.
     const cause = err.cause ? ` (cause: ${err.cause.code ?? err.cause.message ?? err.cause})` : ''
     console.error(`[svp-server] poll failed: ${err.message}${cause}`)
+  } finally {
+    polling = false
   }
 }
 
