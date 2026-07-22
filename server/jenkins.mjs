@@ -116,7 +116,13 @@ function tcSectionIn(text, tc) {
     const m = text.match(new RegExp(`\\[ENABLE\\][^\\n]*${escapeRe(name)}`))
     if (!m) continue
     const next = text.indexOf('[ENABLE]', m.index + m[0].length)
-    return text.slice(m.index, Math.min(next === -1 ? text.length : next, m.index + TAIL_CHARS))
+    const section = text.slice(m.index, next === -1 ? text.length : next)
+    if (section.length <= TAIL_CHARS) return section
+    // 긴 구간은 머리+꼬리로 — 'Test Result: FAIL' / 'Fail Log:' 판정은 구간
+    // 끝에 찍힌다 (사내 실측: 마지막 TC라 다음 마커 없이 앞에서 잘려 유실됐음).
+    const head = Math.floor(TAIL_CHARS / 3)
+    const tail = TAIL_CHARS - head
+    return `${section.slice(0, head)}\n...(중략 ${section.length - TAIL_CHARS} chars)...\n${section.slice(-tail)}`
   }
   return null
 }
