@@ -14,9 +14,13 @@ const USER = process.env.SVP_JENKINS_USER
 const TOKEN = process.env.SVP_JENKINS_TOKEN
 // 실측: 샤드 콘솔이 ~9MB — 다운로드 여유를 둔다.
 const TIMEOUT_MS = Number(process.env.SVP_JENKINS_TIMEOUT_MS ?? 15000)
-// 실패 원인은 로그 끝에 몰린다 → 꼬리만 유지. classifier의 capLog(head 4000+tail
-// 2000)와 조합돼도 콘솔 꼬리의 마지막 부분이 항상 프롬프트에 남는 크기.
+// 꼬리 폴백(TC 구간을 못 찾아 콘솔 전체 꼬리를 쓸 때)의 유지 크기 — 콘솔은
+// ~9MB라 여기서는 cap이 필수. TC 구간은 통짜 보존이 원칙이라 이 cap과 무관.
 const TAIL_CHARS = Number(process.env.SVP_JENKINS_LOG_TAIL ?? 6000)
+// TC 구간 안전 상한 — 실측 구간은 30~110KB(마지막 TC + teardown 포함)로 통짜
+// 보존이 원칙. 증거는 온전히 보존하고 요약은 소비처(classifier capLog)가 한다.
+// 마커 이후 잔여가 병리적으로 클 때만 머리+꼬리로 압축하는 방어선.
+const SECTION_MAX = 500_000
 
 // Jenkins build URL의 고정 형태: .../job/<path>(/job/<sub>...)/<번호>/
 // Jira wiki markup([텍스트|url])·괄호·따옴표 앞에서 끊는다.
@@ -117,12 +121,12 @@ function tcSectionIn(text, tc) {
     if (!m) continue
     const next = text.indexOf('[ENABLE]', m.index + m[0].length)
     const section = text.slice(m.index, next === -1 ? text.length : next)
-    if (section.length <= TAIL_CHARS) return section
-    // 긴 구간은 머리+꼬리로 — 'Test Result: FAIL' / 'Fail Log:' 판정은 구간
-    // 끝에 찍힌다 (사내 실측: 마지막 TC라 다음 마커 없이 앞에서 잘려 유실됐음).
-    const head = Math.floor(TAIL_CHARS / 3)
-    const tail = TAIL_CHARS - head
-    return `${section.slice(0, head)}\n...(중략 ${section.length - TAIL_CHARS} chars)...\n${section.slice(-tail)}`
+    if (section.length <= SECTION_MAX) return section
+    // 안전 상한 초과 시에만 머리+꼬리 — 'Test Result: FAIL' / 'Fail Log:'
+    // 판정은 구간 끝에 찍히므로 꼬리를 두껍게 남긴다.
+    const head = Math.floor(SECTION_MAX / 3)
+    const tail = SECTION_MAX - head
+    return `${section.slice(0, head)}\n...(중략 ${section.length - SECTION_MAX} chars)...\n${section.slice(-tail)}`
   }
   return null
 }
