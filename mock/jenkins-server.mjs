@@ -37,7 +37,8 @@ const TC_FAILS = {
     ]
   },
   'renderer-core': {
-    'ui-snapshot-diff-041.sh': [
+    // 콘솔 마커에는 티켓 TC명(python.ui-...py)에 없는 I- 접두사가 붙는다 (사내 실측 변형)
+    'I-ui-snapshot-diff-041.py': [
       'SITL-041',
       'Test Result: FAIL',
       'Fail Log: Snapshot mismatch: 3 pixels differ (threshold 0) at ui/tests/snapshot.spec.ts:41'

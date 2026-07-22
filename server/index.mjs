@@ -73,6 +73,21 @@ function canWrite(key) {
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
+// 실티켓 description은 HTML로 온다 (사내 실측: <h2>헤드라인</h2><ul><li>key : value</li>...).
+// 블록 태그를 줄바꿈으로 바꾸고 태그를 걷어내 줄 단위 계약 파싱이 동작하게 한다.
+// plain text에는 매칭될 태그가 없어 그대로 통과 — 두 형식 모두 처리된다.
+function htmlToText(s) {
+  return s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(h\d|li|ul|ol|p|div|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;|&quot;/g, "'")
+}
+
 // Real corporate description contract (SVP-6) — ` : `-separated key-value lines:
 //   [DEV_CICD][<project>][T<seq>] : <TC명> Failed   ← first line (= summary)
 //   CICD Project : ... / Step : TEST / Category : ... / TC name or file : ...
@@ -86,8 +101,9 @@ const STEP_TO_TYPE = {
 }
 
 function normalize(t) {
+  const text = htmlToText(t.fields.description ?? '')
   const fields = {}
-  for (const line of (t.fields.description ?? '').split('\n')) {
+  for (const line of text.split('\n')) {
     const sep = line.indexOf(' : ')
     if (sep > 0) fields[line.slice(0, sep).trim()] = line.slice(sep + 3).trim()
   }
@@ -97,7 +113,7 @@ function normalize(t) {
     title: t.fields.summary,
     module: 'unknown', // description에 모듈 정보 없음 — LLM 분류가 결정
     branch: fields['CICD Project'] ?? '',
-    log: t.fields.description ?? '',
+    log: text,
     url: fields['CICD'] ?? `${JIRA}/browse/${t.key}`,
     timestamp: t.fields.created,
     source: 'jira',
@@ -299,8 +315,10 @@ async function poll() {
       // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
       // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
       // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
-      const buildUrl = extractBuildUrl(t.fields.description)
-      const tc = (t.fields.description ?? '').match(/TC name or file\s*:\s*(\S+)/)?.[1]
+      // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
+      // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
+      const buildUrl = extractBuildUrl(event.log)
+      const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
       const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
       if (jenkins) {
         event.log = `${event.log}\n\n${jenkins.log}`
