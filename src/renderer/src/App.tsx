@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AppState, IssueStatus, SheriffIssue, WikiLintReport } from '@shared/types'
+import CommandPalette from './components/CommandPalette'
 import CompactView from './components/CompactView'
 import DetailPanel from './components/DetailPanel'
 import IssueCard from './components/IssueCard'
@@ -12,14 +13,30 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [lintReport, setLintReport] = useState<WikiLintReport | null>(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const paletteOpenRef = useRef(paletteOpen)
+  paletteOpenRef.current = paletteOpen
 
-  // The floating detail panel closes on Escape.
+  // ⌘K / Ctrl+K toggles the command palette. Escape closes the palette first,
+  // then the floating detail panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedId(null)
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        setPaletteOpen((open) => !open)
+      } else if (e.key === 'Escape') {
+        if (paletteOpenRef.current) setPaletteOpen(false)
+        else setSelectedId(null)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Mark the document ready so CSS may run the stagger reveal. Failsafe: rows
+  // stay visible if this never runs or motion is reduced (see global.css).
+  useEffect(() => {
+    document.documentElement.classList.add('js-ready')
   }, [])
 
   useEffect(() => {
@@ -141,6 +158,16 @@ export default function App() {
   const count = (status: IssueStatus) => visible.filter((i) => i.status === status).length
   const selected = visible.find((i) => i.event.id === selectedId) ?? null
 
+  // Three triage zones (rank order is already applied above): the sheriff's own
+  // queue first, auto-routed stream next, resolved history last.
+  const triage = visible.filter(
+    (i) => i.status !== 'resolved' && i.assignment.routedTo === 'sheriff'
+  )
+  const stream = visible.filter(
+    (i) => i.status !== 'resolved' && i.assignment.routedTo === 'feature-owner'
+  )
+  const done = visible.filter((i) => i.status === 'resolved')
+
   return (
     <div className="shell">
       {frameless && titlebar}
@@ -173,6 +200,14 @@ export default function App() {
                   <span className="stat">NEW {count('new')}</span>
                   <span className="stat">진행중 {count('acknowledged')}</span>
                   <span className="stat">해결 {count('resolved')}</span>
+                  <button
+                    className="cmdk-open"
+                    onClick={() => setPaletteOpen(true)}
+                    title="명령 팔레트 (Ctrl+K)"
+                  >
+                    <kbd className="kbd">Ctrl</kbd>
+                    <kbd className="kbd">K</kbd>
+                  </button>
                   <button
                     className="btn"
                     onClick={() => window.svp.openWiki()}
@@ -248,15 +283,59 @@ export default function App() {
                     <span className="th-time">시간</span>
                   </div>
                 )}
-                {visible.map((issue) => (
-                  <IssueCard
-                    key={issue.event.id}
-                    issue={issue}
-                    selected={issue.event.id === selectedId}
-                    highlighted={focusId === issue.event.id}
-                    onSelect={setSelectedId}
-                  />
-                ))}
+                {triage.length > 0 && (
+                  <div className="zone zone-triage">
+                    <div className="zone-head">
+                      <span className="zone-title">당번 확인 필요</span>
+                      <span className="zone-count">{triage.length}</span>
+                    </div>
+                    {triage.map((issue, idx) => (
+                      <IssueCard
+                        key={issue.event.id}
+                        issue={issue}
+                        index={idx}
+                        selected={issue.event.id === selectedId}
+                        highlighted={focusId === issue.event.id}
+                        onSelect={setSelectedId}
+                      />
+                    ))}
+                  </div>
+                )}
+                {stream.length > 0 && (
+                  <div className="zone">
+                    <div className="zone-head">
+                      <span className="zone-title">자동 배정됨</span>
+                      <span className="zone-count">{stream.length}</span>
+                    </div>
+                    {stream.map((issue, idx) => (
+                      <IssueCard
+                        key={issue.event.id}
+                        issue={issue}
+                        index={idx}
+                        selected={issue.event.id === selectedId}
+                        highlighted={focusId === issue.event.id}
+                        onSelect={setSelectedId}
+                      />
+                    ))}
+                  </div>
+                )}
+                {done.length > 0 && (
+                  <div className="zone zone-resolved">
+                    <div className="zone-head">
+                      <span className="zone-title">해결됨</span>
+                      <span className="zone-count">{done.length}</span>
+                    </div>
+                    {done.map((issue) => (
+                      <IssueCard
+                        key={issue.event.id}
+                        issue={issue}
+                        selected={issue.event.id === selectedId}
+                        highlighted={focusId === issue.event.id}
+                        onSelect={setSelectedId}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             </main>
           </div>
@@ -264,6 +343,20 @@ export default function App() {
       </div>
       {selected && (
         <DetailPanel issue={selected} onClose={() => setSelectedId(null)} onAck={ackIssue} />
+      )}
+      {paletteOpen && (
+        <CommandPalette
+          issues={visible}
+          onSelectIssue={(id) => {
+            setSelectedId(id)
+            document
+              .getElementById(`issue-${id}`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }}
+          onOpenWiki={() => window.svp.openWiki()}
+          onLintWiki={() => void window.svp.wikiLint().then(setLintReport)}
+          onClose={() => setPaletteOpen(false)}
+        />
       )}
     </div>
   )
