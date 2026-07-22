@@ -11,7 +11,7 @@ Andrej Karpathy의 llm-wiki 컨셉([원문 전문](../docs/llm-wiki-concept.md))
 
 | 계층 | SVP 구현 | 수정 주체 |
 |---|---|---|
-| raw sources | CI 로그, Jira 이슈 이벤트 (원본) + `raw/` (해결 확정 시점 원문 사본) | 없음 — 불변, 읽기 전용 |
+| raw sources | Jira 이슈 · CI/CD 빌드 로그 · Gerrit 패치 (원본) + `raw/` (해결 확정 시점 원문 사본, 소스별) | 없음 — 불변, 읽기 전용 |
 | wiki | `wiki-vault/` 마크다운 노트 | 앱(자동 파일) + LLM 초안 + 사람 (PR 리뷰) |
 | schema | 이 문서 + CLAUDE.md의 LLM-WIKI 규칙 섹션 | 팀 (PR 리뷰) |
 
@@ -24,14 +24,22 @@ wiki-vault/
   log.md                   시간순 작업 기록 — 자동 append
   case-log.md              해결 사례 원장 — 자동 append
   modules/<module>.md      모듈별 known-failure 지식 노트
-  raw/jira/<티켓키>.md      Jira 티켓 원문 사본 — 자동 생성, 불변
+  raw/jira/<티켓키>.md       Jira 티켓 원문 사본 — 자동 생성, 불변
+  raw/ci/<빌드ID>.md          CI/CD 실패 빌드 로그 발췌 — 자동 생성, 불변
+  raw/gerrit/<Change-Id>.md   Gerrit 패치 원문(제목·파일·diff 발췌) — 자동 생성, 불변
 ```
+
+세 raw 소스는 **하나의 사건**을 서로 다른 각도에서 본 원자료다. Jira 키를 앵커로 삼아
+frontmatter로 상호 링크한다 (아래 "raw correlation key"). ingest는 이 셋을 함께 동결해
+분류 근거(case-log·모듈 노트)의 증거 사슬을 완성한다.
 
 | 구성 요소 | 역할 | 쓰기 주체 |
 |---|---|---|
 | `modules/<module>.md` | **압축된 지식.** 반복 실패 패턴(known-failure)의 축적처이자 분류 신뢰도의 주 근거 | 사람 PR + ingest LLM 초안 PR (F7) |
 | `case-log.md` | **사례 원장.** 해결된 이슈를 건별로 보존하는 축적층. 반복 사례는 모듈 노트로 승격된다 | 앱 append (F7부터 LLM이 내용 작성) |
-| `raw/jira/<티켓키>.md` | **원자료 사본.** 해결(Done) 확정 시점의 티켓 원문(설명·해결 코멘트·로그 발췌)을 증거로 동결. Jira 보존 정책·티켓 삭제와 무관하게 역참조를 보장 | 앱이 Done 확정 시 1회 생성 (F7) — 이후 수정 금지 |
+| `raw/jira/<티켓키>.md` | **원자료 사본.** 해결(Done) 확정 시점의 티켓 원문(설명·해결 코멘트)을 증거로 동결. Jira 보존 정책·티켓 삭제와 무관하게 역참조를 보장 | 앱이 Done 확정 시 1회 생성 (F7) — 이후 수정 금지 |
+| `raw/ci/<빌드ID>.md` | **실패 신호 원문.** 이슈를 유발한 CI/CD 빌드의 실패 테스트·스택트레이스·로그 발췌. 티켓 설명보다 정확한 1차 증상 | 앱이 Done 확정 시 1회 생성 (F7) — 이후 수정 금지 |
+| `raw/gerrit/<Change-Id>.md` | **해결 증거 원문.** 이슈를 고친 Gerrit 패치(제목·변경 파일·diff 발췌). `resolution`을 채우는 가장 강한 근거 — 코멘트 텍스트보다 실제 변경이 낫다 | 앱이 Done 확정 시 1회 생성 (F7) — 이후 수정 금지 |
 | `index.md` | **카탈로그.** query의 진입점 — 노트당 한 줄(링크 + 요약) | 앱이 재생성 — 수동 편집 금지 |
 | `log.md` | **연대기.** ingest/lint 작업의 append-only 기록 | 앱 append — 수동 편집 금지 |
 | `README.md` | **스키마.** 구조·역할·규칙의 명세. query 대상 아님 | 팀 PR |
@@ -95,24 +103,45 @@ updated: <YYYY-MM-DD>
 - confidence: <분류 신뢰도 0~100>
 - assignee: <담당자> (feature-owner | sheriff)
 - jira: <티켓 키 — 원문 사본은 raw/jira/<티켓키>.md>
+- ci-build: <빌드 ID — 원문 사본은 raw/ci/<빌드ID>.md. 없으면 생략>
+- gerrit: <Change-Id — 원문 사본은 raw/gerrit/<Change-Id>.md. 없으면 생략>
 - symptom: <실패 테스트 이름·에러 문자열 원문>
 - cause: <확인된 원인, Jira 해결 코멘트 기반>
-- resolution: <실제 해결 절차>
+- resolution: <실제 해결 절차 — Gerrit 패치가 있으면 그 변경을 근거로>
 - wiki-refs: <분류에 참조된 노트와 도움 여부>
 ```
 
 현재 코드는 date~assignee까지만 기록하고 resolution은 고정 문구다. jira 이하 필드는
-F7(해결 감지→ingest)에서 LLM이 Jira 해결 코멘트를 읽어 채운다.
+F7(해결 감지→ingest)에서 LLM이 Jira 해결 코멘트·연결된 CI/Gerrit raw를 읽어 채운다.
+
+### raw correlation key
+
+세 raw 소스는 **Jira 키를 앵커**로 상호 참조한다. ingest는 하나의 사건을 동결할 때
+가능한 raw를 모두 만들고, 각 노트 frontmatter에 나머지 소스로의 링크를 넣는다.
+링크가 있어야 LLM이 "티켓 → 실제 실패 로그 → 그걸 고친 패치"를 한 사슬로 따라간다.
+
+| 소스 | 파일 키 | frontmatter로 참조하는 다른 소스 |
+|---|---|---|
+| Jira | `<티켓 키>` | `ci-build`, `gerrit` |
+| CI/CD | `<빌드 ID>` | `jira`, `gerrit` |
+| Gerrit | `<Change-Id>` | `jira`, `ci-build` |
+
+- **키가 안 잡히는 경우**(예: 커밋 메시지에 Jira 키가 없어 Gerrit↔Jira를 못 잇는 경우)는
+  링크를 억지로 채우지 않고 생략한다. 있는 링크만 신뢰한다.
+- 소스별 raw는 각각 티켓·빌드·Change당 1개. ingest 1회 규칙과 동일한 키로 중복을 막는다.
 
 ### raw 항목 — `raw/jira/<티켓키>.md`
 
 ingest 시 case-log와 함께 생성되는 티켓 원문 사본. LLM이 요약·가공하지 않고 원문 그대로 담는다
-(가공된 신호는 case-log의 몫). 티켓당 1개 — ingest 1회 규칙과 동일한 키로 중복을 막는다.
+(가공된 신호는 case-log의 몫).
 
 ```markdown
 ---
 type: raw
+source: jira
 jira: <티켓 키>
+ci-build: <연결된 빌드 ID — 없으면 생략>
+gerrit: <연결된 Change-Id — 없으면 생략>
 captured: <ISO 날짜 — Done 확정 시점>
 ---
 
@@ -123,9 +152,56 @@ captured: <ISO 날짜 — Done 확정 시점>
 
 ## Resolution comments
 <해결 코멘트 원문>
+```
+
+### raw 항목 — `raw/ci/<빌드ID>.md`
+
+이슈를 유발한 CI/CD 빌드의 실패 원문. 티켓 설명은 가공될 수 있으나 이 로그는 1차 증상이다.
+요약 금지 — 실패 테스트 이름·assertion·스택트레이스를 원문 그대로 담는다.
+
+```markdown
+---
+type: raw
+source: ci
+build: <빌드 ID>
+jira: <연결된 티켓 키 — 없으면 생략>
+gerrit: <빌드가 돈 patchset의 Change-Id — 없으면 생략>
+module: <CI 이벤트의 module 필드>
+captured: <ISO 날짜 — Done 확정 시점>
+---
+
+# <빌드 ID> — <실패 job 이름>
+
+## Failed tests
+<테스트 이름·assertion 원문>
 
 ## Log excerpt
-<CI 로그 발췌>
+<스택트레이스·에러 로그 원문>
+```
+
+### raw 항목 — `raw/gerrit/<Change-Id>.md`
+
+이슈를 고친 Gerrit 패치. `case-log`의 `resolution`을 채우는 가장 강한 증거 —
+코멘트로 "고쳤다"는 말보다 실제 변경 파일·diff가 근거로 낫다. diff는 발췌(핵심 hunk)로 담되
+원문 그대로 두고, 요약은 case-log의 몫으로 남긴다.
+
+```markdown
+---
+type: raw
+source: gerrit
+change-id: <Change-Id>
+jira: <연결된 티켓 키 — 커밋 메시지 footer 기반, 없으면 생략>
+ci-build: <이 패치에서 실패했던 빌드 ID — 없으면 생략>
+captured: <ISO 날짜 — Done 확정 시점>
+---
+
+# <Change-Id> — <패치 제목>
+
+## Changed files
+<파일 목록 + 파일별 +추가/-삭제 라인 수>
+
+## Diff excerpt
+<핵심 hunk 원문 발췌>
 ```
 
 ### index.md / log.md
@@ -142,8 +218,9 @@ captured: <ISO 날짜 — Done 확정 시점>
    집계는 vault가 아니라 앱 저장소에 쌓인다 (vault는 패키징 시 읽기 전용. F8: hub 경유 서버 집계).
 3. **ingest — append가 아니라 통합이다.** 이슈 해결 시:
    - case-log에 항목 기록 + log/index 갱신 (현재 구현).
-   - F7: 티켓 원문을 `raw/jira/<티켓키>.md`로 동결하고,
-     LLM이 Jira 해결 코멘트를 읽어 symptom/cause/resolution을 채우고, 기존 known-failure와 대조한다.
+   - F7: 티켓 원문을 `raw/jira/<티켓키>.md`로, 연결된 CI 로그·Gerrit 패치를 각각
+     `raw/ci/`·`raw/gerrit/`로 동결하고(correlation key로 상호 링크),
+     LLM이 이 raw들을 읽어 symptom(CI 로그)/cause/resolution(Gerrit 패치)을 채우고 기존 known-failure와 대조한다.
      - 새 패턴 → `modules/<module>.md` known-failure 갱신 초안을 만들어 PR로 제출.
      - 기존 패턴과 모순(기록된 fix가 더 이상 안 통함 등) → 해당 노트에 모순을 명시하는 수정 초안.
    - **known-failure 승격을 사람 수작업에만 맡기지 않는다.** LLM이 초안을 쓰고 사람은 리뷰한다 —
@@ -162,8 +239,10 @@ feedback→lint가 "쓸데없는 정보가 wiki를 오염시키지 않게 하는
 - 자동 파일(index/log/case-log/raw)은 사람이 편집하지 않는다. 그 외 모든 노트 변경은 코드와 동일하게 PR 리뷰를 거친다.
 - **`raw/`는 query·index·lint 대상이 아니다** — 증거 보존과 드릴다운(분류 근거 검증) 용도.
   압축된 검색 신호는 case-log와 모듈 노트가 담당한다. (F7에서 wiki 코드에 제외 처리 반영)
-- 운영 vault의 raw에는 사내 티켓·로그 원문이 그대로 담긴다 — 운영 vault는 사내 저장소에만 두고
+- 운영 vault의 raw에는 사내 티켓·CI 로그·Gerrit 소스 diff 원문이 그대로 담긴다 —
+  내부 호스트명·경로·소스코드가 노출되므로, 운영 vault는 사내 저장소에만 두고
   이 repo에는 시드·데모 외 절대 push하지 않는다 (ARCHITECTURE.md vault 저장소 경계).
+  raw 동결 시 명백한 비밀 패턴(토큰·키·내부 URL)은 최소 마스킹한다.
 - 노트 하나 = 주제 하나. 파일명은 kebab-case.
 - 애매한 표현 금지. 명시적 사실 / 재현 조건 / 담당자 / 해결 절차만 쓴다.
   - 나쁨: "가끔 인증 쪽이 불안정함" / 좋음: "LoginFlowTest.test_token_refresh가 간헐적으로 401 반환"
