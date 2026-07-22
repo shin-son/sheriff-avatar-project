@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { SheriffIssue } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
@@ -6,19 +7,23 @@ interface Props {
   selected: boolean
   highlighted: boolean
   onSelect: (id: string) => void
+  /** Position within its zone — drives the stagger reveal delay (global.css). */
+  index?: number
 }
 
 /** One ledger row; click to open the issue in the floating detail panel. */
-export default function IssueCard({ issue, selected, highlighted, onSelect }: Props) {
+export default function IssueCard({ issue, selected, highlighted, onSelect, index = 0 }: Props) {
   const { event, classification, assignment, status } = issue
   const confClass = classification.confidence > 80 ? 'high' : 'low'
 
   return (
     <article
       id={`issue-${event.id}`}
+      style={{ '--row-index': index } as CSSProperties}
       className={[
         'row',
         `severity-${classification.severity}`,
+        assignment.routedTo === 'feature-owner' ? 'auto' : '',
         highlighted ? 'highlighted' : '',
         selected ? 'selected' : '',
         status === 'new' ? 'is-new' : '',
