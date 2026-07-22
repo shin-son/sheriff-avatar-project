@@ -50,7 +50,6 @@
     50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
     50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%
   );
-  --ledger-grid: 36px 104px minmax(0, 1fr) minmax(90px, 150px) 70px 66px;
 }
 
 * {
@@ -269,120 +268,7 @@ select:focus-visible {
     var(--glass);
 }
 
-.workspace-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-/* ── Sidebar (left zone of the sheet, set apart by tone + line) ── */
-.sidebar {
-  width: 264px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.16);
-  border-right: 1px solid var(--hair-faint);
-}
-
-.me-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 18px 16px;
-  border-bottom: 1px solid var(--hair-faint);
-}
-
-.me-card .avatar-lg {
-  background: linear-gradient(170deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.me-name {
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.role-badge {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  color: var(--dust);
-}
-
-.role-badge.sheriff {
-  color: var(--brass);
-}
-
-.section-title {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-  color: var(--dust);
-  padding: 16px 16px 8px;
-}
-
-.team-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.team-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 1px 8px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--lamplight);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
-}
-
-.team-item:hover {
-  background: var(--glass-raised);
-}
-
-.team-item.active {
-  background: rgba(85, 179, 255, 0.09);
-  box-shadow:
-    0 0 0 1px rgba(85, 179, 255, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.team-item-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-
-.team-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.team-mods {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--dust);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* ── Reusable atoms (shared by the cockpit deck + compact member view) ── */
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -403,34 +289,142 @@ select:focus-visible {
   font-size: 16px;
 }
 
-.notify-toggle {
-  margin-top: auto;
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dust);
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* ── Cockpit deck — the old left sidebar is gone; identity, an oversized status
+   deck, and connection controls now sit in one horizontal shelf across the top.
+   The three big figures are the first-class visual element and mirror the three
+   board lanes below — so even an empty app reads as a redesigned surface. ── */
+.cockpit {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  gap: 22px;
+  padding: 20px 26px;
+  border-bottom: 1px solid var(--hair-faint);
+}
+
+.cockpit-id {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-width: 0;
+}
+
+/* The brass star as the deck's brand anchor — the one warm light on the void. */
+.cockpit-star {
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 0 12px rgba(238, 194, 94, 0.34));
+}
+
+.cockpit-who {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cockpit-role {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
   color: var(--dust);
-  padding: 13px 16px;
-  border: none;
-  border-top: 1px solid var(--hair-faint);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s;
 }
 
-.notify-toggle:hover {
+.cockpit-role.sheriff {
+  color: var(--brass);
+}
+
+.cockpit-name {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.cockpit-team {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.cockpit-team .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+
+/* Sheriff presence gets a faint brass ring (brass = sole warm brand cue). */
+.cockpit-team .avatar.is-sheriff {
+  border-color: rgba(217, 164, 65, 0.55);
+}
+
+.cockpit-stats {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 106px;
+  padding: 12px 18px 14px;
+  border-radius: 16px;
   background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.notify-toggle .dot {
-  background: var(--brass);
+/* Hero tile = 확인 필요 — the sheriff's actionable queue; brightest figure so the
+   배정 확인 workflow (cta_primary) reads first, using tone not color. */
+.stat-tile.hero {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--hair);
 }
 
-.notify-toggle.off .dot {
-  background: var(--dust);
+.stat-num {
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -1.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+
+.stat-tile.hero .stat-num {
+  color: var(--lamplight);
+}
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--dust);
+}
+
+.cockpit-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
 }
 
 .ws-status {
@@ -438,18 +432,9 @@ select:focus-visible {
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--dust);
-  padding: 13px 16px;
-  border-top: 1px solid var(--hair-faint);
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dust);
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .ws-status.connected .dot {
@@ -465,53 +450,58 @@ select:focus-visible {
   animation: pulse 1.2s infinite;
 }
 
-@keyframes pulse {
-  50% {
-    opacity: 0.3;
-  }
-}
-
-/* ── Content panel ───────────────────────── */
-.content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden; /* keeps the scrolling ledger inside the rounded corners */
-}
-
-.content-header {
+.notify-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 20px 28px 14px 26px;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dust);
+  padding: 5px 11px;
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  background: var(--glass-raised);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notify-toggle:hover {
+  background: var(--glass-hover);
+}
+
+.notify-toggle .dot {
+  background: var(--brass);
+}
+
+.notify-toggle.off .dot {
+  background: var(--dust);
+}
+
+/* ── Toolbar — search + palette + wiki actions, one slim row under the deck ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--hair-faint);
 }
 
-.content-header h1 {
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.2px;
+.toolbar-spacer {
+  flex: 1;
 }
 
-.subtitle {
-  font-size: 12px;
-  color: var(--dust);
-  margin-top: 4px;
-}
-
+/* Search — a quiet glass pill; focus blooms the signature blue glow. */
 .search {
   flex: 1;
-  max-width: 300px;
-  margin: 0 20px;
+  max-width: 380px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--lamplight);
   background: var(--glass-raised);
   border: 1px solid var(--hair-faint);
   border-radius: 999px;
   padding: 8px 16px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .search::placeholder {
@@ -522,150 +512,153 @@ select:focus-visible {
   outline: none;
   background: var(--glass-hover);
   border-color: rgba(85, 179, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(85, 179, 255, 0.12);
 }
 
-.stats {
+/* ── Triage board — three lanes side by side (was one vertical ledger list).
+   The sheriff's own queue, the auto-routed stream, and resolved history each
+   own a column. Lane distinction is tone + label only; brass stays sole-warm. ── */
+.board {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px 24px 20px;
+}
+
+.lane {
+  min-height: 0;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--hair-faint);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  overflow: hidden;
 }
 
-/* Status chips — quiet glass pills with a semantic dot (blue new / yellow
-   in-progress / green resolved), the only color coding in the header. */
-.stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+/* Sheriff's action queue — a hair brighter than the void (tone only, no color). */
+.lane-triage {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.lane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--hair-faint);
+}
+
+.lane-title {
   font-family: var(--font-mono);
   font-size: 10.5px;
-  font-weight: 600;
-  color: var(--paper);
-  background: var(--glass-raised);
-  border: 1px solid var(--hair-faint);
-  border-radius: 999px;
-  padding: 4px 10px;
-}
-
-.stat::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--dust);
-}
-
-.stat:nth-of-type(1)::before {
-  background: var(--sky);
-}
-
-.stat:nth-of-type(2)::before {
-  background: #ffbc33;
-}
-
-.stat:nth-of-type(3)::before {
-  background: var(--turquoise);
-}
-
-.ledger {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  padding-bottom: 12px;
-}
-
-.ledger::-webkit-scrollbar {
-  width: 6px;
-}
-
-.ledger::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-}
-
-.ledger::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.ledger .lint-card {
-  margin: 0;
-}
-
-.ledger-head {
-  display: grid;
-  grid-template-columns: var(--ledger-grid);
-  column-gap: 12px;
-  align-items: center;
-  padding: 12px 24px 6px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: rgba(154, 156, 157, 0.6);
-}
-
-.ledger-head .th-time {
-  text-align: right;
-}
-
-/* ── Triage zones — the flat list is split into three labelled bands so the
-   sheriff's own queue reads before the auto-routed stream and resolved history.
-   Distinction is tone + label only (no color coding — brass stays sole-warm). ── */
-.zone {
-  display: flex;
-  flex-direction: column;
-}
-
-.zone + .zone {
-  margin-top: 8px;
-}
-
-.zone-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px 6px;
-}
-
-.zone-title {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 1.4px;
   text-transform: uppercase;
   color: var(--dust);
 }
 
-.zone-count {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
+.lane-triage .lane-title {
   color: var(--paper);
+}
+
+/* Lane count — an oversized figure, a first-class element (not a tiny badge). */
+.lane-count {
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lamplight);
+}
+
+.lane-resolved .lane-count {
+  color: var(--dust);
+}
+
+.lane-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lane-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lane-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.lane-empty {
+  margin: auto;
+  padding: 22px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(154, 156, 157, 0.5);
+}
+
+/* ── Empty board — the watchtower: one breathing star alone in the void.
+   With the deck's three big zero-figures above it, the empty app is
+   unmistakably a new composition. Breathe is disabled by reduced-motion. ── */
+.watchtower {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+}
+
+.watchtower-star {
+  width: 84px;
+  height: 84px;
+  clip-path: var(--star-shape);
+  background: rgba(255, 255, 255, 0.1);
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.08));
+  animation: breathe 4.5s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.62;
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 26px rgba(255, 255, 255, 0.14));
+  }
+}
+
+.watchtower-title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+
+.watchtower-hint {
+  font-size: 13px;
+  color: var(--dust);
+}
+
+.watchtower-hint code {
+  font-family: var(--font-mono);
+  font-size: 12px;
   background: var(--glass-raised);
   border: 1px solid var(--hair-faint);
+  padding: 2px 8px;
   border-radius: 999px;
-  padding: 1px 8px;
 }
 
-/* Triage band — the sheriff's action queue. A hair brighter than the void and a
-   brighter label; the hollow stars inside already signal "you decide". */
-.zone-triage {
-  background: linear-gradient(rgba(255, 255, 255, 0.016), transparent 72px);
-  border-radius: 16px;
-  padding-bottom: 4px;
-}
-
-.zone-triage .zone-title {
-  color: var(--paper);
-}
-
-.zone-resolved {
-  margin-top: 12px;
-  border-top: 1px solid var(--hair-faint);
-  padding-top: 4px;
-}
-
+/* Compact member view keeps a centered star for its own empty state. */
 .empty {
   margin: auto;
   text-align: center;
@@ -696,22 +689,21 @@ select:focus-visible {
   border-radius: 999px;
 }
 
-/* ── Ledger row — command-palette item: a floating glass sliver, not a
-   table line. Hover lifts it, selection tints it blue (DESIGN.md §4). ── */
+/* ── Issue card — a floating glass tile inside a lane (was a grid table row).
+   Hover lifts it, selection tints it blue (DESIGN.md §4). ── */
 .row {
-  margin: 1px 10px;
-  border-radius: 12px;
-  transition: opacity 0.3s, background 0.15s, box-shadow 0.15s;
+  border-radius: 14px;
+  transition: opacity 0.3s;
 }
 
-/* W3 · Stream motion — staggered reveal. FAILSAFE: rows are visible by default;
+/* W3 · Stream motion — staggered reveal. FAILSAFE: cards are visible by default;
    they only start hidden and animate when JS has marked the doc ready AND motion
-   is allowed. So a JS failure or `prefers-reduced-motion` leaves every row on
+   is allowed. So a JS failure or `prefers-reduced-motion` leaves every card on
    screen (no IO-invisible trap). `.is-revealed` is a manual escape hatch. */
 @media (prefers-reduced-motion: no-preference) {
   html.js-ready .row:not(.is-resolved) {
-    animation: revealUp 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
-    animation-delay: calc(min(var(--row-index, 0), 12) * 26ms);
+    animation: revealUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(min(var(--row-index, 0), 10) * 30ms);
   }
   html.js-ready .row.is-revealed {
     animation: none;
@@ -731,7 +723,7 @@ select:focus-visible {
 @keyframes revealUp {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -760,21 +752,6 @@ select:focus-visible {
   }
 }
 
-.row.is-resolved {
-  opacity: 0.45;
-}
-
-.row.highlighted {
-  background: var(--brass-dim);
-}
-
-.row.selected {
-  background: rgba(85, 179, 255, 0.09);
-  box-shadow:
-    0 0 0 1px rgba(85, 179, 255, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -782,26 +759,50 @@ select:focus-visible {
 }
 
 .row-line {
-  display: grid;
-  grid-template-columns: var(--ledger-grid);
-  column-gap: 12px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   width: 100%;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
+  padding: 12px 13px;
+  border: 1px solid var(--hair-faint);
+  border-radius: 14px;
+  background: var(--glass-raised);
   color: var(--lamplight);
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
 .row-line:hover {
-  background: var(--glass-raised);
+  background: var(--glass-hover);
+  transform: translateY(-1px);
   box-shadow:
     0 0 0 1px var(--hair-faint),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 10px 22px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.row.selected .row-line {
+  background: rgba(85, 179, 255, 0.12);
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px rgba(85, 179, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.row.highlighted .row-line {
+  background: var(--brass-dim);
+}
+
+.row.is-resolved {
+  opacity: 0.45;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
 .row-type {
@@ -818,12 +819,23 @@ select:focus-visible {
   color: var(--vermilion);
 }
 
-.row-title {
-  font-size: 13.5px;
-  font-weight: 500;
+.row-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dust);
   white-space: nowrap;
+}
+
+.row-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.1px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .row.is-resolved .row-title {
@@ -858,17 +870,10 @@ select:focus-visible {
 .row-assignee {
   font-size: 12px;
   font-weight: 600;
+  color: var(--paper);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.row-time {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--dust);
-  text-align: right;
-  white-space: nowrap;
 }
 
 /* ── Detached floating detail panel ───────────
@@ -876,7 +881,8 @@ select:focus-visible {
    width, the panel hovers over it (reference: the detached side card). */
 .detail {
   position: fixed;
-  top: 66px;
+  /* Sits over the board region, clearing the taller cockpit deck + toolbar. */
+  top: 150px;
   right: 20px;
   bottom: 20px;
   width: 340px;
@@ -1349,6 +1355,34 @@ select:focus-visible {
   margin-top: 10px;
 }
 
+/* ── Narrow window — the deck wraps and the board stacks into one column ── */
+@media (max-width: 900px) {
+  .cockpit {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .cockpit-stats {
+    margin-left: 0;
+    width: 100%;
+  }
+  .stat-tile {
+    flex: 1;
+    min-width: 0;
+  }
+  .cockpit-aside {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+  .board {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+  .lane {
+    min-height: 180px;
+  }
+}
+
 /* ── Frameless experiment (SVP_GLASS=frameless) ──────────────────────────
    The OS window is an invisible transparent rectangle; panels float directly
    over the desktop with a fully custom silhouette. No acrylic blur exists in
@@ -1390,19 +1424,25 @@ body.frameless .detail {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  /* The gate is the star's stage: one warm halo in the void. */
+  /* The gate is the star's stage: a warm lamplight halo above, a cold blue bloom
+     below — the same two light sources that give the workspace its atmosphere. */
   background:
-    radial-gradient(420px 300px at 50% 32%, rgba(238, 194, 94, 0.06), transparent 70%),
+    radial-gradient(520px 340px at 50% 30%, rgba(238, 194, 94, 0.075), transparent 72%),
+    radial-gradient(680px 420px at 50% 118%, rgba(85, 179, 255, 0.06), transparent 70%),
     rgba(10, 11, 14, 0.94);
   border-radius: 24px;
 }
 .login .brand-star {
-  filter: drop-shadow(0 0 14px rgba(238, 194, 94, 0.35));
+  width: 52px;
+  height: 52px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 20px rgba(238, 194, 94, 0.4));
+  animation: breathe 5s ease-in-out infinite;
 }
 .login-title {
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 650;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.5px;
   margin: 8px 0 0;
 }
 .login-sub {

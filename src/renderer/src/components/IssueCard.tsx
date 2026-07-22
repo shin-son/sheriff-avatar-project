@@ -7,11 +7,11 @@ interface Props {
   selected: boolean
   highlighted: boolean
   onSelect: (id: string) => void
-  /** Position within its zone — drives the stagger reveal delay (global.css). */
+  /** Position within its lane — drives the stagger reveal delay (global.css). */
   index?: number
 }
 
-/** One ledger row; click to open the issue in the floating detail panel. */
+/** One issue card inside a triage lane; click to open it in the floating detail panel. */
 export default function IssueCard({ issue, selected, highlighted, onSelect, index = 0 }: Props) {
   const { event, classification, assignment, status } = issue
   const confClass = classification.confidence > 80 ? 'high' : 'low'
@@ -31,19 +31,21 @@ export default function IssueCard({ issue, selected, highlighted, onSelect, inde
       ].join(' ')}
     >
       <button className="row-line" aria-pressed={selected} onClick={() => onSelect(event.id)}>
-        <span
-          className={`star-badge star-sm ${confClass}`}
-          title={`신뢰도 ${classification.confidence} — 80 초과 시 자동 배정`}
-        >
-          <span className="star-num">{classification.confidence}</span>
-        </span>
-        <span className="row-type">{TYPE_LABEL[event.type]}</span>
-        <span className="row-title">{event.title}</span>
-        <span className="row-meta">
+        <div className="card-top">
+          <span
+            className={`star-badge star-sm ${confClass}`}
+            title={`신뢰도 ${classification.confidence} — 80 초과 시 자동 배정`}
+          >
+            <span className="star-num">{classification.confidence}</span>
+          </span>
+          <span className="row-type">{TYPE_LABEL[event.type]}</span>
+          <span className="row-time">{formatIssueTime(event.timestamp)}</span>
+        </div>
+        <div className="row-title">{event.title}</div>
+        <div className="row-meta">
           {event.module} · {event.branch}
-        </span>
-        <span className="row-assignee">{assignment.assigneeName}</span>
-        <span className="row-time">{formatIssueTime(event.timestamp)}</span>
+        </div>
+        <div className="row-assignee">{assignment.assigneeName}</div>
       </button>
     </article>
   )
