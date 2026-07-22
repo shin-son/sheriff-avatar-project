@@ -15,6 +15,8 @@
 //   (+ NODE_EXTRA_CA_CERTS in the shell for corporate TLS)
 // Usage: npm run server  (port 8793)
 import 'dotenv/config'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Server } from 'socket.io'
 import { classifierEnabled, classify } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
@@ -35,6 +37,9 @@ const CONFIDENCE_MIN = Number(process.env.SVP_LLM_CONFIDENCE_MIN ?? 80)
 //   dry-run(기본) → 로그만 | label → SVP_TEST_LABEL 붙은 티켓만 | live → 전면 허용
 const WRITE_MODE = process.env.SVP_JIRA_WRITE_MODE ?? 'dry-run'
 const TEST_LABEL = process.env.SVP_TEST_LABEL ?? 'svp-test'
+// 설정 시 신규 티켓의 수집 로그(event.log: description + Jenkins 구간)를
+// <dir>/<티켓키>.log로 저장 — ingest 전 수집 데이터 검증용. 기본 꺼짐.
+const DUMP_DIR = process.env.SVP_DEBUG_DUMP_DIR
 
 // Demo auth until SVP-5: admin/admin → sheriff; any username with
 // password === username → member (e.g. shin.son / shin.son).
@@ -302,6 +307,14 @@ async function poll() {
         event.url = jenkins.url
         console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
       }
+      if (DUMP_DIR) {
+        try {
+          mkdirSync(DUMP_DIR, { recursive: true })
+          writeFileSync(join(DUMP_DIR, `${t.key}.log`), event.log)
+        } catch (err) {
+          console.error(`[svp-server] debug dump failed for ${t.key}: ${err.message}`)
+        }
+      }
       const issue = {
         event,
         ...routeByAssignee(event, assigneeOf(t), t.key),
@@ -375,7 +388,7 @@ console.log(
   }`
 )
 console.log(
-  `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}`
+  `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}${DUMP_DIR ? `\n[svp-server] debug-dump: ${DUMP_DIR} — 신규 티켓 수집 로그 저장` : ''}`
 )
 void poll()
 setInterval(() => void poll(), POLL_MS)
