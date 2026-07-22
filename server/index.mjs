@@ -15,6 +15,8 @@
 //   (+ NODE_EXTRA_CA_CERTS in the shell for corporate TLS)
 // Usage: npm run server  (port 8793)
 import 'dotenv/config'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Server } from 'socket.io'
 import { classifierEnabled, classify } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
@@ -35,6 +37,9 @@ const CONFIDENCE_MIN = Number(process.env.SVP_LLM_CONFIDENCE_MIN ?? 80)
 //   dry-run(기본) → 로그만 | label → SVP_TEST_LABEL 붙은 티켓만 | live → 전면 허용
 const WRITE_MODE = process.env.SVP_JIRA_WRITE_MODE ?? 'dry-run'
 const TEST_LABEL = process.env.SVP_TEST_LABEL ?? 'svp-test'
+// 설정 시 신규 티켓의 수집 로그(event.log: description + Jenkins 구간)를
+// <dir>/<티켓키>.log로 저장 — ingest 전 수집 데이터 검증용. 기본 꺼짐.
+const DUMP_DIR = process.env.SVP_DEBUG_DUMP_DIR
 
 // Demo auth until SVP-5: admin/admin → sheriff; any username with
 // password === username → member (e.g. shin.son / shin.son).
@@ -68,6 +73,21 @@ function canWrite(key) {
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
+// 실티켓 description은 HTML로 온다 (사내 실측: <h2>헤드라인</h2><ul><li>key : value</li>...).
+// 블록 태그를 줄바꿈으로 바꾸고 태그를 걷어내 줄 단위 계약 파싱이 동작하게 한다.
+// plain text에는 매칭될 태그가 없어 그대로 통과 — 두 형식 모두 처리된다.
+function htmlToText(s) {
+  return s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(h\d|li|ul|ol|p|div|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;|&quot;/g, "'")
+}
+
 // Real corporate description contract (SVP-6) — ` : `-separated key-value lines:
 //   [DEV_CICD][<project>][T<seq>] : <TC명> Failed   ← first line (= summary)
 //   CICD Project : ... / Step : TEST / Category : ... / TC name or file : ...
@@ -81,8 +101,9 @@ const STEP_TO_TYPE = {
 }
 
 function normalize(t) {
+  const text = htmlToText(t.fields.description ?? '')
   const fields = {}
-  for (const line of (t.fields.description ?? '').split('\n')) {
+  for (const line of text.split('\n')) {
     const sep = line.indexOf(' : ')
     if (sep > 0) fields[line.slice(0, sep).trim()] = line.slice(sep + 3).trim()
   }
@@ -92,7 +113,7 @@ function normalize(t) {
     title: t.fields.summary,
     module: 'unknown', // description에 모듈 정보 없음 — LLM 분류가 결정
     branch: fields['CICD Project'] ?? '',
-    log: t.fields.description ?? '',
+    log: text,
     url: fields['CICD'] ?? `${JIRA}/browse/${t.key}`,
     timestamp: t.fields.created,
     source: 'jira',
@@ -294,13 +315,23 @@ async function poll() {
       // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
       // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
       // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
-      const buildUrl = extractBuildUrl(t.fields.description)
-      const tc = (t.fields.description ?? '').match(/TC name or file\s*:\s*(\S+)/)?.[1]
+      // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
+      // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
+      const buildUrl = extractBuildUrl(event.log)
+      const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
       const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
       if (jenkins) {
         event.log = `${event.log}\n\n${jenkins.log}`
         event.url = jenkins.url
         console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
+      }
+      if (DUMP_DIR) {
+        try {
+          mkdirSync(DUMP_DIR, { recursive: true })
+          writeFileSync(join(DUMP_DIR, `${t.key}.log`), event.log)
+        } catch (err) {
+          console.error(`[svp-server] debug dump failed for ${t.key}: ${err.message}`)
+        }
       }
       const issue = {
         event,
@@ -375,7 +406,7 @@ console.log(
   }`
 )
 console.log(
-  `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}`
+  `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}${DUMP_DIR ? `\n[svp-server] debug-dump: ${DUMP_DIR} — 신규 티켓 수집 로그 저장` : ''}`
 )
 void poll()
 setInterval(() => void poll(), POLL_MS)

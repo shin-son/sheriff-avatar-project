@@ -14,7 +14,8 @@ const BROWSE_BASE = `http://localhost:${PORT}/browse`
 const SCENARIOS = {
   'auth-token-401': { type: 'test_failed', module: 'auth', tc: 'linux.auth-token-refresh-088.sh' },
   'payment-build': { type: 'build_failed', module: 'payment', tc: 'payment/checkout.cc' },
-  'snapshot-diff': { type: 'test_failed', module: 'renderer-core', tc: 'linux.ui-snapshot-diff-041.sh' },
+  // python. 접두사 + 콘솔 마커의 I- 접두사 조합 (사내 실측 변형) 검증용
+  'snapshot-diff': { type: 'test_failed', module: 'renderer-core', tc: 'python.ui-snapshot-diff-041.py' },
   'auth-lint': { type: 'lint_failed', module: 'auth', tc: 'linux.auth-session-lint-057.sh' },
   'payment-e2e': { type: 'test_failed', module: 'payment', tc: 'linux.payment-refund-e2e-030.sh' },
   'infra-deploy': { type: 'deploy_failed', module: 'infra', tc: 'linux.infra-staging-deploy-005.sh' }
@@ -45,21 +46,24 @@ function createTicket(scenarioId) {
   const key = `${PROJECT}-${seq}`
   const now = new Date().toISOString()
   const headline = `[DEV_CICD][${PLATFORM}][T${seq}] : ${s.tc} Failed`
+  const cicdUrl = `https://cicd.example.internal:1234/detail?type=test-pipeline&seq=${seq}&platform_version=${PLATFORM.toUpperCase()}`
+  const testUrl = `http://localhost:8794/job/ci-${s.module}/${seq}`
   const ticket = {
     key,
     summary: headline,
-    description: [
-      headline,
-      `CICD Project : ${PLATFORM}`,
-      `Step : ${STEP_BY_TYPE[s.type]}`,
-      'Category : SPECIAL',
-      `TC name or file : ${s.tc}`,
-      'Link',
-      `CICD : https://cicd.example.internal:1234/detail?type=test-pipeline&seq=${seq}&platform_version=${PLATFORM.toUpperCase()}`,
-      `TEST : http://localhost:8794/job/ci-${s.module}/${seq}`,
-      'IMAGE DIR : None',
-      'DUMP DIR : None'
-    ].join('\n'),
+    // 실티켓 description은 줄바꿈 없는 HTML 한 덩어리로 온다 (사내 실측) —
+    // 서버 htmlToText가 이를 줄 단위 계약으로 되돌리는 경로를 항상 검증한다.
+    description:
+      `<h2>${headline}</h2><ul>` +
+      `<li>CICD Project : ${PLATFORM}</li>` +
+      `<li>Step : ${STEP_BY_TYPE[s.type]}</li>` +
+      `<li>Category : SPECIAL</li>` +
+      `<li>TC name or file : ${s.tc}</li></ul>` +
+      `<h2>Link</h2><ul>` +
+      `<li>CICD : <a href='${cicdUrl}'>${cicdUrl}</a></li>` +
+      `<li>TEST : <a href='${testUrl}'>${testUrl}</a></li>` +
+      `<li>IMAGE DIR : None</li>` +
+      `<li>DUMP DIR : None</li></ul>`,
     labels: ['ci-failure'],
     status: 'Open',
     created: now,

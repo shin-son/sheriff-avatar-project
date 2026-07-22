@@ -26,7 +26,7 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_JIRA_JQL` | `project = CIOPS AND labels = ci-failure` (mock용) | 팀 CI 티켓 필터 JQL. ORDER BY는 서버가 자동으로 붙이므로 **넣지 않는다** |
 | `SVP_JIRA_BOT` | `cicd_ap` | "사람 배정 전" 취급하는 bot 계정 — 이 assignee면 당번 큐로 라우팅 |
 | `SVP_JENKINS_USER` / `SVP_JENKINS_TOKEN` | (없음) | Jenkins Basic auth (계정 + API Token — 프로필 → Configure에서 발급). 미설정이면 인증 헤더 없이 시도 (mock용). 티켓 description의 빌드 링크에서 콘솔 로그 꼬리를 가져와 분류·ingest 로그를 보강 — 링크 없음/실패 시 description 로그로 폴백 |
-| `SVP_JENKINS_LOG_TAIL` | `6000` | 가져온 콘솔 로그에서 유지하는 꼬리 크기(chars) — 실패 원인은 로그 끝에 몰린다 |
+| `SVP_JENKINS_LOG_TAIL` | `6000` | 콘솔 꼬리 폴백(TC 구간을 못 찾을 때)의 유지 크기(chars). 찾은 TC 구간은 통짜 보존된다 |
 | `SVP_LLM_PROVIDER` | `bedrock` | 분류기 LLM 경로 — `bedrock`(Messages 엔드포인트) / **`bedrock-invoke`(표준 Bedrock InvokeModel — 사내처럼 Mantle이 막힌 환경)** / `anthropic`(사외 dev) |
 | `SVP_LLM_MODEL` | provider별 기본 | `bedrock-invoke` 기본값은 `global.anthropic.claude-opus-4-8` (global inference profile — on-demand ID는 400). 환경이 다르면 콘솔의 ID로 교체 |
 | `AWS_REGION` | (없음) | Bedrock 리전. **미설정이면 분류기 비활성** — 티켓은 당번 큐에 유지되고 서버는 정상 동작 |
