@@ -1,5 +1,5 @@
 // CI test log 확보·양식화 — poll()의 Jenkins 로그 보강 경로.
-// 1) fetchRawLogViaTool: fetch_ci_test.py(repo 루트)를 직접 실행해 raw 로그 확보.
+// 1) fetchRawLogViaTool: fetch_ci_test.py(.tool/Jenkins/)를 직접 실행해 raw 로그 확보.
 //    실패 시 null — 호출부(index.mjs)가 기존 jenkins.mjs fetchFailureLog로 폴백.
 // 2) formatLogViaSkill: 확보한 로그를 임시 파일로 넘겨 headless Claude
 //    (`claude -p "/format-ci-log <file>"`)의 format-ci-log 스킬로 양식화.
@@ -35,7 +35,7 @@ function run(cmd, args, timeout) {
 export async function fetchRawLogViaTool(buildUrl, tc) {
   const { ok, out, err } = await run(
     'python3',
-    ['fetch_ci_test.py', buildUrl, tc ?? '-', MATCH],
+    ['.tool/Jenkins/fetch_ci_test.py', buildUrl, tc ?? '-', MATCH],
     TOOL_TIMEOUT_MS
   )
   if (!ok || out === '') {
