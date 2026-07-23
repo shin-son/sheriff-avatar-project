@@ -44,7 +44,7 @@ LLM-WIKI 기반 Sheriff Agent Windows 데스크톱 앱 (Electron + React + TypeS
 **목표 주도 실행.**
 - 작업을 검증 가능한 목표로 바꾼다: "버그 수정" → "재현 테스트 작성 후 통과시키기".
 - 여러 단계 작업은 `단계 → 검증 방법` 형태의 짧은 계획을 먼저 제시한다.
-- 최소 검증: 커밋 전 `npm run typecheck` + 해당 기능 수동 확인.
+- 최소 검증: 커밋 전 `npm run typecheck` + `npm test` + 해당 기능 수동 확인.
 
 ## 명령어
 
@@ -55,6 +55,7 @@ npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792)
 npm run mock:jenkins # mock Jenkins 서버 (별도 터미널, 포트 8794) — 콘솔 로그 소스
 npm run server       # v3 서버 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로. 운영은 Linux systemd
 npm run typecheck    # 타입 체크
+npm test             # 서버 핵심 로직 유닛 테스트 (node:test — 티켓 파싱·Jenkins 추출·vault 검색·ingest 멱등성)
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
@@ -78,6 +79,7 @@ server/                          v3 서버 (headless Node, plain .mjs) — Linux
   wiki-query.mjs                 vault 검색 + 노트 frontmatter owner 해석 (담당자 매핑)
   jira.mjs                       Jira write 3종 (assignee·댓글 템플릿·전이)
   jenkins.mjs                    티켓 링크의 Jenkins 빌드 콘솔 로그(consoleText 꼬리) 수집 — 분류·ingest 로그 보강
+  ticket.mjs                     실티켓 description 계약(SVP-6) 파싱 — HTML 복원 + normalize (순수 함수, 유닛 테스트 대상)
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정
