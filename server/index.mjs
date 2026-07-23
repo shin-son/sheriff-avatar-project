@@ -20,7 +20,7 @@ import { join } from 'node:path'
 import { Server } from 'socket.io'
 import { loadIssueCache, saveIssueCache } from './cache.mjs'
 import { classifierEnabled, classify } from './classifier.mjs'
-import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
+import { extractBuildUrl, fetchFailureLog, probeBuildUrl } from './jenkins.mjs'
 import { fetchFailureLogViaSkill } from './ci-test-fetch.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
@@ -337,9 +337,15 @@ async function poll() {
         // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
         const buildUrl = extractBuildUrl(event.log)
         const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
-        const jenkins = buildUrl
-          ? ((await fetchFailureLogViaSkill(buildUrl, tc)) ?? (await fetchFailureLog(buildUrl, tc)))
-          : null
+        let jenkins = null
+        if (buildUrl && !(await probeBuildUrl(buildUrl))) {
+          // 접근 불가 링크 — fetch(스킬·직통)만 건너뛰고 dump·분류는 description
+          // 로그로 그대로 진행. 무효 URL 흔적은 dump에도 남도록 log에 기록한다.
+          event.log = `${event.log}\n\n[jenkins] unreachable build url: ${buildUrl}`
+          console.log(`[svp-server] jenkins build url unreachable for ${t.key}: ${buildUrl}`)
+        } else if (buildUrl) {
+          jenkins = (await fetchFailureLogViaSkill(buildUrl, tc)) ?? (await fetchFailureLog(buildUrl, tc))
+        }
         if (jenkins) {
           event.log = `${event.log}\n\n${jenkins.log}`
           event.url = jenkins.url

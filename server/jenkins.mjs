@@ -82,6 +82,20 @@ async function jenkinsGet(url) {
 }
 
 /**
+ * true if the build URL answers HTTP at all (any status) — 접근 불가(호스트
+ * 다운·타임아웃·차단망)만 false. 404/500도 '접근 가능'이다: 그 처리(폴백)는
+ * fetch 로직이 맡는다. 죽은 링크에 스킬/콘솔 fetch를 태우지 않기 위한 사전 점검.
+ */
+export async function probeBuildUrl(buildUrl) {
+  try {
+    await jenkinsGet(buildUrl)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * GET <buildUrl>/consoleText → full text, or null on any failure. Never
  * throws — a dead Jenkins must not break the poll loop; the caller falls
  * back to the description log.
