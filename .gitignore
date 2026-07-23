@@ -6,4 +6,5 @@ dist/
 .DS_Store
 .env
 .env.local
+server/issue-cache.json
 .claude/

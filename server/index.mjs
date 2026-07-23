@@ -18,6 +18,7 @@ import 'dotenv/config'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Server } from 'socket.io'
+import { loadIssueCache, saveIssueCache } from './cache.mjs'
 import { classifierEnabled, classify } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
@@ -60,8 +61,11 @@ const STATUS_BY_CATEGORY = { new: 'new', indeterminate: 'acknowledged', done: 'r
 
 /** key → SheriffIssue (the server owns the issue store in v3). */
 const issues = new Map()
+/** key → { receivedAt, log, url, classification? } — 초도분석 1회 보장 (disk-backed, cache.mjs). */
+const issueCache = loadIssueCache()
 /** key → LLM Classification — survives sync-loop re-routing (routeByAssignee consults it). */
 const llmResults = new Map()
+for (const [key, entry] of issueCache) if (entry.classification) llmResults.set(key, entry.classification)
 /** key → Jira labels (server-internal; the app contract doesn't carry labels). */
 const ticketLabels = new Map()
 
@@ -173,6 +177,11 @@ async function classifyAndAct(key) {
     wikiRefs
   }
   llmResults.set(key, classification)
+  const cached = issueCache.get(key)
+  if (cached) {
+    cached.classification = classification // restart-proof: never re-classify this ticket
+    saveIssueCache(issueCache)
+  }
   issue.classification = classification
   emitIssue('issue:updated', issue) // ≤80이어도 당번 화면에 LLM 판단 근거가 보인다
 
@@ -312,36 +321,49 @@ async function poll() {
       ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
       const event = normalize(t)
-      // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
-      // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
-      // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
-      // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
-      // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
-      const buildUrl = extractBuildUrl(event.log)
-      const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
-      const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
-      if (jenkins) {
-        event.log = `${event.log}\n\n${jenkins.log}`
-        event.url = jenkins.url
-        console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
-      }
-      if (DUMP_DIR) {
-        try {
-          mkdirSync(DUMP_DIR, { recursive: true })
-          writeFileSync(join(DUMP_DIR, `${t.key}.log`), event.log)
-        } catch (err) {
-          console.error(`[svp-server] debug dump failed for ${t.key}: ${err.message}`)
+      const cached = issueCache.get(t.key)
+      if (cached) {
+        // 초도분석이 이미 끝난 티켓(재시작 복원) — Jenkins 재수집 없이 캐시의
+        // 보강 로그를 그대로 쓴다. 분류도 llmResults 복원으로 건너뛴다.
+        event.log = cached.log
+        event.url = cached.url
+      } else {
+        // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
+        // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
+        // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
+        // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
+        // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
+        const buildUrl = extractBuildUrl(event.log)
+        const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
+        const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
+        if (jenkins) {
+          event.log = `${event.log}\n\n${jenkins.log}`
+          event.url = jenkins.url
+          console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
+        }
+        if (DUMP_DIR) {
+          try {
+            mkdirSync(DUMP_DIR, { recursive: true })
+            writeFileSync(join(DUMP_DIR, `${t.key}.log`), event.log)
+          } catch (err) {
+            console.error(`[svp-server] debug dump failed for ${t.key}: ${err.message}`)
+          }
         }
       }
       const issue = {
         event,
         ...routeByAssignee(event, assigneeOf(t), t.key),
         status: STATUS_BY_CATEGORY[t.fields.status.statusCategory.key] ?? 'new',
-        receivedAt: new Date().toISOString()
+        receivedAt: cached?.receivedAt ?? new Date().toISOString()
       }
       issues.set(t.key, issue)
-      console.log(`[svp-server] new ${t.key} assignee=${assigneeOf(t) ?? '-'} → ${issue.assignment.assigneeId}`)
-      emitIssue('issue:new', issue)
+      if (!cached) {
+        issueCache.set(t.key, { receivedAt: issue.receivedAt, log: event.log, url: event.url })
+        saveIssueCache(issueCache)
+      }
+      console.log(`[svp-server] ${cached ? 'restored' : 'new'} ${t.key} assignee=${assigneeOf(t) ?? '-'} → ${issue.assignment.assigneeId}`)
+      // Restored issues re-enter the clients' lists but must not re-toast.
+      emitIssue('issue:new', cached ? { ...issue, restored: true } : issue)
       // Classify only bot-assigned open tickets. Human-assigned tickets skip it,
       // which also makes restarts idempotent: an already-auto-assigned ticket
       // re-ingests with its human assignee and never gets a second comment.
@@ -377,8 +399,11 @@ async function poll() {
         // The previous holder also gets the update so their list drops/updates it.
         emitIssue('issue:updated', issue, assigneeChanged ? [before] : [])
         // F7: on entering `resolved`, freeze evidence into the vault (once per key).
-        if (statusChanged && status === 'resolved' && !alreadyIngested(t.key)) {
-          void ingestResolved(issue) // fire-and-forget — never block the poll loop
+        if (statusChanged && status === 'resolved') {
+          if (issueCache.delete(t.key)) saveIssueCache(issueCache) // 종결 — 캐시 정리
+          if (!alreadyIngested(t.key)) {
+            void ingestResolved(issue) // fire-and-forget — never block the poll loop
+          }
         }
       }
     }
@@ -393,6 +418,8 @@ async function poll() {
 
 console.log(`[svp-server] v3 server listening on :${PORT}`)
 console.log(`[svp-server] jira=${JIRA} bot=${BOT} jql=${BASE_JQL}`)
+if (issueCache.size > 0)
+  console.log(`[svp-server] issue-cache: ${issueCache.size} ticket(s) — 초도분석 완료분은 재수집·재분류 없이 복원`)
 console.log(
   `[svp-server] classifier: ${classifierEnabled() ? `on (>${CONFIDENCE_MIN} → auto-assign)` : 'off — LLM 자격증명 없음, 티켓은 당번 큐에 유지'}`
 )

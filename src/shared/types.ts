@@ -65,6 +65,8 @@ export interface SheriffIssue {
   assignment: Assignment
   status: IssueStatus
   receivedAt: string
+  /** Server re-push of an already-analyzed issue (restart restore) — clients skip the toast. */
+  restored?: boolean
 }
 
 export type Role = 'member' | 'sheriff'
