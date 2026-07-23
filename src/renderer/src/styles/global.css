@@ -26,17 +26,20 @@
 }
 
 :root {
-  --ink-deep: #110d0a;
-  --lamplight: #f0e8d8;
-  --paper: #d9cdb8;
-  --dust: #a8987f;
+  /* Raycast-variation palette (DESIGN.md): near-black blue canvas, cool
+     neutrals, blue for interaction, red for alarm. The brass star stays the
+     sole warm brand element. */
+  --ink-deep: #18191a;
+  --lamplight: #f9f9f9;
+  --paper: #cecece;
+  --dust: #9c9c9d;
   --brass: #d9a441;
   --brass-dim: rgba(217, 164, 65, 0.16);
-  --turquoise: #49b896;
-  --vermilion: #e2543e;
-  --sky: #82a7c7;
-  /* glass layers — neutral smoke, like frosted glass; warmth lives in the content */
-  --glass: rgba(30, 30, 34, 0.5);
+  --turquoise: #5fc992;
+  --vermilion: #ff6363;
+  --sky: #55b3ff;
+  /* glass layers — blue-cold smoke over the acrylic void (#07080a undertone) */
+  --glass: rgba(9, 10, 13, 0.55);
   --glass-raised: rgba(255, 255, 255, 0.06);
   --glass-hover: rgba(255, 255, 255, 0.09);
   --hair: rgba(255, 255, 255, 0.09);
@@ -47,7 +50,6 @@
     50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
     50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%
   );
-  --ledger-grid: 36px 104px minmax(0, 1fr) minmax(90px, 150px) 70px 66px;
 }
 
 * {
@@ -58,9 +60,15 @@
 
 body {
   font-family: var(--font-body);
-  /* Neutral tint over the acrylic void; on the solid-color fallback this reads as ink. */
-  background: rgba(12, 12, 14, 0.35);
+  /* Blue-cold tint over the acrylic void; on the solid-color fallback this reads as ink. */
+  background: rgba(7, 8, 10, 0.4);
   color: var(--lamplight);
+  /* Positive tracking on dark — airy, readable (DESIGN.md §3) */
+  letter-spacing: 0.2px;
+  /* Inter OpenType features enabled globally (DESIGN.md §3/§12 Principle 2) */
+  font-feature-settings: 'calt', 'kern', 'liga', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
   user-select: none;
 }
@@ -71,7 +79,7 @@ button {
 
 button:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--brass);
+  outline: 2px solid var(--sky);
   outline-offset: -2px;
 }
 
@@ -127,6 +135,9 @@ select:focus-visible {
 
 .star-badge.high {
   background: linear-gradient(160deg, #eec25e, #b8842a);
+  /* clip-path swallows box-shadow — drop-shadow follows the star silhouette.
+     The soft brass halo is the one warm light on the obsidian ledger. */
+  filter: drop-shadow(0 0 7px rgba(238, 194, 94, 0.32));
 }
 
 .star-badge.high .star-num {
@@ -214,7 +225,7 @@ select:focus-visible {
 }
 
 .win-btn.win-close:hover {
-  background: rgba(226, 84, 62, 0.85);
+  background: rgba(255, 99, 99, 0.85);
   color: #fff;
 }
 
@@ -222,137 +233,44 @@ select:focus-visible {
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 10px; /* thin acrylic halo — the sheet reads as the whole window */
 }
 
 /* Shared glass panel material. Inside a sheet there are no boxed groups —
    sections are separated by hairlines and shifts in glass tone only.
    The detail panel is the single detached floating element (reference look). */
-.workspace,
 .compact,
 .detail {
   border-radius: 32px;
   background: var(--glass);
   border: 1px solid var(--hair);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  /* outer depth + inset top highlight pair (DESIGN.md §6 shadow philosophy) */
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(28px) saturate(1.25);
 }
 
-/* One sheet holding the title bar + sidebar + ledger */
+/* The dashboard has no outer sheet — it bleeds edge-to-edge and the canvas
+   itself is the surface. Cockpit, lanes, and the detail panel are the only
+   framed glass elements. Frameless mode restores a rounded silhouette because
+   there the surface doubles as the transparent window's shape (override below).
+   Two faint light sources give the obsidian canvas its atmosphere: a warm
+   lamplight halo top-left (home of the brass star) and a cold blue bloom
+   bottom-right. Barely-there on purpose. */
 .workspace {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background:
+    radial-gradient(640px 320px at 10% -4%, rgba(238, 194, 94, 0.055), transparent 70%),
+    radial-gradient(760px 460px at 104% 106%, rgba(85, 179, 255, 0.05), transparent 70%),
+    var(--glass);
+  backdrop-filter: blur(28px) saturate(1.25);
 }
 
-.workspace-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-/* ── Sidebar (left zone of the sheet, set apart by tone + line) ── */
-.sidebar {
-  width: 264px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.16);
-  border-right: 1px solid var(--hair-faint);
-}
-
-.me-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: var(--glass-raised);
-  border-bottom: 1px solid var(--hair-faint);
-}
-
-.me-name {
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.role-badge {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  color: var(--dust);
-}
-
-.role-badge.sheriff {
-  color: var(--brass);
-}
-
-.section-title {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-  color: var(--dust);
-  padding: 16px 16px 8px;
-}
-
-.team-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.team-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 16px;
-  border: none;
-  background: transparent;
-  color: var(--lamplight);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.team-item:hover {
-  background: var(--glass-raised);
-}
-
-.team-item.active {
-  background: var(--glass-raised);
-  box-shadow: inset 2px 0 0 var(--brass);
-}
-
-.team-item-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-
-.team-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.team-mods {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--dust);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* ── Reusable atoms (shared by the cockpit deck + compact member view) ── */
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -361,7 +279,7 @@ select:focus-visible {
   height: 28px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(217, 164, 65, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
@@ -373,34 +291,142 @@ select:focus-visible {
   font-size: 16px;
 }
 
-.notify-toggle {
-  margin-top: auto;
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dust);
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* ── Cockpit deck — the old left sidebar is gone; identity, an oversized status
+   deck, and connection controls now sit in one horizontal shelf across the top.
+   The three big figures are the first-class visual element and mirror the three
+   board lanes below — so even an empty app reads as a redesigned surface. ── */
+.cockpit {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  gap: 22px;
+  padding: 20px 26px;
+  border-bottom: 1px solid var(--hair-faint);
+}
+
+.cockpit-id {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-width: 0;
+}
+
+/* The brass star as the deck's brand anchor — the one warm light on the void. */
+.cockpit-star {
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 0 12px rgba(238, 194, 94, 0.34));
+}
+
+.cockpit-who {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cockpit-role {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
   color: var(--dust);
-  padding: 13px 16px;
-  border: none;
-  border-top: 1px solid var(--hair-faint);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s;
 }
 
-.notify-toggle:hover {
+.cockpit-role.sheriff {
+  color: var(--brass);
+}
+
+.cockpit-name {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.cockpit-team {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.cockpit-team .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+
+/* Sheriff presence gets a faint brass ring (brass = sole warm brand cue). */
+.cockpit-team .avatar.is-sheriff {
+  border-color: rgba(217, 164, 65, 0.55);
+}
+
+.cockpit-stats {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 106px;
+  padding: 12px 18px 14px;
+  border-radius: 16px;
   background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.notify-toggle .dot {
-  background: var(--brass);
+/* Hero tile = 확인 필요 — the sheriff's actionable queue; brightest figure so the
+   배정 확인 workflow (cta_primary) reads first, using tone not color. */
+.stat-tile.hero {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--hair);
 }
 
-.notify-toggle.off .dot {
-  background: var(--dust);
+.stat-num {
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -1.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+
+.stat-tile.hero .stat-num {
+  color: var(--lamplight);
+}
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--dust);
+}
+
+.cockpit-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
 }
 
 .ws-status {
@@ -408,18 +434,9 @@ select:focus-visible {
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--dust);
-  padding: 13px 16px;
-  border-top: 1px solid var(--hair-faint);
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dust);
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .ws-status.connected .dot {
@@ -435,53 +452,58 @@ select:focus-visible {
   animation: pulse 1.2s infinite;
 }
 
-@keyframes pulse {
-  50% {
-    opacity: 0.3;
-  }
-}
-
-/* ── Content panel ───────────────────────── */
-.content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden; /* keeps the scrolling ledger inside the rounded corners */
-}
-
-.content-header {
+.notify-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 20px 28px 14px 26px;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dust);
+  padding: 5px 11px;
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  background: var(--glass-raised);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notify-toggle:hover {
+  background: var(--glass-hover);
+}
+
+.notify-toggle .dot {
+  background: var(--brass);
+}
+
+.notify-toggle.off .dot {
+  background: var(--dust);
+}
+
+/* ── Toolbar — search + palette + wiki actions, one slim row under the deck ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--hair-faint);
 }
 
-.content-header h1 {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
+.toolbar-spacer {
+  flex: 1;
 }
 
-.subtitle {
-  font-size: 12px;
-  color: var(--dust);
-  margin-top: 4px;
-}
-
+/* Search — a quiet glass pill; focus blooms the signature blue glow. */
 .search {
   flex: 1;
-  max-width: 300px;
-  margin: 0 20px;
+  max-width: 380px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--lamplight);
   background: var(--glass-raised);
   border: 1px solid var(--hair-faint);
   border-radius: 999px;
   padding: 8px 16px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .search::placeholder {
@@ -491,61 +513,154 @@ select:focus-visible {
 .search:focus {
   outline: none;
   background: var(--glass-hover);
-  border-color: rgba(217, 164, 65, 0.4);
+  border-color: rgba(85, 179, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(85, 179, 255, 0.12);
 }
 
-.stats {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stat {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--dust);
-}
-
-.ledger {
+/* ── Triage board — three lanes side by side (was one vertical ledger list).
+   The sheriff's own queue, the auto-routed stream, and resolved history each
+   own a column. Lane distinction is tone + label only; brass stays sole-warm. ── */
+.board {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px 24px 20px;
+}
+
+.lane {
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--hair-faint);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  overflow: hidden;
 }
 
-.ledger::-webkit-scrollbar {
-  width: 8px;
+/* Sheriff's action queue — a hair brighter than the void (tone only, no color). */
+.lane-triage {
+  background: rgba(255, 255, 255, 0.022);
 }
 
-.ledger::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-}
-
-.ledger .lint-card {
-  margin: 0;
-}
-
-.ledger-head {
-  display: grid;
-  grid-template-columns: var(--ledger-grid);
-  column-gap: 12px;
-  align-items: center;
-  padding: 10px 24px 8px;
+.lane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 12px;
   border-bottom: 1px solid var(--hair-faint);
+}
+
+.lane-title {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
   color: var(--dust);
 }
 
-.ledger-head .th-time {
-  text-align: right;
+.lane-triage .lane-title {
+  color: var(--paper);
 }
 
+/* Lane count — an oversized figure, a first-class element (not a tiny badge). */
+.lane-count {
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lamplight);
+}
+
+.lane-resolved .lane-count {
+  color: var(--dust);
+}
+
+.lane-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lane-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lane-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.lane-empty {
+  margin: auto;
+  padding: 22px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(154, 156, 157, 0.5);
+}
+
+/* ── Empty board — the watchtower: one breathing star alone in the void.
+   With the deck's three big zero-figures above it, the empty app is
+   unmistakably a new composition. Breathe is disabled by reduced-motion. ── */
+.watchtower {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+}
+
+.watchtower-star {
+  width: 84px;
+  height: 84px;
+  clip-path: var(--star-shape);
+  background: rgba(255, 255, 255, 0.1);
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.08));
+  animation: breathe 4.5s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.62;
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 26px rgba(255, 255, 255, 0.14));
+  }
+}
+
+.watchtower-title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+
+.watchtower-hint {
+  font-size: 13px;
+  color: var(--dust);
+}
+
+.watchtower-hint code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+/* Compact member view keeps a centered star for its own empty state. */
 .empty {
   margin: auto;
   text-align: center;
@@ -559,6 +674,7 @@ select:focus-visible {
   margin: 0 auto 16px;
   clip-path: var(--star-shape);
   background: rgba(255, 255, 255, 0.1);
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.08));
 }
 
 .empty-hint {
@@ -575,24 +691,67 @@ select:focus-visible {
   border-radius: 999px;
 }
 
-/* ── Ledger row ──────────────────────────── */
+/* ── Issue card — a floating glass tile inside a lane (was a grid table row).
+   Hover lifts it, selection tints it blue (DESIGN.md §4). ── */
 .row {
-  border-bottom: 1px solid var(--hair-faint);
-  animation: fadeIn 0.3s ease both;
+  border-radius: 14px;
   transition: opacity 0.3s;
 }
 
-.row.is-resolved {
-  opacity: 0.45;
+/* W3 · Stream motion — staggered reveal. FAILSAFE: cards are visible by default;
+   they only start hidden and animate when JS has marked the doc ready AND motion
+   is allowed. So a JS failure or `prefers-reduced-motion` leaves every card on
+   screen (no IO-invisible trap). `.is-revealed` is a manual escape hatch. */
+@media (prefers-reduced-motion: no-preference) {
+  html.js-ready .row:not(.is-resolved) {
+    animation: revealUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(min(var(--row-index, 0), 10) * 30ms);
+  }
+  html.js-ready .row.is-revealed {
+    animation: none;
+    opacity: 1;
+  }
+  /* W1 · brass star "stamp" the moment a high-confidence issue auto-routes.
+     §15 standard (250ms); minimal overshoot bezier for the press-in feel. */
+  html.js-ready .row.is-new.auto .star-badge.high {
+    animation: starStamp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) 0.16s both;
+  }
+  /* W3 · new-issue brass unread dot pulses a few times to draw the eye */
+  html.js-ready .row.is-new .row-title::before {
+    animation: dotPulse 1.5s ease-in-out 3;
+  }
 }
 
-.row.highlighted {
-  background: var(--brass-dim);
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.row.selected {
-  background: var(--glass-raised);
-  box-shadow: inset 2px 0 0 var(--brass);
+@keyframes starStamp {
+  0% {
+    transform: scale(1.18);
+    filter: drop-shadow(0 0 0 rgba(238, 194, 94, 0));
+  }
+  60% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 7px rgba(238, 194, 94, 0.32));
+  }
+}
+
+@keyframes dotPulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(1.5);
+  }
 }
 
 @keyframes fadeIn {
@@ -602,22 +761,50 @@ select:focus-visible {
 }
 
 .row-line {
-  display: grid;
-  grid-template-columns: var(--ledger-grid);
-  column-gap: 12px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   width: 100%;
-  padding: 9px 24px;
-  border: none;
-  background: transparent;
+  padding: 12px 13px;
+  border: 1px solid var(--hair-faint);
+  border-radius: 14px;
+  background: var(--glass-raised);
   color: var(--lamplight);
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
 .row-line:hover {
-  background: var(--glass-raised);
+  background: var(--glass-hover);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px var(--hair-faint),
+    0 10px 22px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.row.selected .row-line {
+  background: rgba(85, 179, 255, 0.12);
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px rgba(85, 179, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.row.highlighted .row-line {
+  background: var(--brass-dim);
+}
+
+.row.is-resolved {
+  opacity: 0.45;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
 .row-type {
@@ -634,12 +821,23 @@ select:focus-visible {
   color: var(--vermilion);
 }
 
-.row-title {
-  font-size: 13px;
-  font-weight: 500;
+.row-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dust);
   white-space: nowrap;
+}
+
+.row-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.1px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .row.is-resolved .row-title {
@@ -674,17 +872,10 @@ select:focus-visible {
 .row-assignee {
   font-size: 12px;
   font-weight: 600;
+  color: var(--paper);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.row-time {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--dust);
-  text-align: right;
-  white-space: nowrap;
 }
 
 /* ── Detached floating detail panel ───────────
@@ -692,7 +883,8 @@ select:focus-visible {
    width, the panel hovers over it (reference: the detached side card). */
 .detail {
   position: fixed;
-  top: 66px;
+  /* Sits over the board region, clearing the taller cockpit deck + toolbar. */
+  top: 150px;
   right: 20px;
   bottom: 20px;
   width: 340px;
@@ -700,7 +892,15 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  border-radius: 24px;
+  /* Level 5 floating window (DESIGN.md §6): heavy depth + faint white glow
+     ring + inset top light — reads as a real macOS panel above the sheet. */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 40px 90px rgba(0, 0, 0, 0.65),
+    0 0 24px rgba(255, 255, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(36px) saturate(1.3);
   animation: panelIn 0.25s ease both;
 }
 
@@ -751,18 +951,25 @@ select:focus-visible {
 }
 
 .detail-title {
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.45;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: -0.1px;
   margin: 8px 0 16px;
 }
 
+/* Confidence — the panel's centerpiece: the star sits in its own raised
+   glass plaque instead of hanging on a divider line. */
 .detail-star {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--hair-faint);
+  gap: 14px;
+  padding: 12px 14px;
+  margin-bottom: 4px;
+  border-radius: 16px;
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .detail-conf {
@@ -815,16 +1022,38 @@ select:focus-visible {
   color: var(--dust);
 }
 
-.detail-actions {
+/* Promoted CTA plaque — sits directly under the panel head, above the scrolling
+   body, so 배정 확인 is the highest-hierarchy element (DESIGN.md §12 Principle 5). */
+.detail-cta {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 20px 18px;
-  border-top: 1px solid var(--hair-faint);
+  padding: 4px 20px 14px;
+  border-bottom: 1px solid var(--hair-faint);
 }
 
-.detail-actions .btn {
+.detail-cta .btn {
   width: 100%;
+}
+
+/* Hero confidence star — the panel's focal element (W1). */
+.detail-star.hero {
+  gap: 16px;
+  padding: 14px;
+}
+
+.detail-star.hero .star-badge {
+  width: 56px;
+  height: 56px;
+}
+
+.detail-star.hero .star-badge .star-num {
+  font-size: 14px;
+  transform: translateY(3px);
+}
+
+.detail-star.hero .star-badge.high {
+  filter: drop-shadow(0 0 14px rgba(238, 194, 94, 0.4));
 }
 
 .detail-goto {
@@ -844,22 +1073,24 @@ select:focus-visible {
   background: var(--glass-raised);
   color: var(--lamplight);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  /* macOS-native inset highlight + opacity hover (DESIGN.md §4/§15) */
+  box-shadow: rgba(255, 255, 255, 0.1) 0px 1px 0px 0px inset;
+  transition: opacity 0.15s;
 }
 
 .btn:hover {
-  background: var(--glass-hover);
-  border-color: rgba(217, 164, 65, 0.4);
+  opacity: 0.6;
 }
 
 .btn-primary {
-  background: var(--brass);
-  border-color: var(--brass);
+  background: rgba(255, 255, 255, 0.815);
+  border-color: transparent;
   color: var(--ink-deep);
 }
 
 .btn-primary:hover {
-  background: #e5b355;
+  background: #ffffff;
+  opacity: 1;
 }
 
 .ack-label {
@@ -1006,7 +1237,7 @@ select:focus-visible {
 }
 
 .compact-user option {
-  background: #232327;
+  background: #1b1c1e;
 }
 
 .compact-sub {
@@ -1126,6 +1357,34 @@ select:focus-visible {
   margin-top: 10px;
 }
 
+/* ── Narrow window — the deck wraps and the board stacks into one column ── */
+@media (max-width: 900px) {
+  .cockpit {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .cockpit-stats {
+    margin-left: 0;
+    width: 100%;
+  }
+  .stat-tile {
+    flex: 1;
+    min-width: 0;
+  }
+  .cockpit-aside {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+  .board {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+  .lane {
+    min-height: 180px;
+  }
+}
+
 /* ── Frameless experiment (SVP_GLASS=frameless) ──────────────────────────
    The OS window is an invisible transparent rectangle; panels float directly
    over the desktop with a fully custom silhouette. No acrylic blur exists in
@@ -1140,7 +1399,7 @@ body.frameless .titlebar {
   padding: 0 8px 0 18px;
   border-radius: 999px;
   border: 1px solid var(--hair);
-  background: rgba(22, 22, 26, 0.92);
+  background: rgba(10, 11, 14, 0.92);
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.45);
 }
 
@@ -1156,7 +1415,20 @@ body.frameless .workspace,
 body.frameless .compact,
 body.frameless .detail {
   border-radius: 40px;
-  background: rgba(22, 22, 26, 0.94);
+  background: rgba(10, 11, 14, 0.94);
+}
+
+/* Frameless workspace doubles as the transparent window's silhouette, so the
+   sheet frame the acrylic mode dropped comes back here. */
+body.frameless .workspace {
+  border: 1px solid var(--hair);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(640px 320px at 10% -4%, rgba(238, 194, 94, 0.055), transparent 70%),
+    radial-gradient(760px 460px at 104% 106%, rgba(85, 179, 255, 0.05), transparent 70%),
+    rgba(10, 11, 14, 0.94);
 }
 
 /* ---- login view (v3: 서버가 role을 판정) ---- */
@@ -1167,12 +1439,26 @@ body.frameless .detail {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: rgba(22, 22, 26, 0.94);
+  /* The gate is the star's stage: a warm lamplight halo above, a cold blue bloom
+     below — the same two light sources that give the workspace its atmosphere. */
+  background:
+    radial-gradient(520px 340px at 50% 30%, rgba(238, 194, 94, 0.075), transparent 72%),
+    radial-gradient(680px 420px at 50% 118%, rgba(85, 179, 255, 0.06), transparent 70%),
+    rgba(10, 11, 14, 0.94);
   border-radius: 24px;
 }
+.login .brand-star {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 20px rgba(238, 194, 94, 0.4));
+  animation: breathe 5s ease-in-out infinite;
+}
 .login-title {
-  font-size: 22px;
-  margin: 6px 0 0;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.5px;
+  margin: 8px 0 0;
 }
 .login-sub {
   font-size: 12px;
@@ -1195,14 +1481,14 @@ body.frameless .detail {
 }
 .login-input:focus {
   outline: none;
-  border-color: rgba(255, 214, 90, 0.6);
+  border-color: rgba(85, 179, 255, 0.6);
 }
 .login-btn {
   margin-top: 4px;
 }
 .login-error {
   font-size: 12px;
-  color: #ff8a8a;
+  color: var(--vermilion);
   text-align: center;
 }
 .user-label {
@@ -1211,4 +1497,191 @@ body.frameless .detail {
   gap: 6px;
   font-size: 12px;
   opacity: 0.85;
+}
+
+/* ── Physical key caps (DESIGN.md §4) — gradient + multi-layer press shadow.
+   Shared by the header ⌘K affordance and the palette footer hints. ── */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--paper);
+  border-radius: 5px;
+  background: linear-gradient(#121212, #0d0d0d);
+  box-shadow:
+    rgba(0, 0, 0, 0.4) 0 1.5px 0.5px 0,
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Header affordance that opens the palette — a quiet pair of key caps. */
+.cmdk-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.cmdk-open:hover {
+  opacity: 0.6;
+}
+
+/* ── Command palette (⌘K / Ctrl+K) — keyboard-first overlay (W4) ── */
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: rgba(5, 6, 8, 0.5);
+  backdrop-filter: blur(3px);
+  animation: cmdkFade 0.15s ease both;
+}
+
+.cmdk {
+  width: min(560px, 92vw);
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--glass);
+  border: 1px solid var(--hair);
+  /* Level 5 floating (DESIGN.md §6) — heavy depth + faint glow ring + inset top */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 40px 90px rgba(0, 0, 0, 0.65),
+    0 0 24px rgba(255, 255, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(36px) saturate(1.3);
+  animation: cmdkIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cmdkFade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes cmdkIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+.cmdk-input {
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--lamplight);
+  letter-spacing: 0.2px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--hair-faint);
+  padding: 18px 22px;
+  outline: none;
+}
+
+.cmdk-input::placeholder {
+  color: var(--dust);
+}
+
+.cmdk-list {
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cmdk-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cmdk-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+}
+
+.cmdk-group {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(154, 156, 157, 0.6);
+  padding: 10px 12px 4px;
+}
+
+.cmdk-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--lamplight);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+
+.cmdk-item.active {
+  background: rgba(85, 179, 255, 0.09);
+  box-shadow:
+    0 0 0 1px rgba(85, 179, 255, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.cmdk-item-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmdk-item-hint,
+.cmdk-item-meta {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--dust);
+  white-space: nowrap;
+}
+
+.cmdk-empty {
+  padding: 22px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--dust);
+}
+
+.cmdk-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--hair-faint);
+  font-size: 11px;
+  color: var(--dust);
+}
+
+.cmdk-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }

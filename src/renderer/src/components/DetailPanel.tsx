@@ -30,10 +30,26 @@ export default function DetailPanel({ issue, onClose, onAck }: Props) {
         </button>
       </div>
 
+      {/* Primary CTA promoted to the top of the panel — the sheriff's one action
+          (배정 확인) is the highest-hierarchy element, not buried at the bottom. */}
+      <div className="detail-cta">
+        {status === 'acknowledged' && (
+          <span className="ack-label">진행 중 — 해결은 Jira에서 Done 처리</span>
+        )}
+        {status === 'resolved' && (
+          <span className="resolved-label">✓ 해결됨 · case-log.md에 기록됨</span>
+        )}
+        {status !== 'resolved' && (
+          <button className="btn btn-primary detail-goto" onClick={checkTicket}>
+            티켓 확인 ↗
+          </button>
+        )}
+      </div>
+
       <div className="detail-body">
         <h2 className="detail-title">{event.title}</h2>
 
-        <div className="detail-star">
+        <div className="detail-star hero">
           <span className={`star-badge ${confClass}`}>
             <span className="star-num">{classification.confidence}</span>
           </span>
@@ -70,16 +86,6 @@ export default function DetailPanel({ issue, onClose, onAck }: Props) {
         <div className="detail-section detail-meta">
           {event.module} · {event.branch} · {formatIssueTime(event.timestamp)}
         </div>
-      </div>
-
-      <div className="detail-actions">
-        {status === 'acknowledged' && <span className="ack-label">진행 중 — 해결은 Jira에서 Done 처리</span>}
-        {status === 'resolved' && <span className="resolved-label">✓ 해결됨 · case-log.md에 기록됨</span>}
-        {status !== 'resolved' && (
-          <button className="btn btn-primary detail-goto" onClick={checkTicket}>
-            티켓 확인 ↗
-          </button>
-        )}
       </div>
     </aside>
   )
