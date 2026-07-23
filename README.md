@@ -131,4 +131,5 @@ npm run dev          # 5. (터미널 2) 스모크 테스트 →
 - [docs/API.md](./docs/API.md) — 클라이언트↔서버 WS·Jira REST·LLM 계약 명세
 - [docs/BACKEND.md](./docs/BACKEND.md) — 백엔드 핵심 기능(F1~F8) 명세와 완료 기준
 - [docs/DEMO-SCENARIO.md](./docs/DEMO-SCENARIO.md) — 데모 시나리오 (15분, 4장면)
+- [docs/ROI.md](./docs/ROI.md) — 도입 효과 추정 (사내 실측 기반: 일 294건 × triage 20~30분 vs 당번 3~4시간)
 - [wiki-vault/](./wiki-vault/) — LLM-WIKI (Obsidian으로 열 수 있음)
