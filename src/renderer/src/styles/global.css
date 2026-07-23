@@ -233,13 +233,11 @@ select:focus-visible {
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 10px; /* thin acrylic halo — the sheet reads as the whole window */
 }
 
 /* Shared glass panel material. Inside a sheet there are no boxed groups —
    sections are separated by hairlines and shifts in glass tone only.
    The detail panel is the single detached floating element (reference look). */
-.workspace,
 .compact,
 .detail {
   border-radius: 32px;
@@ -252,8 +250,11 @@ select:focus-visible {
   backdrop-filter: blur(28px) saturate(1.25);
 }
 
-/* One sheet holding the title bar + sidebar + ledger.
-   Two faint light sources give the obsidian sheet its atmosphere: a warm
+/* The dashboard has no outer sheet — it bleeds edge-to-edge and the canvas
+   itself is the surface. Cockpit, lanes, and the detail panel are the only
+   framed glass elements. Frameless mode restores a rounded silhouette because
+   there the surface doubles as the transparent window's shape (override below).
+   Two faint light sources give the obsidian canvas its atmosphere: a warm
    lamplight halo top-left (home of the brass star) and a cold blue bloom
    bottom-right. Barely-there on purpose. */
 .workspace {
@@ -266,6 +267,7 @@ select:focus-visible {
     radial-gradient(640px 320px at 10% -4%, rgba(238, 194, 94, 0.055), transparent 70%),
     radial-gradient(760px 460px at 104% 106%, rgba(85, 179, 255, 0.05), transparent 70%),
     var(--glass);
+  backdrop-filter: blur(28px) saturate(1.25);
 }
 
 /* ── Reusable atoms (shared by the cockpit deck + compact member view) ── */
@@ -1414,6 +1416,19 @@ body.frameless .compact,
 body.frameless .detail {
   border-radius: 40px;
   background: rgba(10, 11, 14, 0.94);
+}
+
+/* Frameless workspace doubles as the transparent window's silhouette, so the
+   sheet frame the acrylic mode dropped comes back here. */
+body.frameless .workspace {
+  border: 1px solid var(--hair);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(640px 320px at 10% -4%, rgba(238, 194, 94, 0.055), transparent 70%),
+    radial-gradient(760px 460px at 104% 106%, rgba(85, 179, 255, 0.05), transparent 70%),
+    rgba(10, 11, 14, 0.94);
 }
 
 /* ---- login view (v3: 서버가 role을 판정) ---- */
