@@ -135,7 +135,7 @@ function assigneeOf(t) {
 // sync loop would overwrite the real confidence/summary with the placeholder.
 function routeByAssignee(event, assignee, key) {
   const human = assignee && assignee !== BOT
-  if (human) knownMembers.add(assignee)
+  if (human) addMember(assignee)
   const llm = llmResults.get(key)
   return {
     classification: llm ?? {
@@ -240,6 +240,15 @@ function roster() {
   ]
 }
 
+// 새 팀원이 나타나면(로그인·신규 assignee) 접속 중인 모든 세션에 roster를
+// 다시 내려준다 — 없으면 당번의 재배정 후보 목록이 로그인 시점 스냅샷에
+// 갇힌다 (F4: 팀원이 나중에 로그인하면 드롭다운에 안 보이는 문제).
+function addMember(id) {
+  if (!id || knownMembers.has(id)) return
+  knownMembers.add(id)
+  for (const [, s] of sessions) s.socket.emit('session', { user: s.socket.data.user, team: roster() })
+}
+
 function recipientsOf(issue, extra = []) {
   const ids = new Set(extra)
   ids.add(issue.assignment.assigneeId)
@@ -255,7 +264,7 @@ function emitIssue(type, issue, extra = []) {
 
 io.on('connection', (socket) => {
   const user = socket.data.user
-  if (user.role === 'member') knownMembers.add(user.userId)
+  if (user.role === 'member') addMember(user.userId)
   sessions.get(user.userId)?.socket.disconnect(true)
   sessions.set(user.userId, { socket, role: user.role })
 
@@ -284,6 +293,36 @@ io.on('connection', (socket) => {
       void poll()
     } catch (err) {
       console.error(`[svp-server] ack transition failed: ${err.message}`)
+    }
+  })
+
+  // F4 — C→S: 당번 수동 재배정 (human-in-the-loop의 손). 로컬 상태는 바꾸지
+  // 않고 Jira assignee만 갱신한다 — 변경은 폴링이 읽어 routeByAssignee를 거쳐
+  // 기존/신규 담당자 양쪽에 issue:updated로 push된다 (sync 루프의 기존 경로).
+  socket.on('issue:reassign', async (payload) => {
+    if (user.role !== 'sheriff') return
+    const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
+    const target = String(payload?.assigneeId ?? '').trim()
+    if (!issue || issue.status === 'resolved' || !target) return
+    const key = issue.event.jira.key
+    if (!canWrite(key)) {
+      console.log(
+        `[svp-server] [${WRITE_MODE}] reassign from ${user.userId}: would set ${key} assignee → ${target} — Jira 변경 안 함`
+      )
+      return
+    }
+    try {
+      // Assignee first — 댓글은 실제 배정이 성공했을 때만 (auto-assign과 동일 원칙).
+      await setAssignee(key, target)
+      console.log(`[svp-server] reassign from ${user.userId}: ${key} assignee → ${target}`)
+      try {
+        await postComment(key, `🤠 [Sheriff Avatar] 당번(${user.userId})이 ${target}에게 재배정했습니다.`)
+      } catch (err) {
+        console.error(`[svp-server] reassign comment failed for ${key}: ${err.message}`) // 배정은 성공 — 계속
+      }
+      void poll()
+    } catch (err) {
+      console.error(`[svp-server] reassign failed for ${key}: ${err.message}`)
     }
   })
 

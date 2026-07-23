@@ -36,4 +36,6 @@ export interface PushListener {
   dispose(): void
   /** C→S: the assignee checked the ticket — the server transitions it in Jira. */
   ackIssue(issueId: string): void
+  /** F4 — 당번 수동 재배정. 서버가 Jira assignee를 갱신하고 폴링으로 되돌아온다. */
+  reassignIssue(issueId: string, assigneeId: string): void
 }
