@@ -8,4 +8,4 @@ dist/
 .env.local
 server/issue-cache.json
 .claude/*
-!.claude/skills/
+.tool/*
