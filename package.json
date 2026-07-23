@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
-    "dev:acrylic": "set SVP_GLASS=acrylic&& electron-vite dev",
+    "dev:frameless": "set SVP_GLASS=frameless&& electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist": "electron-vite build && electron-builder --win",
