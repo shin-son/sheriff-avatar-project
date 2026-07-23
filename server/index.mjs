@@ -278,6 +278,36 @@ io.on('connection', (socket) => {
     }
   })
 
+  // F4 — C→S: 당번 수동 재배정 (human-in-the-loop의 손). 로컬 상태는 바꾸지
+  // 않고 Jira assignee만 갱신한다 — 변경은 폴링이 읽어 routeByAssignee를 거쳐
+  // 기존/신규 담당자 양쪽에 issue:updated로 push된다 (sync 루프의 기존 경로).
+  socket.on('issue:reassign', async (payload) => {
+    if (user.role !== 'sheriff') return
+    const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
+    const target = String(payload?.assigneeId ?? '').trim()
+    if (!issue || issue.status === 'resolved' || !target) return
+    const key = issue.event.jira.key
+    if (!canWrite(key)) {
+      console.log(
+        `[svp-server] [${WRITE_MODE}] reassign from ${user.userId}: would set ${key} assignee → ${target} — Jira 변경 안 함`
+      )
+      return
+    }
+    try {
+      // Assignee first — 댓글은 실제 배정이 성공했을 때만 (auto-assign과 동일 원칙).
+      await setAssignee(key, target)
+      console.log(`[svp-server] reassign from ${user.userId}: ${key} assignee → ${target}`)
+      try {
+        await postComment(key, `🤠 [Sheriff Avatar] 당번(${user.userId})이 ${target}에게 재배정했습니다.`)
+      } catch (err) {
+        console.error(`[svp-server] reassign comment failed for ${key}: ${err.message}`) // 배정은 성공 — 계속
+      }
+      void poll()
+    } catch (err) {
+      console.error(`[svp-server] reassign failed for ${key}: ${err.message}`)
+    }
+  })
+
   socket.on('disconnect', () => {
     if (sessions.get(user.userId)?.socket === socket) sessions.delete(user.userId)
     console.log(`[svp-server] ${user.userId} disconnected`)
