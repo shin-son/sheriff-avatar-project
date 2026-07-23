@@ -21,6 +21,7 @@ import { Server } from 'socket.io'
 import { loadIssueCache, saveIssueCache } from './cache.mjs'
 import { classifierEnabled, classify } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
+import { fetchFailureLogViaSkill } from './ci-test-fetch.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
@@ -328,14 +329,17 @@ async function poll() {
         event.log = cached.log
         event.url = cached.url
       } else {
-        // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
-        // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
-        // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
+        // Jenkins 실패 로그 보강 — description에는 로그가 없다. 1차: fetch-ci-log
+        // 스킬(fetch_ci_test.py + 양식 재조합). 실패 시 기존 jenkins.mjs 직통
+        // (TEST 링크에서 실패 샤드 콘솔 추적)으로 폴백, 그마저 실패(다운·
+        // 타임아웃·링크 없음)면 description 로그 그대로 진행.
         // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
         // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
         const buildUrl = extractBuildUrl(event.log)
         const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
-        const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
+        const jenkins = buildUrl
+          ? ((await fetchFailureLogViaSkill(buildUrl, tc)) ?? (await fetchFailureLog(buildUrl, tc)))
+          : null
         if (jenkins) {
           event.log = `${event.log}\n\n${jenkins.log}`
           event.url = jenkins.url
