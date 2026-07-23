@@ -9,6 +9,8 @@ declare global {
       login(username: string, password: string): Promise<{ ok: boolean; error?: string }>
       /** "티켓 확인" — 상태는 서버가 Jira 전이 후 폴링으로 확정해 issue:updated로 돌아온다. */
       ackIssue(id: string): void
+      /** F4 당번 수동 재배정 — 서버가 Jira assignee 갱신, 결과는 폴링으로 양쪽에 push된다. */
+      reassignIssue(id: string, assigneeId: string): void
       onIssueNew(cb: (issue: SheriffIssue) => void): () => void
       onIssueUpdated(cb: (issue: SheriffIssue) => void): () => void
       /** Whole-state invalidation (e.g. hub welcome snapshot) — re-fetch via getState(). */

@@ -815,6 +815,33 @@ select:focus-visible {
   color: var(--dust);
 }
 
+/* F4 — 당번 수동 재배정 컨트롤 */
+.reassign-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.reassign-select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--lamplight);
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  padding: 7px 12px;
+}
+
+.reassign-select:focus {
+  outline: none;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .detail-actions {
   display: flex;
   flex-direction: column;

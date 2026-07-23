@@ -244,6 +244,11 @@ app.whenReady().then(() => {
     pushListener?.ackIssue(issueId)
   })
 
+  // F4 — 당번 수동 재배정. 상태는 서버가 Jira assignee 갱신 후 폴링으로 확정.
+  ipcMain.on('issue:reassign', (_e, issueId: string, assigneeId: string) => {
+    pushListener?.reassignIssue(issueId, assigneeId)
+  })
+
   ipcMain.handle('notify:setMuted', (_e, muted: boolean): boolean => {
     setNotificationsMuted(muted)
     return notificationsMuted
