@@ -15,7 +15,10 @@
 //   (+ NODE_EXTRA_CA_CERTS in the shell for corporate TLS)
 // Usage: npm run server  (port 8793)
 import 'dotenv/config'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Server } from 'socket.io'
+import { loadIssueCache, saveIssueCache } from './cache.mjs'
 import { classifierEnabled, classify } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
@@ -35,6 +38,9 @@ const CONFIDENCE_MIN = Number(process.env.SVP_LLM_CONFIDENCE_MIN ?? 80)
 //   dry-run(기본) → 로그만 | label → SVP_TEST_LABEL 붙은 티켓만 | live → 전면 허용
 const WRITE_MODE = process.env.SVP_JIRA_WRITE_MODE ?? 'dry-run'
 const TEST_LABEL = process.env.SVP_TEST_LABEL ?? 'svp-test'
+// 설정 시 신규 티켓의 수집 로그(event.log: description + Jenkins 구간)를
+// <dir>/<티켓키>.log로 저장 — ingest 전 수집 데이터 검증용. 기본 꺼짐.
+const DUMP_DIR = process.env.SVP_DEBUG_DUMP_DIR
 
 // Demo auth until SVP-5: admin/admin → sheriff; any username with
 // password === username → member (e.g. shin.son / shin.son).
@@ -55,8 +61,11 @@ const STATUS_BY_CATEGORY = { new: 'new', indeterminate: 'acknowledged', done: 'r
 
 /** key → SheriffIssue (the server owns the issue store in v3). */
 const issues = new Map()
+/** key → { receivedAt, log, url, classification? } — 초도분석 1회 보장 (disk-backed, cache.mjs). */
+const issueCache = loadIssueCache()
 /** key → LLM Classification — survives sync-loop re-routing (routeByAssignee consults it). */
 const llmResults = new Map()
+for (const [key, entry] of issueCache) if (entry.classification) llmResults.set(key, entry.classification)
 /** key → Jira labels (server-internal; the app contract doesn't carry labels). */
 const ticketLabels = new Map()
 
@@ -67,6 +76,21 @@ function canWrite(key) {
 }
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
+
+// 실티켓 description은 HTML로 온다 (사내 실측: <h2>헤드라인</h2><ul><li>key : value</li>...).
+// 블록 태그를 줄바꿈으로 바꾸고 태그를 걷어내 줄 단위 계약 파싱이 동작하게 한다.
+// plain text에는 매칭될 태그가 없어 그대로 통과 — 두 형식 모두 처리된다.
+function htmlToText(s) {
+  return s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(h\d|li|ul|ol|p|div|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;|&quot;/g, "'")
+}
 
 // Real corporate description contract (SVP-6) — ` : `-separated key-value lines:
 //   [DEV_CICD][<project>][T<seq>] : <TC명> Failed   ← first line (= summary)
@@ -81,8 +105,9 @@ const STEP_TO_TYPE = {
 }
 
 function normalize(t) {
+  const text = htmlToText(t.fields.description ?? '')
   const fields = {}
-  for (const line of (t.fields.description ?? '').split('\n')) {
+  for (const line of text.split('\n')) {
     const sep = line.indexOf(' : ')
     if (sep > 0) fields[line.slice(0, sep).trim()] = line.slice(sep + 3).trim()
   }
@@ -92,7 +117,7 @@ function normalize(t) {
     title: t.fields.summary,
     module: 'unknown', // description에 모듈 정보 없음 — LLM 분류가 결정
     branch: fields['CICD Project'] ?? '',
-    log: t.fields.description ?? '',
+    log: text,
     url: fields['CICD'] ?? `${JIRA}/browse/${t.key}`,
     timestamp: t.fields.created,
     source: 'jira',
@@ -152,6 +177,11 @@ async function classifyAndAct(key) {
     wikiRefs
   }
   llmResults.set(key, classification)
+  const cached = issueCache.get(key)
+  if (cached) {
+    cached.classification = classification // restart-proof: never re-classify this ticket
+    saveIssueCache(issueCache)
+  }
   issue.classification = classification
   emitIssue('issue:updated', issue) // ≤80이어도 당번 화면에 LLM 판단 근거가 보인다
 
@@ -291,26 +321,49 @@ async function poll() {
       ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
       const event = normalize(t)
-      // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
-      // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
-      // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
-      const buildUrl = extractBuildUrl(t.fields.description)
-      const tc = (t.fields.description ?? '').match(/TC name or file\s*:\s*(\S+)/)?.[1]
-      const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
-      if (jenkins) {
-        event.log = `${event.log}\n\n${jenkins.log}`
-        event.url = jenkins.url
-        console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
+      const cached = issueCache.get(t.key)
+      if (cached) {
+        // 초도분석이 이미 끝난 티켓(재시작 복원) — Jenkins 재수집 없이 캐시의
+        // 보강 로그를 그대로 쓴다. 분류도 llmResults 복원으로 건너뛴다.
+        event.log = cached.log
+        event.url = cached.url
+      } else {
+        // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
+        // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
+        // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
+        // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
+        // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
+        const buildUrl = extractBuildUrl(event.log)
+        const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
+        const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
+        if (jenkins) {
+          event.log = `${event.log}\n\n${jenkins.log}`
+          event.url = jenkins.url
+          console.log(`[svp-server] jenkins log for ${t.key}: ${jenkins.log.length} chars from ${jenkins.url}`)
+        }
+        if (DUMP_DIR) {
+          try {
+            mkdirSync(DUMP_DIR, { recursive: true })
+            writeFileSync(join(DUMP_DIR, `${t.key}.log`), event.log)
+          } catch (err) {
+            console.error(`[svp-server] debug dump failed for ${t.key}: ${err.message}`)
+          }
+        }
       }
       const issue = {
         event,
         ...routeByAssignee(event, assigneeOf(t), t.key),
         status: STATUS_BY_CATEGORY[t.fields.status.statusCategory.key] ?? 'new',
-        receivedAt: new Date().toISOString()
+        receivedAt: cached?.receivedAt ?? new Date().toISOString()
       }
       issues.set(t.key, issue)
-      console.log(`[svp-server] new ${t.key} assignee=${assigneeOf(t) ?? '-'} → ${issue.assignment.assigneeId}`)
-      emitIssue('issue:new', issue)
+      if (!cached) {
+        issueCache.set(t.key, { receivedAt: issue.receivedAt, log: event.log, url: event.url })
+        saveIssueCache(issueCache)
+      }
+      console.log(`[svp-server] ${cached ? 'restored' : 'new'} ${t.key} assignee=${assigneeOf(t) ?? '-'} → ${issue.assignment.assigneeId}`)
+      // Restored issues re-enter the clients' lists but must not re-toast.
+      emitIssue('issue:new', cached ? { ...issue, restored: true } : issue)
       // Classify only bot-assigned open tickets. Human-assigned tickets skip it,
       // which also makes restarts idempotent: an already-auto-assigned ticket
       // re-ingests with its human assignee and never gets a second comment.
@@ -346,8 +399,11 @@ async function poll() {
         // The previous holder also gets the update so their list drops/updates it.
         emitIssue('issue:updated', issue, assigneeChanged ? [before] : [])
         // F7: on entering `resolved`, freeze evidence into the vault (once per key).
-        if (statusChanged && status === 'resolved' && !alreadyIngested(t.key)) {
-          void ingestResolved(issue) // fire-and-forget — never block the poll loop
+        if (statusChanged && status === 'resolved') {
+          if (issueCache.delete(t.key)) saveIssueCache(issueCache) // 종결 — 캐시 정리
+          if (!alreadyIngested(t.key)) {
+            void ingestResolved(issue) // fire-and-forget — never block the poll loop
+          }
         }
       }
     }
@@ -362,6 +418,8 @@ async function poll() {
 
 console.log(`[svp-server] v3 server listening on :${PORT}`)
 console.log(`[svp-server] jira=${JIRA} bot=${BOT} jql=${BASE_JQL}`)
+if (issueCache.size > 0)
+  console.log(`[svp-server] issue-cache: ${issueCache.size} ticket(s) — 초도분석 완료분은 재수집·재분류 없이 복원`)
 console.log(
   `[svp-server] classifier: ${classifierEnabled() ? `on (>${CONFIDENCE_MIN} → auto-assign)` : 'off — LLM 자격증명 없음, 티켓은 당번 큐에 유지'}`
 )
@@ -375,7 +433,7 @@ console.log(
   }`
 )
 console.log(
-  `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}`
+  `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}${DUMP_DIR ? `\n[svp-server] debug-dump: ${DUMP_DIR} — 신규 티켓 수집 로그 저장` : ''}`
 )
 void poll()
 setInterval(() => void poll(), POLL_MS)

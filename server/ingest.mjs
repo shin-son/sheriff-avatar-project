@@ -148,6 +148,9 @@ function appendLog(op, detail) {
 function listNoteFiles(dir) {
   const out = []
   for (const name of readdirSync(dir)) {
+    // 숨김 폴더 제외: 사내 vault에는 .obsidian/, .claude/(스킬) 등이 함께 있다 —
+    // index.md 카탈로그에 스킬·설정 파일이 노트로 등재되면 안 된다.
+    if (name.startsWith('.')) continue
     const full = join(dir, name)
     if (statSync(full).isDirectory()) {
       if (name !== 'raw') out.push(...listNoteFiles(full))

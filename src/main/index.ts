@@ -163,14 +163,16 @@ function setWsStatus(status: WsStatus): void {
 
 // Upsert an issue pushed by the server into local state: the renderer
 // re-renders via issue:new / issue:updated, and relevant issues pop a toast.
-// The login replay burst stays quiet — those are restored, not new.
+// The login replay burst and server-restart re-pushes (issue.restored) stay
+// quiet — those are restored, not new.
 function applyPushedIssue(issue: SheriffIssue): void {
   const idx = issues.findIndex((i) => i.event.id === issue.event.id)
   if (idx === -1) issues.unshift(issue)
   else issues[idx] = issue
   mainWindow?.webContents.send(idx === -1 ? 'issue:new' : 'issue:updated', issue)
   const replaying = Date.now() - sessionStartedAt < 3000
-  if (!notificationsMuted && !replaying && isRelevantTo(issue, userConfig)) toasts.show(issue)
+  if (!notificationsMuted && !replaying && !issue.restored && isRelevantTo(issue, userConfig))
+    toasts.show(issue)
 }
 
 // Login = opening the push session. The server authenticates the credentials,

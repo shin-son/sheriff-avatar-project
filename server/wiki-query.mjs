@@ -16,6 +16,9 @@ const INFRA_FILES = new Set(['README.md', 'index.md', 'log.md'])
 function listMarkdownFiles(dir) {
   const out = []
   for (const name of readdirSync(dir)) {
+    // 숨김 폴더 제외: 사내 vault에는 .obsidian/, .claude/(스킬) 등이 함께 있다 —
+    // 스킬 지침·설정 파일이 wiki 노트로 검색되어 분류 프롬프트에 섞이면 안 된다.
+    if (name.startsWith('.')) continue
     const full = join(dir, name)
     if (statSync(full).isDirectory()) {
       if (name !== 'raw') out.push(...listMarkdownFiles(full))
