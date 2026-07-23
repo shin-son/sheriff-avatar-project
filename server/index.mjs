@@ -336,7 +336,11 @@ async function poll() {
         // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
         // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
         const buildUrl = extractBuildUrl(event.log)
-        const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
+        // 티켓 TC명은 <os도메인>.<테스트명>.sh|py — 콘솔 마커와 fetch_ci_test.py
+        // 인자는 도메인 접두사 없는 순수 테스트명을 쓴다. 도메인이 없으면 그대로.
+        // ('Link'는 description 렌더링에 따라 다음 헤더가 달라붙는 경우 정리.)
+        const rawTc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
+        const tc = rawTc?.replace(/Link$/, '').replace(/^[^.]+\.(?=.+\.(?:sh|py)$)/, '')
         let jenkins = null
         if (buildUrl && !(await probeBuildUrl(buildUrl))) {
           // 접근 불가 링크 — fetch(스킬·직통)만 건너뛰고 dump·분류는 description
