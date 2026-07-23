@@ -20,7 +20,8 @@ import { join } from 'node:path'
 import { Server } from 'socket.io'
 import { loadIssueCache, saveIssueCache } from './cache.mjs'
 import { classifierEnabled, classify } from './classifier.mjs'
-import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
+import { extractBuildUrl, fetchFailureLog, probeBuildUrl } from './jenkins.mjs'
+import { fetchRawLogViaTool, formatLogViaSkill } from './ci-test-fetch.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
@@ -328,14 +329,32 @@ async function poll() {
         event.log = cached.log
         event.url = cached.url
       } else {
-        // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
-        // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
-        // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.
+        // Jenkins 실패 로그 보강 — description에는 로그가 없다. 확보는 1차
+        // fetch_ci_test.py 직접 실행, 실패 시 기존 jenkins.mjs 직통(TEST 링크
+        // 에서 실패 샤드 콘솔 추적) 폴백, 그마저 실패(다운·타임아웃·링크 없음)
+        // 면 description 로그 그대로 진행. 확보된 로그는 format-ci-log 스킬로
+        // 양식화하되 실패하면 raw 그대로 쓴다.
         // event.log = HTML을 걷어낸 description — 링크·TC명 추출도 여기서 한다
         // (raw HTML에서 하면 </li> 등이 TC명에 달라붙는다).
         const buildUrl = extractBuildUrl(event.log)
-        const tc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
-        const jenkins = buildUrl ? await fetchFailureLog(buildUrl, tc) : null
+        // 티켓 TC명은 <os도메인>.<테스트명>.sh|py — 콘솔 마커와 fetch_ci_test.py
+        // 인자는 도메인 접두사 없는 순수 테스트명을 쓴다. 도메인이 없으면 그대로.
+        // ('Link'는 description 렌더링에 따라 다음 헤더가 달라붙는 경우 정리.)
+        const rawTc = event.log.match(/TC name or file\s*:\s*(\S+)/)?.[1]
+        const tc = rawTc?.replace(/Link$/, '').replace(/^[^.]+\.(?=.+\.(?:sh|py)$)/, '')
+        let jenkins = null
+        if (buildUrl && !(await probeBuildUrl(buildUrl))) {
+          // 접근 불가 링크 — fetch(스킬·직통)만 건너뛰고 dump·분류는 description
+          // 로그로 그대로 진행. 무효 URL 흔적은 dump에도 남도록 log에 기록한다.
+          event.log = `${event.log}\n\n[jenkins] unreachable build url: ${buildUrl}`
+          console.log(`[svp-server] jenkins build url unreachable for ${t.key}: ${buildUrl}`)
+        } else if (buildUrl) {
+          const raw = await fetchRawLogViaTool(buildUrl, tc)
+          jenkins = raw
+            ? { url: buildUrl, log: `[ci-test tool] ${buildUrl}\n${raw}` }
+            : await fetchFailureLog(buildUrl, tc)
+          if (jenkins) jenkins = { ...jenkins, log: (await formatLogViaSkill(jenkins.log)) ?? jenkins.log }
+        }
         if (jenkins) {
           event.log = `${event.log}\n\n${jenkins.log}`
           event.url = jenkins.url

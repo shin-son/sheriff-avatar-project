@@ -7,4 +7,5 @@ dist/
 .env
 .env.local
 server/issue-cache.json
-.claude/
+.claude/*
+.tool/*
