@@ -82,14 +82,15 @@ async function jenkinsGet(url) {
 }
 
 /**
- * true if the build URL answers HTTP at all (any status) — 접근 불가(호스트
- * 다운·타임아웃·차단망)만 false. 404/500도 '접근 가능'이다: 그 처리(폴백)는
- * fetch 로직이 맡는다. 죽은 링크에 스킬/콘솔 fetch를 태우지 않기 위한 사전 점검.
+ * true if the build URL answers HTTP with a non-5xx status. false = 접근 불가:
+ * 네트워크 실패(호스트 다운·타임아웃) 또는 5xx — 사내 게이트웨이는 죽은 내부
+ * 호스트(No route to host) 대신 502를 응답하므로 5xx도 걸러야 한다. 4xx는
+ * '접근 가능'(빌드 로테이션 404 등은 fetch 폴백이 처리). 죽은 링크에 스킬/
+ * 콘솔 fetch를 태우지 않기 위한 사전 점검.
  */
 export async function probeBuildUrl(buildUrl) {
   try {
-    await jenkinsGet(buildUrl)
-    return true
+    return (await jenkinsGet(buildUrl)).status < 500
   } catch {
     return false
   }
