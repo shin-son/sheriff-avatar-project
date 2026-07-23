@@ -22,6 +22,7 @@ import { classifierEnabled, classify } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
+import { normalize } from './ticket.mjs'
 import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
@@ -72,54 +73,6 @@ function canWrite(key) {
 }
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
-
-// 실티켓 description은 HTML로 온다 (사내 실측: <h2>헤드라인</h2><ul><li>key : value</li>...).
-// 블록 태그를 줄바꿈으로 바꾸고 태그를 걷어내 줄 단위 계약 파싱이 동작하게 한다.
-// plain text에는 매칭될 태그가 없어 그대로 통과 — 두 형식 모두 처리된다.
-function htmlToText(s) {
-  return s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(h\d|li|ul|ol|p|div|tr)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#39;|&quot;/g, "'")
-}
-
-// Real corporate description contract (SVP-6) — ` : `-separated key-value lines:
-//   [DEV_CICD][<project>][T<seq>] : <TC명> Failed   ← first line (= summary)
-//   CICD Project : ... / Step : TEST / Category : ... / TC name or file : ...
-//   Link / CICD : <대시보드 URL> / TEST : <Jenkins 빌드 URL> / IMAGE·DUMP DIR : ...
-// description에 실패 로그는 없다 — 로그는 poll()의 Jenkins consoleText 보강이 맡는다.
-const STEP_TO_TYPE = {
-  TEST: 'test_failed',
-  BUILD: 'build_failed',
-  DEPLOY: 'deploy_failed',
-  LINT: 'lint_failed'
-}
-
-function normalize(t) {
-  const text = htmlToText(t.fields.description ?? '')
-  const fields = {}
-  for (const line of text.split('\n')) {
-    const sep = line.indexOf(' : ')
-    if (sep > 0) fields[line.slice(0, sep).trim()] = line.slice(sep + 3).trim()
-  }
-  return {
-    id: t.key,
-    type: STEP_TO_TYPE[(fields['Step'] ?? '').toUpperCase()] ?? 'test_failed',
-    title: t.fields.summary,
-    module: 'unknown', // description에 모듈 정보 없음 — LLM 분류가 결정
-    branch: fields['CICD Project'] ?? '',
-    log: text,
-    url: fields['CICD'] ?? `${JIRA}/browse/${t.key}`,
-    timestamp: t.fields.created,
-    source: 'jira',
-    jira: { key: t.key, url: `${JIRA}/browse/${t.key}`, status: t.fields.status.statusCategory.key }
-  }
-}
 
 function assigneeOf(t) {
   return t.fields.assignee?.name ?? t.fields.assignee?.key ?? null
@@ -350,7 +303,7 @@ async function poll() {
     for (const t of await search(`(${BASE_JQL}) ORDER BY created ASC`)) {
       ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
-      const event = normalize(t)
+      const event = normalize(t, JIRA)
       // Jenkins 실패 로그 보강 — description에는 로그가 없다. 티켓의 TEST 링크
       // (CI_MAIN_JOB)에서 실패 샤드(CI_TEST) 콘솔까지 따라가 가져온다. 실패
       // (다운·타임아웃·링크 없음) 시 description 로그 그대로 진행.

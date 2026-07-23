@@ -113,7 +113,7 @@ function escapeRe(s) {
  * 다음 [ENABLE] 마커 직전(최대 TAIL_CHARS)까지. 티켓의 TC명에는 `linux.` 같은
  * 도메인 접두사가 붙지만 콘솔 마커에는 없다 — 접두사 제거 변형도 시도.
  */
-function tcSectionIn(text, tc) {
+export function tcSectionIn(text, tc) {
   if (!tc) return null
   const base = tc.replace(/Link$/, '') // description 렌더링에 따라 'Link' 헤더가 붙어 오는 경우
   for (const name of new Set([base, base.replace(/^[a-z0-9]+\./i, '')])) {
@@ -175,7 +175,7 @@ function sameJob(a, b) {
  * 우선, description이 HTML(<a href>)로 감싸 텍스트 패턴이 깨지는 경우엔 모든
  * /job/ 빌드 URL로 폴백. 자기 자신은 제외.
  */
-function shardLinksIn(text, selfUrl) {
+export function shardLinksIn(text, selfUrl) {
   const named = [...text.matchAll(TEST_RESULT_RE)].map((m) => m[1])
   const urls = named.length > 0 ? named : (text.match(ANY_BUILD_RE) ?? [])
   const self = selfUrl.replace(/\/+$/, '')
