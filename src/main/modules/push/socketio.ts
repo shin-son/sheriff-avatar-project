@@ -11,7 +11,6 @@ import type { PushCredentials, PushListener, PushListenerHandlers, PushSession }
 const EVENT_SESSION = 'session'
 const EVENT_ISSUE_NEW = 'issue:new'
 const EVENT_ISSUE_UPDATED = 'issue:updated'
-const EVENT_ISSUE_ACK = 'issue:ack'
 const EVENT_ISSUE_REASSIGN = 'issue:reassign'
 const AUTH_FAILED = 'AUTH_FAILED'
 
@@ -56,10 +55,6 @@ export class SocketIoPushListener implements PushListener {
   dispose(): void {
     this.socket?.disconnect()
     this.socket = null
-  }
-
-  ackIssue(issueId: string): void {
-    this.socket?.emit(EVENT_ISSUE_ACK, { issueId })
   }
 
   reassignIssue(issueId: string, assigneeId: string): void {

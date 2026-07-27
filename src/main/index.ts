@@ -243,14 +243,8 @@ app.whenReady().then(() => {
     }
   })
 
-  // "티켓 확인" — never flips status locally. The server transitions the Jira
-  // ticket; the new status comes back through polling as issue:updated.
-  ipcMain.on('issue:ack', (_e, issueId: string) => {
-    pushListener?.ackIssue(issueId)
-  })
-
   // 수동 배정 (sheriff) — 서버가 Jira assignee를 갱신하고, 변경은 폴링 sync가
-  // issue:updated로 되돌려준다 (ack와 동일하게 로컬 상태는 건드리지 않는다).
+  // issue:updated로 되돌려준다 (로컬 상태는 건드리지 않는다).
   ipcMain.on('issue:reassign', (_e, issueId: string, assigneeId: string) => {
     pushListener?.reassignIssue(issueId, assigneeId)
   })

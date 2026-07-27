@@ -7,8 +7,6 @@ declare global {
       getState(): Promise<AppState>
       /** Demo auth (SVP-5 전까지): 서버가 검증하고 role을 내려준다. */
       login(username: string, password: string): Promise<{ ok: boolean; error?: string }>
-      /** "티켓 확인" — 상태는 서버가 Jira 전이 후 폴링으로 확정해 issue:updated로 돌아온다. */
-      ackIssue(id: string): void
       /** 수동 배정 (sheriff 전용) — 서버가 Jira assignee 갱신, 결과는 폴링 후 issue:updated로 반영 */
       reassignIssue(id: string, assigneeId: string): void
       onIssueNew(cb: (issue: SheriffIssue) => void): () => void

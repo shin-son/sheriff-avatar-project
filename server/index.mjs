@@ -34,7 +34,7 @@ const BASE_JQL = process.env.SVP_JIRA_JQL ?? 'project = CIOPS AND labels = ci-fa
 const POLL_MS = Number(process.env.SVP_SERVER_POLL_MS ?? 5000)
 /** Auto-assign gate — strictly greater (ARCHITECTURE.md: >80 → owner, ≤80 → sheriff). */
 const CONFIDENCE_MIN = Number(process.env.SVP_LLM_CONFIDENCE_MIN ?? 80)
-// Every server-initiated Jira write (auto-assign trio AND app-ack transition)
+// Every server-initiated Jira write (auto-assign trio AND manual reassign)
 // obeys this mode. Safe by default: 테스트 단계에서 실티켓이 바뀌면 안 된다.
 //   dry-run(기본) → 로그만 | label → SVP_TEST_LABEL 붙은 티켓만 | live → 전면 허용
 const WRITE_MODE = process.env.SVP_JIRA_WRITE_MODE ?? 'dry-run'
@@ -290,26 +290,6 @@ io.on('connection', (socket) => {
   )
   visible.forEach((i) => socket.emit('issue:new', i))
   console.log(`[svp-server] ${user.userId} logged in as ${user.role} (${visible.length} issue(s) restored)`)
-
-  // C→S: the assignee checked the ticket — transition it in Jira.
-  // Status flows back via polling, never written locally (Jira = source of truth).
-  socket.on('issue:ack', async (payload) => {
-    const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
-    if (!issue || issue.status !== 'new') return
-    if (!canWrite(issue.event.jira.key)) {
-      console.log(
-        `[svp-server] [${WRITE_MODE}] ack from ${user.userId}: would transition ${issue.event.jira.key} → In Progress — Jira 변경 안 함`
-      )
-      return
-    }
-    try {
-      await transitionTo(issue.event.jira.key, 'In Progress')
-      console.log(`[svp-server] ack from ${user.userId}: ${issue.event.jira.key} → In Progress`)
-      void poll()
-    } catch (err) {
-      console.error(`[svp-server] ack transition failed: ${err.message}`)
-    }
-  })
 
   // C→S: sheriff manually assigns the issue (F4, API.md §1). Jira assignee is
   // the source of truth — write it there and let the tracked-key sync route the

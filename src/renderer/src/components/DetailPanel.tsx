@@ -6,13 +6,12 @@ interface Props {
   issue: SheriffIssue
   team: TeamMember[]
   onClose: () => void
-  onAck: (id: string) => void
   /** 수동 배정 (F4) — 서버가 Jira assignee를 갱신, 반영은 issue:updated로 돌아온다. */
   onReassign: (id: string, assigneeId: string) => void
 }
 
 /** Floating glass panel with the selected issue's detail (reference: detached side card). */
-export default function DetailPanel({ issue, team, onClose, onAck, onReassign }: Props) {
+export default function DetailPanel({ issue, team, onClose, onReassign }: Props) {
   const { event, classification, assignment, status } = issue
   const confClass = classification.confidence > 80 ? 'high' : 'low'
   const [pick, setPick] = useState('')
@@ -28,12 +27,11 @@ export default function DetailPanel({ issue, team, onClose, onAck, onReassign }:
     .filter((m) => m.role === 'member')
     .sort((a, b) => Number(isOwner(b)) - Number(isOwner(a)))
 
-  // "확인" = open the ticket + ack (the server transitions it in Jira).
-  // Status is never written locally — it comes back once the server confirms it in Jira.
+  // "확인" opens the ticket only. In Progress is the assignee's move in Jira —
+  // the poller detects the status change and pushes it back (issue:updated).
   // jira.url is the browse link; event.url may carry the CICD pipeline link instead.
   const checkTicket = () => {
     window.svp.openTicket(event.jira?.url ?? event.url)
-    if (status === 'new') onAck(event.id)
   }
 
   return (

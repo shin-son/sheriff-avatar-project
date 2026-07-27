@@ -16,7 +16,8 @@
 >   `issue:new`로 재생(복원). 재접속은 socket.io-client 내장.
 > - S→C `issue:new` / `issue:updated` — payload는 `SheriffIssue` 그대로 (envelope 없음).
 >   서버 측 필터링: member = 본인 assignee분만, sheriff = 전체.
-> - C→S `issue:ack` `{ issueId }` — 서버가 Jira를 In Progress로 전이. 해결 메시지는 없다 (Done은 Jira에서만).
+> - (2026-07-27 제거) `issue:ack` — "티켓 확인"은 티켓을 브라우저로 열기만 한다. In Progress 전이는
+>   담당자가 Jira에서 직접 하고, 폴링 sync가 status 변화를 감지해 `issue:updated`로 반영한다.
 > - C→S `issue:reassign` `{ issueId, assigneeId }` — sheriff 전용 수동 배정 (F4). 서버가 Jira assignee
 >   갱신 + 배정 댓글을 남기고, 변경은 tracked-key 폴링 sync가 기존/신규 담당자에게 `issue:updated`로
 >   되돌린다 (Jira = source of truth). `SVP_JIRA_WRITE_MODE` 게이트 적용 — dry-run에서는 로그만.
@@ -49,7 +50,7 @@
 | S→C | `server:welcome` | `{ user: UserConfig, team: TeamMember[], issues: SheriffIssue[] }` | 이슈 스냅샷 (재접속 시 상태 복원) — member는 본인 배정분, **v3: sheriff는 전체** |
 | S→C | `issue:assigned` | `{ issue: SheriffIssue }` | 새 이슈 배정 push — member 세션에는 **본인 배정분만**, **v3: sheriff 세션에는 전체** |
 | S→C | `issue:updated` | `{ issue: SheriffIssue }` | 상태 변경·재배정 반영. 재배정으로 자신이 제외되면 `issue.assignment`로 판별해 목록에서 제거 |
-| C→S | `issue:ack` | `{ issueId }` | "티켓 확인" 클릭(티켓 열림과 동시) → 서버가 Jira를 In Progress로 전이. **해결 메시지는 없다** — Done은 Jira에서만 일어나고 서버가 폴링으로 감지한다 |
+| C→S | ~~`issue:ack`~~ | `{ issueId }` | **제거(2026-07-27)** — "티켓 확인"은 티켓을 열기만 한다. In Progress는 담당자가 Jira에서 직접 옮기고 서버가 폴링으로 감지한다. **해결 메시지도 없다** — Done도 Jira에서만 |
 | C→S | `issue:reassign` | `{ issueId, assigneeId }` | **v3 신설, sheriff 전용** — 수동 재배정 (F4). 서버가 Jira assignee 갱신 + 기존/신규 담당자에게 `issue:updated` push. member 세션이 보내면 `server:error(FORBIDDEN)` |
 | C→S | `wiki:lint` | `{}` | **v3 신설, sheriff 전용** — WIKI 점검 실행 요청 (F8). 응답은 `wiki:lint:result` |
 | S→C | `wiki:lint:result` | `{ report: WikiLintReport }` | lint 보고서 — 요청한 sheriff 세션에만 전송 |
