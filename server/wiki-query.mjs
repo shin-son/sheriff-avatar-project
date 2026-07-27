@@ -215,7 +215,7 @@ async function lookupGerritCommitter(filePath) {
     `Reply with EXACTLY ONE JSON object: {"changeId":"<CL number>","owner":"<owner email or username>","name":"<owner display name>"}. ` +
     `If no change is found reply with {"changeId":"","owner":"","name":""}. No prose, no code fences.`
   const { ok, out } = await runClaude(
-    ['-p', prompt, '--allowedTools', `mcp__${MCP}__query_changes`, '--output-format', 'text'],
+    ['-p', prompt, '--allowedTools', `mcp__${MCP}__query_changes,mcp__${MCP}__get_change_details`, '--output-format', 'text'],
     60_000
   )
   if (!ok || !out) return null
