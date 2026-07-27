@@ -14,8 +14,9 @@ export default function DetailPanel({ issue, onClose, onAck }: Props) {
 
   // "확인" = open the ticket + ack (the server transitions it in Jira).
   // Status is never written locally — it comes back once the server confirms it in Jira.
+  // jira.url is the browse link; event.url may carry the CICD pipeline link instead.
   const checkTicket = () => {
-    window.svp.openTicket(event.url)
+    window.svp.openTicket(event.jira?.url ?? event.url)
     if (status === 'new') onAck(event.id)
   }
 
@@ -25,6 +26,7 @@ export default function DetailPanel({ issue, onClose, onAck }: Props) {
         <span className={`row-type ${classification.severity === 'critical' ? 'crit' : ''}`}>
           {TYPE_LABEL[event.type]}
         </span>
+        {event.jira && <span className="ticket-key">{event.jira.key}</span>}
         <button className="detail-close" title="닫기" onClick={onClose}>
           ✕
         </button>

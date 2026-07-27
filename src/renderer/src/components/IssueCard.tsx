@@ -39,6 +39,7 @@ export default function IssueCard({ issue, selected, highlighted, onSelect, inde
             <span className="star-num">{classification.confidence}</span>
           </span>
           <span className="row-type">{TYPE_LABEL[event.type]}</span>
+          {event.jira && <span className="ticket-key">{event.jira.key}</span>}
           <span className="row-time">{formatIssueTime(event.timestamp)}</span>
         </div>
         <div className="row-title">{event.title}</div>

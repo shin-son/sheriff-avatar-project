@@ -150,9 +150,13 @@ export default function App() {
   const q = query.trim().toLowerCase()
   const visible = q
     ? sorted.filter((i) =>
-        [i.event.title, i.event.module, i.event.branch, i.assignment.assigneeName].some((s) =>
-          s.toLowerCase().includes(q)
-        )
+        [
+          i.event.jira?.key ?? '',
+          i.event.title,
+          i.event.module,
+          i.event.branch,
+          i.assignment.assigneeName
+        ].some((s) => s.toLowerCase().includes(q))
       )
     : sorted
   const selected = visible.find((i) => i.event.id === selectedId) ?? null
@@ -186,7 +190,7 @@ export default function App() {
             <input
               className="search"
               type="search"
-              placeholder="검색 — 제목 · 모듈 · 담당"
+              placeholder="검색 — 티켓 번호 · 제목 · 모듈 · 담당"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               spellCheck={false}
