@@ -176,6 +176,88 @@ export async function classify(event, matches, modules) {
   }
 }
 
+/* ── SVP-3 — LLM note selection (drill-down retrieval before classify) ────── */
+
+function selectSchema() {
+  return {
+    type: 'object',
+    properties: {
+      hypothesis: { type: 'string' },
+      files: { type: 'array', items: { type: 'string' }, maxItems: 3 }
+    },
+    required: ['hypothesis', 'files'],
+    additionalProperties: false
+  }
+}
+
+function buildSelectSystem() {
+  const lines = [
+    'You are the retrieval step of Sheriff Avatar, an CI-failure triage agent.',
+    'Read the failure log of a Jira ticket, form a hypothesis about the cause, and pick',
+    'the team wiki notes worth reading for classification.',
+    '',
+    '- "hypothesis": 한국어 1문장 — 로그에서 읽어낸 실패 원인 추정.',
+    '- "files": 이 실패를 다루고 있을 가능성이 있는 노트의 file 경로, 최대 3개.',
+    '  카탈로그에 있는 경로만. 관련 노트가 없다고 판단되면 빈 배열 — 억지로 고르지 마라.'
+  ]
+  if (PROVIDER === 'bedrock-invoke') {
+    lines.push(
+      '',
+      'Respond with EXACTLY ONE JSON object matching this schema — no prose before or after, no code fences:',
+      JSON.stringify(selectSchema())
+    )
+  }
+  return lines.join('\n')
+}
+
+function buildSelectUser(event, catalog) {
+  const rows = catalog.map(
+    (c) => `- ${c.file} | module: ${c.module ?? '-'} | ${c.title}${c.tags ? ` | tags: ${c.tags}` : ''}`
+  )
+  return [
+    '[티켓]',
+    `summary: ${event.title}`,
+    `type: ${event.type}`,
+    'description/로그 발췌:',
+    capLog(event.log, 3000, 1500),
+    '',
+    '[노트 카탈로그]',
+    ...rows,
+    '',
+    '원인을 추정하고 읽을 노트를 골라라.'
+  ].join('\n')
+}
+
+/**
+ * selectNotes(event, catalog) → { hypothesis, files }. Never throws — any
+ * failure returns empty files and the caller proceeds with keyword matches.
+ * Returned files are validated against the catalog (no invented paths).
+ */
+export async function selectNotes(event, catalog) {
+  if (!classifierEnabled() || catalog.length === 0) return { hypothesis: '', files: [] }
+  try {
+    const request = {
+      model: MODEL,
+      max_tokens: 1000,
+      system: buildSelectSystem(),
+      messages: [{ role: 'user', content: buildSelectUser(event, catalog) }]
+    }
+    if (PROVIDER !== 'bedrock-invoke') {
+      request.thinking = { type: 'adaptive' }
+      request.output_config = { format: { type: 'json_schema', schema: selectSchema() } }
+    }
+    const response = await getClient().messages.create(request)
+    const text = response.content.find((b) => b.type === 'text')?.text
+    const parsed = JSON.parse(extractJson(text))
+    const valid = new Set(catalog.map((c) => c.file))
+    const files = (Array.isArray(parsed.files) ? parsed.files : []).filter((f) => valid.has(f)).slice(0, 3)
+    return { hypothesis: String(parsed.hypothesis ?? ''), files }
+  } catch (err) {
+    console.error(`[svp-server] selectNotes failed for ${event.id}: ${err.message}`)
+    return { hypothesis: '', files: [] }
+  }
+}
+
 /* ── F7 (P0b) — resolution summariser for case-log ingest ─────────────────── */
 
 function resolutionSchema() {

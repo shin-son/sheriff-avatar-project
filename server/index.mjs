@@ -19,11 +19,11 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Server } from 'socket.io'
 import { loadIssueCache, saveIssueCache } from './cache.mjs'
-import { classifierEnabled, classify } from './classifier.mjs'
+import { classifierEnabled, classify, selectNotes } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog } from './jenkins.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
-import { listModules, queryWiki, resolveOwner } from './wiki-query.mjs'
+import { listCatalog, listModules, queryWiki, readNotes, resolveOwner } from './wiki-query.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -164,7 +164,15 @@ function routeByAssignee(event, assignee, key) {
 async function classifyAndAct(key) {
   const issue = issues.get(key)
   if (!issue) return
-  const matches = queryWiki(issue.event)
+  // SVP-3 drill-down: LLM이 로그로 원인을 추정하고 카탈로그에서 읽을 노트를
+  // 고른다. 키워드 매칭과 합집합 — 선택이 실패/공집합이면 키워드 결과로 진행.
+  const keywordMatches = queryWiki(issue.event)
+  const picked = await selectNotes(issue.event, listCatalog())
+  if (picked.files.length > 0 || picked.hypothesis) {
+    console.log(`[svp-server] note-select ${key}: [${picked.files.join(', ') || '없음'}] — ${picked.hypothesis}`)
+  }
+  const known = new Set(keywordMatches.map((m) => m.file))
+  const matches = [...keywordMatches, ...readNotes(picked.files.filter((f) => !known.has(f)))]
   const llm = await classify(issue.event, matches, listModules())
   const wikiRefs = llm.evidence
     .map((e) => matches.find((m) => m.file === e) ?? { file: e, title: e, score: 0 })

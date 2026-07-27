@@ -69,6 +69,52 @@ export function resolveOwner(category) {
 }
 
 /**
+ * Catalog of all queryable notes for LLM note selection (SVP-3 drill-down):
+ * one entry per note — file/title/module/tags, no bodies. index.md가 아니라
+ * 파일에서 직접 만든다 (index에는 tags·module이 없고, 갱신 시점에 의존하지 않음).
+ */
+export function listCatalog() {
+  let files = []
+  try {
+    files = listMarkdownFiles(VAULT_DIR)
+  } catch {
+    return []
+  }
+  return files.map((file) => {
+    const content = readFileSync(file, 'utf-8')
+    const fm = parseFrontmatter(content)
+    return {
+      file: relative(VAULT_DIR, file).replaceAll('\\', '/'),
+      title: toTitle(file, content),
+      module: fm.module ?? null,
+      tags: (fm.tags ?? '').replace(/[[\]]/g, '')
+    }
+  })
+}
+
+/** Full match objects for catalog-relative paths; unreadable paths are dropped. */
+export function readNotes(files) {
+  const out = []
+  for (const file of files) {
+    try {
+      const content = readFileSync(join(VAULT_DIR, file), 'utf-8')
+      const fm = parseFrontmatter(content)
+      out.push({
+        file,
+        title: toTitle(file, content),
+        score: 0, // LLM-picked, not keyword-scored
+        body: content,
+        module: fm.module ?? null,
+        owner: fm.owner ?? null
+      })
+    } catch {
+      // stale/invalid path from the selection step — skip
+    }
+  }
+  return out
+}
+
+/**
  * Note-side signals matched against the ticket text: frontmatter tags +
  * identifier-like tokens (≥5 chars) from known-failure headings and symptom
  * lines — the verbatim test names/error strings the vault schema requires
