@@ -193,10 +193,14 @@ async function classifyAndAct(key) {
     console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → 당번 유지`)
     return
   }
+  const reason = `LLM 분류 ${llm.category} (신뢰도 ${llm.confidence}) → ${llm.category} owner ${owner}`
+  const comment = buildComment(issue.event, llm, wikiRefs, `${llm.category} 담당 ${owner} 자동 배정`, reason)
   if (!canWrite(key)) {
     console.log(
       `[svp-server] [${WRITE_MODE}] ${key}: would assign → ${owner} (${llm.category}/${llm.confidence}, +댓글, In Progress) — Jira 변경 안 함`
     )
+    // dry에서도 실제로 달릴 분석 코멘트를 검증할 수 있게 본문을 그대로 남긴다.
+    console.log(`[svp-server] [${WRITE_MODE}] ${key} 코멘트 미리보기:\n${comment}`)
     return
   }
   try {
@@ -207,9 +211,8 @@ async function classifyAndAct(key) {
     return
   }
   console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → assignee=${owner}`)
-  const reason = `LLM 분류 ${llm.category} (신뢰도 ${llm.confidence}) → ${llm.category} owner ${owner}`
   try {
-    await postComment(key, buildComment(issue.event, llm, wikiRefs, `${llm.category} 담당 ${owner} 자동 배정`, reason))
+    await postComment(key, comment)
   } catch (err) {
     console.error(`[svp-server] comment failed for ${key}: ${err.message}`) // 배정은 이미 성공 — 계속
   }
