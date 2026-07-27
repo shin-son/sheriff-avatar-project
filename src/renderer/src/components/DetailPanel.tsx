@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { SheriffIssue, TeamMember } from '@shared/types'
+import type { CandidateAssignee, SheriffIssue, TeamMember } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
 interface Props {
@@ -23,11 +23,23 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
       ? classification.category
       : event.module
   const isOwner = (m: TeamMember) => m.ownedModules.includes(module)
-  // issue.candidates (Gerrit/wiki signal) takes priority over the plain team list.
-  const smartCandidates = issue.candidates ?? []
   const teamCandidates = team
     .filter((m) => m.role === 'member')
     .sort((a, b) => Number(isOwner(b)) - Number(isOwner(a)))
+
+  // 서버가 내려준 candidates(Gerrit 커미터 등 더 강한 신호)를 우선 사용한다.
+  // 없고 confidence ≤ 80(당번 큐)이면 wiki 담당자 신호로 합성해, 서버 데이터와
+  // 무관하게 항상 클릭 가능한 후보 버튼을 보여준다.
+  const smartCandidates: CandidateAssignee[] = issue.candidates?.length
+    ? issue.candidates
+    : classification.confidence <= 80
+      ? teamCandidates.filter(isOwner).map((m) => ({
+          id: m.id,
+          name: m.name,
+          source: 'wiki' as const,
+          reason: `LLM-WIKI ${module} 모듈 담당자`
+        }))
+      : []
 
   // "확인" opens the ticket only. In Progress is the assignee's move in Jira —
   // the poller detects the status change and pushes it back (issue:updated).
@@ -93,7 +105,7 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
         {status !== 'resolved' && (smartCandidates.length > 0 || teamCandidates.length > 0) && (
           <div className="detail-section">
             <div className="detail-label">담당자 배정</div>
-            {smartCandidates.length > 0 && (
+            {smartCandidates.length > 0 ? (
               <div className="candidates-list">
                 {smartCandidates.map((c) => (
                   <button
@@ -107,31 +119,40 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
                     <span className="candidate-reason">{c.reason}</span>
                   </button>
                 ))}
+                <button
+                  className="btn candidate-assign-btn"
+                  disabled={!pick || pick === assignment.assigneeId}
+                  title="Jira assignee를 변경합니다 (dry-run 모드에서는 서버 로그로만 확인)"
+                  onClick={() => onReassign(event.id, pick)}
+                >
+                  선택한 담당자로 배정
+                </button>
+              </div>
+            ) : (
+              <div className="assign-row">
+                <select
+                  className="assign-select"
+                  value={pick}
+                  onChange={(e) => setPick(e.target.value)}
+                >
+                  <option value="">팀원 선택…</option>
+                  {teamCandidates.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                      {isOwner(m) ? ` — ${module} 담당` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="btn"
+                  disabled={!pick || pick === assignment.assigneeId}
+                  title="Jira assignee를 변경합니다 (dry-run 모드에서는 서버 로그로만 확인)"
+                  onClick={() => onReassign(event.id, pick)}
+                >
+                  배정
+                </button>
               </div>
             )}
-            <div className="assign-row">
-              <select
-                className="assign-select"
-                value={pick}
-                onChange={(e) => setPick(e.target.value)}
-              >
-                <option value="">팀원 선택…</option>
-                {teamCandidates.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                    {isOwner(m) ? ` — ${module} 담당` : ''}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn"
-                disabled={!pick || pick === assignment.assigneeId}
-                title="Jira assignee를 변경합니다 (dry-run 모드에서는 서버 로그로만 확인)"
-                onClick={() => onReassign(event.id, pick)}
-              >
-                배정
-              </button>
-            </div>
           </div>
         )}
 

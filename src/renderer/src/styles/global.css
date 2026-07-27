@@ -1085,6 +1085,12 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.candidate-assign-btn {
+  margin-top: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
 .assign-row {
   display: flex;
   gap: 8px;
