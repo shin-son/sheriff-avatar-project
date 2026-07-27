@@ -55,9 +55,13 @@ export default function CommandPalette({
   const matchedIssues = useMemo(() => {
     const list = q
       ? issues.filter((i) =>
-          [i.event.title, i.event.module, i.event.branch, i.assignment.assigneeName].some((s) =>
-            s.toLowerCase().includes(q)
-          )
+          [
+            i.event.jira?.key ?? '',
+            i.event.title,
+            i.event.module,
+            i.event.branch,
+            i.assignment.assigneeName
+          ].some((s) => s.toLowerCase().includes(q))
         )
       : issues
     return list.slice(0, 8)
@@ -107,7 +111,7 @@ export default function CommandPalette({
         <input
           ref={inputRef}
           className="cmdk-input"
-          placeholder="이슈로 이동하거나 명령 실행 — 제목 · 모듈 · 담당"
+          placeholder="이슈로 이동하거나 명령 실행 — 티켓 번호 · 제목 · 모듈 · 담당"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
@@ -139,6 +143,9 @@ export default function CommandPalette({
               >
                 <span className="cmdk-item-label">{issue.event.title}</span>
                 <span className="cmdk-item-meta">
+                  {issue.event.jira && (
+                    <span className="ticket-key">{issue.event.jira.key}</span>
+                  )}{' '}
                   {TYPE_LABEL[issue.event.type]} · {issue.assignment.assigneeName}
                 </span>
               </button>

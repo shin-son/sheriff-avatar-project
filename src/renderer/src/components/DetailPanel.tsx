@@ -25,6 +25,7 @@ export default function DetailPanel({ issue, onClose, onAck }: Props) {
         <span className={`row-type ${classification.severity === 'critical' ? 'crit' : ''}`}>
           {TYPE_LABEL[event.type]}
         </span>
+        {event.jira && <span className="ticket-key">{event.jira.key}</span>}
         <button className="detail-close" title="닫기" onClick={onClose}>
           ✕
         </button>

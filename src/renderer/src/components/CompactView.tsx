@@ -101,6 +101,7 @@ function CompactItem({
     >
       <div className="citem-top">
         <span className={`type-badge t-${event.type}`}>{TYPE_LABEL[event.type]}</span>
+        {event.jira && <span className="ticket-key">{event.jira.key}</span>}
         <span className="time">{formatIssueTime(event.timestamp)}</span>
       </div>
       <div className="citem-title">{event.title}</div>

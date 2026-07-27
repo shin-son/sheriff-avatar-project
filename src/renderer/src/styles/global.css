@@ -821,6 +821,22 @@ select:focus-visible {
   color: var(--vermilion);
 }
 
+/* Jira ticket key (e.g. CIOPS-1001) — the issue's identity everywhere it
+   appears: card, detail head, compact item, palette meta (DESIGN.md §3 Code
+   Small: mono inline issue keys). */
+.ticket-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--lamplight);
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
 .row-time {
   margin-left: auto;
   font-family: var(--font-mono);
