@@ -12,7 +12,12 @@ async function request(path, options = {}) {
     ...options,
     headers: { ...auth(), 'Content-Type': 'application/json', ...options.headers }
   })
-  if (!res.ok) throw new Error(`${options.method ?? 'GET'} ${path} returned ${res.status}`)
+  if (!res.ok) {
+    // Jira는 거부 사유(권한·필드·워크플로)를 응답 본문에 담는다 — 상태 코드만으로는
+    // 원인 분석이 안 되므로 본문 앞부분을 에러에 실어 로그까지 끌고 간다.
+    const detail = (await res.text().catch(() => '')).slice(0, 300)
+    throw new Error(`${options.method ?? 'GET'} ${path} returned ${res.status}${detail ? ` — ${detail}` : ''}`)
+  }
   return res
 }
 

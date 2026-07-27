@@ -26,8 +26,8 @@ export function commentChannel() {
 
 function run(cmd, args, timeout) {
   return new Promise((resolve) => {
-    execFile(cmd, args, { timeout }, (err, stdout) => {
-      resolve({ ok: !err, out: (stdout ?? '').trim(), err })
+    execFile(cmd, args, { timeout }, (err, stdout, stderr) => {
+      resolve({ ok: !err, out: (stdout ?? '').trim(), errOut: (stderr ?? '').trim(), err })
     })
   })
 }
@@ -39,12 +39,18 @@ async function postViaMcp(key, body) {
   try {
     await writeFile(file, body)
     const prompt = `${MCP_NAME} MCP의 Jira 툴로 티켓 ${key}에 코멘트를 하나 달아라. 코멘트 본문은 파일 ${file}의 내용 그대로 쓴다 (수정·요약 금지). 성공하면 "OK"만, 실패하면 "MCP_FAILED: <이유>"만 출력해라.`
-    const { ok, out, err } = await run(
+    console.log(`[svp-server] comment ${key}: mcp 호출 — claude -p --allowedTools Read,mcp__${MCP_NAME}`)
+    const { ok, out, errOut, err } = await run(
       'claude',
       ['-p', prompt, '--allowedTools', `Read,mcp__${MCP_NAME}`, '--add-dir', tmpdir()],
       MCP_TIMEOUT_MS
     )
-    if (!ok || !out.startsWith('OK')) throw new Error(err ? err.message : out || 'empty output')
+    if (!ok || !out.startsWith('OK')) {
+      // exit code·stdout(MCP_FAILED 사유)·stderr를 전부 실어야 원인이 보인다
+      // (systemd에서 claude 미설치/PATH 문제는 err, MCP 미등록은 stdout에 나타남).
+      const parts = [err?.message, out && `stdout: ${out.slice(0, 300)}`, errOut && `stderr: ${errOut.slice(0, 300)}`]
+      throw new Error(parts.filter(Boolean).join(' | ') || 'empty output')
+    }
   } finally {
     rm(file, { force: true }).catch(() => {})
   }
@@ -57,11 +63,14 @@ export async function postAnalysisComment(key, body) {
     } else {
       try {
         await postViaMcp(key, body)
+        console.log(`[svp-server] comment ${key}: mcp 기입 성공`)
         return
       } catch (err) {
-        console.error(`[svp-server] mcp comment failed for ${key}: ${err.message} — REST 폴백`)
+        console.error(`[svp-server] comment ${key}: mcp 실패 — REST 폴백 (${err.message})`)
       }
     }
   }
-  return postComment(key, body)
+  console.log(`[svp-server] comment ${key}: REST POST /rest/api/2/issue/${key}/comment (${body.length} chars)`)
+  await postComment(key, body)
+  console.log(`[svp-server] comment ${key}: REST 기입 성공`)
 }
