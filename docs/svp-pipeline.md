@@ -39,7 +39,8 @@ flowchart TB
     NORM["normalize(t) — 실티켓 계약 (PR17)<br/>Step→type · CICD Project→branch<br/>module=unknown (LLM 몫) · log=description"]
     JENK["jenkins.mjs (PR17)<br/>extractBuildUrl → CI_MAIN_JOB URL<br/>fetchFailureLog: 샤드링크 → 실패샤드 필터<br/>console → tcSectionIn TC구간 → 없으면 꼬리"]
     ENRICH["event.log += jenkins.log (PR17)<br/>event.url = jenkins.url<br/>분류 입력 보강"]
-    WQ["wiki-query.mjs queryWiki<br/>키워드 스코어 상위 3<br/>listModules → enum · resolveOwner → owner"]
+    WQ["wiki-query.mjs queryWiki<br/>키워드 스코어(양방향) 상위 3<br/>listModules → enum · resolveOwner → owner"]
+    SEL["classifier.mjs selectNotes (SVP-3)<br/>로그 읽고 원인 가설 → listCatalog에서<br/>노트 최대 3개 선택 · 실패/무자격 시 빈 결과"]
     CLS["classifier.mjs classify<br/>category · severity · confidence 0-100<br/>summary · evidence (구조화 출력 + fallback)"]
     ROUTE["classifyAndAct · routeByAssignee<br/>confidence 80 초과 → owner 자동 배정<br/>80 이하 → 당번(sheriff) 큐"]
     JWRITE["jira.mjs write<br/>setAssignee → postComment → transitionTo<br/>WRITE_MODE 게이트 (dry-run 기본)"]
@@ -67,8 +68,12 @@ flowchart TB
   SHARD -.->|"실패 샤드 TC 구간"| JENK
   JENK --> ENRICH
   ENRICH --> WQ
+  ENRICH --> SEL
   MOD -.->|"query 대상 · owner 맵"| WQ
-  WQ -->|"matches 상위 3"| CLS
+  MOD -.->|"카탈로그(파일/제목/module/tags)"| SEL
+  SEL -.-> LLMN
+  SEL -->|"선택 노트 최대 3"| CLS
+  WQ -->|"키워드 매칭 상위 3"| CLS
   CLS -.-> LLMN
   CLS --> ROUTE
   ROUTE -->|"80 초과 자동 배정"| JWRITE
@@ -92,7 +97,7 @@ flowchart TB
   class NORM,JENK,ENRICH pr17
   class TRIG,GETRAW,SUMM,INGEST,CASE,IDX pr16
   class RJIRA,RCI,RGERRIT pr15
-  class POLL,WQ,CLS,ROUTE,JWRITE,PUSH,MOD base
+  class POLL,WQ,SEL,CLS,ROUTE,JWRITE,PUSH,MOD base
   class JIRA,RELAY,SHARD,GERRIT,CLIENT ext
   class LLMN llm
 ```
@@ -104,8 +109,9 @@ flowchart TB
 `poll()`이 base JQL로 신규 티켓을 잡으면 `normalize()`가 실티켓 description(`' : '` key-value)을
 파싱한다. description에는 로그가 없으므로 **`jenkins.mjs`(#17)** 가 TEST 링크의 CI_MAIN_JOB
 중계빌드 → `CI TEST RESULT` 샤드빌드(build description의 api/json) → 실패 샤드(result ≠ SUCCESS)
-console에서 해당 TC의 `[ENABLE]` 구간만 추출해 `event.log`를 보강한다. 이 보강된 로그가
-wiki query → classifier(LLM)의 입력이 되고, confidence 80 초과면 Jira에 자동 배정한다.
+console에서 해당 TC의 `[ENABLE]` 구간만 추출해 `event.log`를 보강한다. 이 보강된 로그로 키워드 매칭과
+LLM 드릴다운(selectNotes, SVP-3)이 각각 노트를 찾고, 합쳐진 노트가 classifier(LLM)의 입력이 되어
+confidence 80 초과면 Jira에 자동 배정한다.
 
 **② OUTBOUND — 해결 감지 → ingest (파랑 #16이 핵심)**
 

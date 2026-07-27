@@ -120,7 +120,12 @@ vault 모듈 노트 목록에서 생성한다 — 모델이 모듈을 지어낼 
 | `SVP_LLM_CONFIDENCE_MIN` | `80` | 자동 배정 게이트 (초과 시에만) |
 | `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 읽는 vault 경로 |
 
-- **입력**: 티켓 정보(summary, description, CI 로그 발췌 — head 4000자+tail 2000자 캡) + `queryWiki()` 상위 3개 노트 본문(개당 3000자 캡)
+- **입력**: 티켓 정보(summary, description, CI 로그 발췌 — head 4000자+tail 2000자 캡) +
+  `queryWiki()`(키워드, 양방향) ∪ `selectNotes()`(LLM 드릴다운, SVP-3) 노트 본문(개당 3000자 캡).
+  classify 전에 `selectNotes()`가 별도 LLM 호출로 로그를 읽고 원인을 가설화한 뒤 `listCatalog()`
+  (파일/제목/module/tags만, 본문 없음)에서 관련 노트를 최대 3개 고른다 — 카탈로그 밖 경로는 버리고,
+  무자격증명·실패 시 빈 결과로 폴백(키워드 결과만 사용). 이 선택 단계는 어떤 노트를 classify에 보여줄지만
+  바꿀 뿐, confidence는 여전히 아래 §3 규칙(위키 근거 강도)으로만 산출된다.
 - **출력**: 아래 JSON만 (structured output 강제):
 
 ```json

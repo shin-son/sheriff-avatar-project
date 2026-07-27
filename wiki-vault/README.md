@@ -211,9 +211,14 @@ captured: <ISO 날짜 — Done 확정 시점>
 
 ## wiki 4대 동작
 
-1. **query** — 이슈 유입 시 classifier가 vault를 검색해 상위 3개 노트를 신뢰도 근거로 사용.
-   신뢰도 >80 → feature owner, ≤80 → sheriff 배정의 근거가 된다.
-   (현재: 전체 파일 키워드 매칭. 목표: index를 먼저 읽고 노트로 드릴다운 — TODO(SVP-3))
+1. **query** — 이슈 유입 시 classifier가 vault를 검색해 상위 노트를 신뢰도 근거로 사용.
+   신뢰도 >80 → feature owner, ≤80 → sheriff 배정의 근거가 된다. 두 경로의 합집합을 classify에 넘긴다:
+   - **키워드 스코어링** — 이벤트(module/제목) 키워드가 노트에 있는지, 그리고 역방향으로 노트의
+     frontmatter tags·known-failure 원문 신호(테스트명·에러 문자열)가 티켓 로그에 있는지 대조.
+   - **LLM 드릴다운(SVP-3)** — classify 이전에 별도 LLM 호출이 로그를 읽고 원인을 가설화한 뒤
+     `index.md` 대신 파일/제목/module/tags만 담은 카탈로그에서 관련 노트를 최대 3개 고른다
+     (`server/classifier.mjs` `selectNotes`). 카탈로그에 없는 경로는 버리고, 실패·무자격 시 빈 결과로
+     키워드 매칭에만 의존 — 자동 배정 게이트(신뢰도 규칙)에는 영향을 주지 않는다.
 2. **feedback** — 담당자가 참조 노트에 👍/👎. 👎3회 이상(또한 👎>👍)이면 query 점수 절반 감점.
    집계는 vault가 아니라 앱 저장소에 쌓인다 (vault는 패키징 시 읽기 전용. F8: hub 경유 서버 집계).
 3. **ingest — append가 아니라 통합이다.** 이슈 해결 시:
