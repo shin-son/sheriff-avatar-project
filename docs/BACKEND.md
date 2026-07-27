@@ -9,7 +9,7 @@
 | # | 기능 | 모듈 | 상태 |
 |---|---|---|---|
 | F1 | Jira 폴러 (이슈 유입) | `modules/jira/` | 신규 |
-| F2 | WIKI query (분류 근거 검색) | `modules/wiki/` | 구현됨 (키워드) → 정확도 개선 |
+| F2 | WIKI query (분류 근거 검색) | `modules/wiki/` | 구현됨 (키워드 + LLM 드릴다운) |
 | F3 | LLM 분류기 | `modules/classifier/` | stub → Claude API 실구현 |
 | F4 | 배정 라우터 + 수동 재배정 | `modules/assignment/` | 라우팅 구현됨 → 재배정 추가 |
 | F5 | Jira 라이터 (댓글·assignee·전이) | `modules/jira/` | 신규 |
@@ -28,10 +28,17 @@
 
 ## F2 — WIKI query
 
-- **책임**: 티켓 텍스트로 `wiki-vault/`에서 관련 노트 상위 3개 검색. **case-log도 검색 대상** — 이것이 compounding의 핵심
-  (해결 사례가 쌓일수록 같은 유형의 매치 점수가 올라간다).
-- **현재**: 키워드 매칭 + 부정 피드백 감점. **개선(Week 1, 김민석)**: frontmatter 스키마 확정, 검색 정확도.
-- **완료 기준**: auth 토큰 이슈 티켓 → `modules/auth.md`가 1위 매치. 👎3 누적 노트는 점수 반감 확인.
+- **책임**: 티켓 텍스트로 `wiki-vault/`에서 관련 노트를 찾아 classify 입력으로 넘긴다. **case-log도 검색 대상**
+  — 이것이 compounding의 핵심(해결 사례가 쌓일수록 같은 유형의 매치 점수가 올라간다).
+- **구현: 두 경로의 합집합** (`server/wiki-query.mjs` + `server/classifier.mjs`):
+  - **키워드 스코어링** (`queryWiki`) — 이벤트 module/제목 키워드가 노트에 있으면 +, 노트의 frontmatter
+    tags·known-failure 원문 신호(테스트명·에러 문자열)가 티켓 로그에 있으면 + (양방향). 부정 피드백 감점.
+  - **LLM 드릴다운** (`selectNotes`, SVP-3) — classify 전에 로그를 읽고 원인을 가설화한 뒤, `listCatalog()`
+    (파일/제목/module/tags만, 본문 없음)에서 관련 노트를 최대 3개 고른다. 티켓 텍스트에 노트 원문이
+    그대로 안 찍혀 키워드가 못 찾는 케이스를 보완. 카탈로그 밖 경로는 버리고, 무자격증명·호출 실패 시
+    빈 결과로 폴백 — 키워드 매칭만으로 진행되어 파이프라인이 멈추지 않는다.
+- **완료 기준**: auth 토큰 이슈 티켓 → `modules/auth.md`가 매치. 제목에 단서가 없고 로그에만 신호가
+  있는 티켓도 매치됨(양방향 스코어링 또는 드릴다운). 👎3 누적 노트는 점수 반감 확인.
 
 ## F3 — LLM 분류기 (Claude API)
 
