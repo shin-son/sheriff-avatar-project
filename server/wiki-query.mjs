@@ -235,8 +235,10 @@ async function lookupGerritCommitter(filePath) {
  * Build a ranked candidate list for human-in-the-loop assignee selection.
  * Currently sources: Gerrit (last committer on the TC file) + wiki (module owner).
  * Returned list has Gerrit candidates first (highest signal), wiki second.
+ * `category` is the classifier's module (event.module is always 'unknown' from
+ * the CI description) — pass it so the wiki-owner candidate can be resolved.
  */
-export async function buildCandidates(event) {
+export async function buildCandidates(event, category = null) {
   const candidates = []
 
   // ── Gerrit: TC name → file path → last committer ─────────────────────────
@@ -262,16 +264,20 @@ export async function buildCandidates(event) {
   }
 
   // ── Wiki: module owner from frontmatter ──────────────────────────────────
-  const category =
-    event.module && event.module !== 'unknown' ? event.module : null
-  if (category) {
-    const owner = resolveOwner(category)
+  const cat =
+    category && category !== 'unknown'
+      ? category
+      : event.module && event.module !== 'unknown'
+        ? event.module
+        : null
+  if (cat) {
+    const owner = resolveOwner(cat)
     if (owner && !candidates.some((c) => c.id === owner)) {
       candidates.push({
         id: owner,
         name: owner,
         source: 'wiki',
-        reason: `LLM-WIKI ${category} 모듈 담당자`
+        reason: `LLM-WIKI ${cat} 모듈 담당자`
       })
     }
   }

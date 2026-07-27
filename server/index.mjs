@@ -203,7 +203,7 @@ async function classifyAndAct(key) {
     // confidence ≤ 80 또는 담당자 미등록 → 후보 리스트를 빌드해 당번 화면에 노출.
     if (eligible && !confident) {
       try {
-        issue.candidates = await buildCandidates(issue.event)
+        issue.candidates = await buildCandidates(issue.event, llm.category)
         if (issue.candidates.length > 0) {
           console.log(`[svp-server] candidates for ${key}: ${issue.candidates.map((c) => `${c.source}:${c.id}`).join(', ')}`)
           const cached2 = issueCache.get(key)
