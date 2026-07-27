@@ -440,6 +440,9 @@ async function poll() {
         status: STATUS_BY_CATEGORY[t.fields.status.statusCategory.key] ?? 'new',
         receivedAt: cached?.receivedAt ?? new Date().toISOString()
       }
+      // Restore the human-in-the-loop candidate list frozen at classify time —
+      // llmResults 복원으로 classifyAndAct가 재실행되지 않으므로 캐시에서 되살린다.
+      if (cached?.candidates) issue.candidates = cached.candidates
       issues.set(t.key, issue)
       if (!cached) {
         issueCache.set(t.key, { receivedAt: issue.receivedAt, log: event.log, url: event.url })
