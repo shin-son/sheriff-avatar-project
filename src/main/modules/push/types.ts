@@ -36,4 +36,6 @@ export interface PushListener {
   dispose(): void
   /** C→S: the assignee checked the ticket — the server transitions it in Jira. */
   ackIssue(issueId: string): void
+  /** C→S (sheriff only): manual assignment — the server updates the Jira assignee (F4). */
+  reassignIssue(issueId: string, assigneeId: string): void
 }

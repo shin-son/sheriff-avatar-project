@@ -249,6 +249,12 @@ app.whenReady().then(() => {
     pushListener?.ackIssue(issueId)
   })
 
+  // 수동 배정 (sheriff) — 서버가 Jira assignee를 갱신하고, 변경은 폴링 sync가
+  // issue:updated로 되돌려준다 (ack와 동일하게 로컬 상태는 건드리지 않는다).
+  ipcMain.on('issue:reassign', (_e, issueId: string, assigneeId: string) => {
+    pushListener?.reassignIssue(issueId, assigneeId)
+  })
+
   ipcMain.handle('notify:setMuted', (_e, muted: boolean): boolean => {
     setNotificationsMuted(muted)
     return notificationsMuted

@@ -304,7 +304,14 @@ export default function App() {
         </div>
       </div>
       {selected && (
-        <DetailPanel issue={selected} onClose={() => setSelectedId(null)} onAck={ackIssue} />
+        <DetailPanel
+          key={selected.event.id}
+          issue={selected}
+          team={state.team}
+          onClose={() => setSelectedId(null)}
+          onAck={ackIssue}
+          onReassign={(id, assigneeId) => window.svp.reassignIssue(id, assigneeId)}
+        />
       )}
       {paletteOpen && (
         <CommandPalette
