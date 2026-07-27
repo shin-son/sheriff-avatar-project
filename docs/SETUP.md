@@ -33,6 +33,8 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_ANTHROPIC_API_KEY` | (없음) | `SVP_LLM_PROVIDER=anthropic`일 때만 |
 | `SVP_LLM_CONFIDENCE_MIN` | `80` | 이 점수 **초과**여야 자동 배정 (assignee+댓글+In Progress) |
 | `SVP_JIRA_WRITE_MODE` | **`dry-run`** | 서버발 Jira write 전부(자동 배정 + ack 전이)의 게이트: `dry-run`=로그만 / `label`=`SVP_TEST_LABEL` 티켓만 / `live`=전면 |
+| `SVP_COMMENT_CHANNEL` | `rest` | 분석 코멘트 전송 채널: `rest`=Jira REST 직접 / `mcp`=사내 MCP 서버 경유 (**미구현** — 세팅 전까지 REST 폴백). write 게이트를 따른다 |
+| `SVP_COMMENT_MCP_URL` | (없음) | `mcp` 채널이 쓸 MCP 서버 주소 — 세팅/구현 시 형식 확정 |
 | `SVP_TEST_LABEL` | `svp-test` | `label` 모드에서 write를 허용하는 Jira 라벨 |
 | `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 분류 근거로 읽는 vault 경로 |
 | `SVP_SERVER_PORT` | `8793` | 서버 Socket.IO 리슨 포트 |
