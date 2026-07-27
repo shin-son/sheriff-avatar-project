@@ -11,7 +11,7 @@ import type { PushCredentials, PushListener, PushListenerHandlers, PushSession }
 const EVENT_SESSION = 'session'
 const EVENT_ISSUE_NEW = 'issue:new'
 const EVENT_ISSUE_UPDATED = 'issue:updated'
-const EVENT_ISSUE_ACK = 'issue:ack'
+const EVENT_ISSUE_REASSIGN = 'issue:reassign'
 const AUTH_FAILED = 'AUTH_FAILED'
 
 /** Socket.IO push listener. Reconnection/backoff is handled by socket.io-client. */
@@ -57,8 +57,8 @@ export class SocketIoPushListener implements PushListener {
     this.socket = null
   }
 
-  ackIssue(issueId: string): void {
-    this.socket?.emit(EVENT_ISSUE_ACK, { issueId })
+  reassignIssue(issueId: string, assigneeId: string): void {
+    this.socket?.emit(EVENT_ISSUE_REASSIGN, { issueId, assigneeId })
   }
 
   private dispatch(payload: unknown, handler: (issue: SheriffIssue) => void): void {

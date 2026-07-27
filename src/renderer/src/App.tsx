@@ -77,11 +77,6 @@ export default function App() {
 
   if (!state) return null
 
-  // ack는 Jira 전이 요청일 뿐 — 상태는 서버가 Jira에서 확인한 뒤 issue:updated로 돌아온다.
-  const ackIssue = (id: string) => {
-    window.svp.ackIssue(id)
-  }
-
   const toggleMuted = () => {
     void window.svp.setNotificationsMuted(!state.notificationsMuted)
     // state update arrives via onNotifyMuted (also covers tray-menu toggles)
@@ -139,7 +134,6 @@ export default function App() {
           issues={myIssues}
           focusId={focusId}
           titlebar={frameless ? undefined : titlebar}
-          onAck={ackIssue}
           onToggleMuted={toggleMuted}
         />
       </div>
@@ -304,7 +298,13 @@ export default function App() {
         </div>
       </div>
       {selected && (
-        <DetailPanel issue={selected} onClose={() => setSelectedId(null)} onAck={ackIssue} />
+        <DetailPanel
+          key={selected.event.id}
+          issue={selected}
+          team={state.team}
+          onClose={() => setSelectedId(null)}
+          onReassign={(id, assigneeId) => window.svp.reassignIssue(id, assigneeId)}
+        />
       )}
       {paletteOpen && (
         <CommandPalette

@@ -11,7 +11,7 @@ const api = {
   frameless: process.argv.includes('--svp-frameless'),
   getState: () => ipcRenderer.invoke('state:get'),
   login: (username: string, password: string) => ipcRenderer.invoke('auth:login', username, password),
-  ackIssue: (id: string) => ipcRenderer.send('issue:ack', id),
+  reassignIssue: (id: string, assigneeId: string) => ipcRenderer.send('issue:reassign', id, assigneeId),
   onIssueNew: (cb: (payload: unknown) => void) => subscribe('issue:new', cb),
   onIssueUpdated: (cb: (payload: unknown) => void) => subscribe('issue:updated', cb),
   onStateRefresh: (cb: (payload: unknown) => void) => subscribe('state:refresh', cb),

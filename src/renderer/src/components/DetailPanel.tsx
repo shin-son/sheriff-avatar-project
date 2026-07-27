@@ -1,23 +1,37 @@
-import type { SheriffIssue } from '@shared/types'
+import { useState } from 'react'
+import type { SheriffIssue, TeamMember } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
 interface Props {
   issue: SheriffIssue
+  team: TeamMember[]
   onClose: () => void
-  onAck: (id: string) => void
+  /** 수동 배정 (F4) — 서버가 Jira assignee를 갱신, 반영은 issue:updated로 돌아온다. */
+  onReassign: (id: string, assigneeId: string) => void
 }
 
 /** Floating glass panel with the selected issue's detail (reference: detached side card). */
-export default function DetailPanel({ issue, onClose, onAck }: Props) {
+export default function DetailPanel({ issue, team, onClose, onReassign }: Props) {
   const { event, classification, assignment, status } = issue
   const confClass = classification.confidence > 80 ? 'high' : 'low'
+  const [pick, setPick] = useState('')
 
-  // "확인" = open the ticket + ack (the server transitions it in Jira).
-  // Status is never written locally — it comes back once the server confirms it in Jira.
+  // Module owners first in the picker (wiki frontmatter → TeamMember.ownedModules).
+  // The classifier's category is the trusted module; CI's own module field is the fallback.
+  const module =
+    classification.category && classification.category !== 'unknown'
+      ? classification.category
+      : event.module
+  const isOwner = (m: TeamMember) => m.ownedModules.includes(module)
+  const candidates = team
+    .filter((m) => m.role === 'member')
+    .sort((a, b) => Number(isOwner(b)) - Number(isOwner(a)))
+
+  // "확인" opens the ticket only. In Progress is the assignee's move in Jira —
+  // the poller detects the status change and pushes it back (issue:updated).
   // jira.url is the browse link; event.url may carry the CICD pipeline link instead.
   const checkTicket = () => {
     window.svp.openTicket(event.jira?.url ?? event.url)
-    if (status === 'new') onAck(event.id)
   }
 
   return (
@@ -73,6 +87,35 @@ export default function DetailPanel({ issue, onClose, onAck }: Props) {
           <div className="detail-label">배정 근거</div>
           <p className="detail-text">{assignment.reason}</p>
         </div>
+
+        {status !== 'resolved' && candidates.length > 0 && (
+          <div className="detail-section">
+            <div className="detail-label">담당자 배정</div>
+            <div className="assign-row">
+              <select
+                className="assign-select"
+                value={pick}
+                onChange={(e) => setPick(e.target.value)}
+              >
+                <option value="">팀원 선택…</option>
+                {candidates.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {isOwner(m) ? ` — ${module} 담당` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn"
+                disabled={!pick || pick === assignment.assigneeId}
+                title="Jira assignee를 변경합니다 (dry-run 모드에서는 서버 로그로만 확인)"
+                onClick={() => onReassign(event.id, pick)}
+              >
+                배정
+              </button>
+            </div>
+          </div>
+        )}
 
         {classification.wikiRefs.length > 0 && (
           <div className="detail-section">

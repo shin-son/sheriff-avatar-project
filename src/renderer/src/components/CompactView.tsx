@@ -15,7 +15,6 @@ interface Props {
   focusId: string | null
   /** In acrylic mode the title bar renders inside this sheet (frameless: floats outside). */
   titlebar?: ReactNode
-  onAck: (id: string) => void
   onToggleMuted: () => void
 }
 
@@ -25,7 +24,6 @@ export default function CompactView({
   issues,
   focusId,
   titlebar,
-  onAck,
   onToggleMuted
 }: Props) {
   const openCount = issues.filter((i) => i.status !== 'resolved').length
@@ -61,33 +59,19 @@ export default function CompactView({
           </div>
         )}
         {issues.map((issue) => (
-          <CompactItem
-            key={issue.event.id}
-            issue={issue}
-            highlighted={focusId === issue.event.id}
-            onAck={onAck}
-          />
+          <CompactItem key={issue.event.id} issue={issue} highlighted={focusId === issue.event.id} />
         ))}
       </div>
     </div>
   )
 }
 
-function CompactItem({
-  issue,
-  highlighted,
-  onAck
-}: {
-  issue: SheriffIssue
-  highlighted: boolean
-  onAck: (id: string) => void
-}) {
+function CompactItem({ issue, highlighted }: { issue: SheriffIssue; highlighted: boolean }) {
   const { event, classification, assignment, status } = issue
-  // ack는 서버에 Jira 전이를 요청할 뿐 — 상태는 Jira 확인 후 issue:updated로 반영된다.
+  // 티켓을 열기만 한다 — In Progress 전이는 담당자가 Jira에서 직접, 폴링이 반영.
   // jira.url이 browse 링크 — event.url은 CICD 파이프라인 링크일 수 있다.
   const checkTicket = () => {
     window.svp.openTicket(event.jira?.url ?? event.url)
-    if (status === 'new') onAck(event.id)
   }
   return (
     <article
