@@ -69,10 +69,36 @@ export function resolveOwner(category) {
 }
 
 /**
- * Same scorer as the Electron adapter: keywords = module + title words >3 chars;
- * module match +3, other keyword substring +1; top 3 with score > 0.
- * Returns matches extended with body/module/owner so the classifier can build
- * its prompt without re-reading files.
+ * Note-side signals matched against the ticket text: frontmatter tags +
+ * identifier-like tokens (≥5 chars) from known-failure headings and symptom
+ * lines — the verbatim test names/error strings the vault schema requires
+ * notes to keep (README.md "실패한 테스트 이름과 에러 문자열은 원문 그대로").
+ */
+function noteSignals(content, fm) {
+  const signals = new Set()
+  for (const tag of (fm.tags ?? '').replace(/[[\]]/g, '').split(',')) {
+    const t = tag.trim().toLowerCase()
+    if (t.length > 1) signals.add(t)
+  }
+  for (const line of content.split('\n')) {
+    const m = line.match(/^\s*(?:###\s+(.*)|-\s*symptom\s*:\s*(.*))/i)
+    if (!m) continue
+    for (const token of (m[1] ?? m[2]).match(/[A-Za-z][\w.-]{4,}/g) ?? []) {
+      signals.add(token.toLowerCase())
+    }
+  }
+  return signals
+}
+
+/**
+ * 초도분석 scorer — two directions:
+ *  - event → note (Electron adapter behavior): keywords = module + title words
+ *    >3 chars; module match +3, other keyword substring +1.
+ *  - note → event: noteSignals() found in the ticket text (title + description
+ *    + Jenkins failure log) +2 each — description/로그가 제목보다 실측 신호가
+ *    많으므로 known-failure 원문이 로그에 그대로 찍힌 노트가 위로 온다.
+ * Top 3 with score > 0. Returns matches extended with body/module/owner so
+ * the classifier can build its prompt without re-reading files.
  */
 export function queryWiki(event) {
   const keywords = new Set(
@@ -80,6 +106,7 @@ export function queryWiki(event) {
       (w) => w && w.length > 3
     )
   )
+  const ticketText = `${event.title}\n${event.log ?? ''}`.toLowerCase()
   const matches = []
   let files = []
   try {
@@ -89,14 +116,17 @@ export function queryWiki(event) {
   }
   for (const file of files) {
     const content = readFileSync(file, 'utf-8')
+    const fm = parseFrontmatter(content)
     const haystack = content.toLowerCase()
     let score = 0
     for (const keyword of keywords) {
       if (!haystack.includes(keyword)) continue
       score += keyword === event.module ? 3 : 1
     }
+    for (const signal of noteSignals(content, fm)) {
+      if (ticketText.includes(signal)) score += 2
+    }
     if (score > 0) {
-      const fm = parseFrontmatter(content)
       matches.push({
         file: relative(VAULT_DIR, file).replaceAll('\\', '/'),
         title: toTitle(file, content),
