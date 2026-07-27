@@ -84,8 +84,9 @@ function CompactItem({
 }) {
   const { event, classification, assignment, status } = issue
   // ack는 서버에 Jira 전이를 요청할 뿐 — 상태는 Jira 확인 후 issue:updated로 반영된다.
+  // jira.url이 browse 링크 — event.url은 CICD 파이프라인 링크일 수 있다.
   const checkTicket = () => {
-    window.svp.openTicket(event.url)
+    window.svp.openTicket(event.jira?.url ?? event.url)
     if (status === 'new') onAck(event.id)
   }
   return (
