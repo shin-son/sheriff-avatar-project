@@ -25,7 +25,7 @@ import { fetchRawLogViaTool, formatLogViaSkill } from './ci-test-fetch.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
 import { commentChannel, postAnalysisComment } from './comment-channel.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
-import { listCatalog, listModules, queryWiki, readNotes, resolveOwner } from './wiki-query.mjs'
+import { buildCandidates, listCatalog, listModules, queryWiki, readNotes, resolveOwner } from './wiki-query.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -200,6 +200,20 @@ async function classifyAndAct(key) {
   const confident = llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown'
   const owner = eligible && confident ? resolveOwner(llm.category) : null
   if (!owner) {
+    // confidence ≤ 80 또는 담당자 미등록 → 후보 리스트를 빌드해 당번 화면에 노출.
+    if (eligible && !confident) {
+      try {
+        issue.candidates = await buildCandidates(issue.event)
+        if (issue.candidates.length > 0) {
+          console.log(`[svp-server] candidates for ${key}: ${issue.candidates.map((c) => `${c.source}:${c.id}`).join(', ')}`)
+          const cached2 = issueCache.get(key)
+          if (cached2) { cached2.candidates = issue.candidates; saveIssueCache(issueCache) }
+          emitIssue('issue:updated', issue)
+        }
+      } catch (err) {
+        console.warn(`[svp-server] buildCandidates failed for ${key}: ${err.message}`)
+      }
+    }
     // 자동 배정 없음 — 분석 결과는 코멘트로 남긴다 (모든 신규 티켓에 분석 코멘트).
     console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → ${eligible ? '당번 유지' : '배정 변경 없음 (분류 중 상태 이동)'}`)
     const reason = !eligible

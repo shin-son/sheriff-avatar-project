@@ -23,7 +23,9 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
       ? classification.category
       : event.module
   const isOwner = (m: TeamMember) => m.ownedModules.includes(module)
-  const candidates = team
+  // issue.candidates (Gerrit/wiki signal) takes priority over the plain team list.
+  const smartCandidates = issue.candidates ?? []
+  const teamCandidates = team
     .filter((m) => m.role === 'member')
     .sort((a, b) => Number(isOwner(b)) - Number(isOwner(a)))
 
@@ -88,9 +90,25 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
           <p className="detail-text">{assignment.reason}</p>
         </div>
 
-        {status !== 'resolved' && candidates.length > 0 && (
+        {status !== 'resolved' && (smartCandidates.length > 0 || teamCandidates.length > 0) && (
           <div className="detail-section">
             <div className="detail-label">담당자 배정</div>
+            {smartCandidates.length > 0 && (
+              <div className="candidates-list">
+                {smartCandidates.map((c) => (
+                  <button
+                    key={`${c.source}-${c.id}`}
+                    className={`candidate-item${pick === c.id ? ' selected' : ''}`}
+                    title={c.reason}
+                    onClick={() => setPick(c.id)}
+                  >
+                    <span className={`candidate-badge source-${c.source}`}>{c.source}</span>
+                    <span className="candidate-name">{c.name}</span>
+                    <span className="candidate-reason">{c.reason}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="assign-row">
               <select
                 className="assign-select"
@@ -98,7 +116,7 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
                 onChange={(e) => setPick(e.target.value)}
               >
                 <option value="">팀원 선택…</option>
-                {candidates.map((m) => (
+                {teamCandidates.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                     {isOwner(m) ? ` — ${module} 담당` : ''}

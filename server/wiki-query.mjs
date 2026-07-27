@@ -6,6 +6,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execFile } from 'node:child_process'
 
 const VAULT_DIR =
   process.env.SVP_WIKI_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'wiki-vault')
@@ -184,4 +185,96 @@ export function queryWiki(event) {
     }
   }
   return matches.sort((a, b) => b.score - a.score).slice(0, 3)
+}
+
+// TC name(e.g. "linux.power-cmu-110.sh") → Gerrit file path("linux/power-cmu-110.sh").
+// Only the first dot is treated as a directory separator — the rest of the name is kept.
+function tcNameToPath(tcName) {
+  const dot = tcName.indexOf('.')
+  if (dot < 0) return tcName
+  return tcName.slice(0, dot) + '/' + tcName.slice(dot + 1)
+}
+
+function runClaude(args, timeoutMs) {
+  return new Promise((resolve) => {
+    execFile('claude', args, { timeout: timeoutMs }, (err, stdout, stderr) => {
+      resolve({ ok: !err, out: (stdout ?? '').trim(), err: (stderr ?? '').trim() })
+    })
+  })
+}
+
+/**
+ * Gerrit lookup via headless claude -p (same pattern as comment-channel.mjs).
+ * Returns the committer id and display info from the most recent CL touching the file.
+ * Returns null when the lookup fails or no CL is found.
+ */
+async function lookupGerritCommitter(filePath) {
+  const MCP = 'Exynos-Auto-CICD-Gerrit'
+  const prompt =
+    `Use the ${MCP} MCP tool query_changes to find the most recent merged change that touched the file path "${filePath}". ` +
+    `Reply with EXACTLY ONE JSON object: {"changeId":"<CL number>","owner":"<owner email or username>","name":"<owner display name>"}. ` +
+    `If no change is found reply with {"changeId":"","owner":"","name":""}. No prose, no code fences.`
+  const { ok, out } = await runClaude(
+    ['-p', prompt, '--allowedTools', `mcp__${MCP}__query_changes`, '--output-format', 'text'],
+    60_000
+  )
+  if (!ok || !out) return null
+  try {
+    const start = out.indexOf('{')
+    const end = out.lastIndexOf('}')
+    if (start < 0 || end < 0) return null
+    const parsed = JSON.parse(out.slice(start, end + 1))
+    if (!parsed.owner) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Build a ranked candidate list for human-in-the-loop assignee selection.
+ * Currently sources: Gerrit (last committer on the TC file) + wiki (module owner).
+ * Returned list has Gerrit candidates first (highest signal), wiki second.
+ */
+export async function buildCandidates(event) {
+  const candidates = []
+
+  // ── Gerrit: TC name → file path → last committer ─────────────────────────
+  const tcMatch = (event.log ?? '').match(/TC\s+name\s*(?:or\s+file)?\s*:\s*(\S+)/i)
+  if (tcMatch) {
+    const tcName = tcMatch[1]
+    const filePath = tcNameToPath(tcName)
+    try {
+      const result = await lookupGerritCommitter(filePath)
+      if (result?.owner) {
+        candidates.push({
+          id: result.owner,
+          name: result.name || result.owner,
+          source: 'gerrit',
+          reason: result.changeId
+            ? `Gerrit CL ${result.changeId} — ${filePath} 마지막 커미터`
+            : `Gerrit — ${filePath} 마지막 커미터`
+        })
+      }
+    } catch (err) {
+      console.warn(`[svp-server] buildCandidates gerrit lookup failed: ${err.message}`)
+    }
+  }
+
+  // ── Wiki: module owner from frontmatter ──────────────────────────────────
+  const category =
+    event.module && event.module !== 'unknown' ? event.module : null
+  if (category) {
+    const owner = resolveOwner(category)
+    if (owner && !candidates.some((c) => c.id === owner)) {
+      candidates.push({
+        id: owner,
+        name: owner,
+        source: 'wiki',
+        reason: `LLM-WIKI ${category} 모듈 담당자`
+      })
+    }
+  }
+
+  return candidates
 }
