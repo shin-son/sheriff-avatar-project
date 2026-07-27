@@ -23,6 +23,7 @@ import { classifierEnabled, classify, selectNotes } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog, probeBuildUrl } from './jenkins.mjs'
 import { fetchRawLogViaTool, formatLogViaSkill } from './ci-test-fetch.mjs'
 import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
+import { commentChannel, postAnalysisComment } from './comment-channel.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { listCatalog, listModules, queryWiki, readNotes, resolveOwner } from './wiki-query.mjs'
 
@@ -194,12 +195,29 @@ async function classifyAndAct(key) {
   issue.classification = classification
   emitIssue('issue:updated', issue) // ≤80이어도 당번 화면에 LLM 판단 근거가 보인다
 
-  // State may have moved during the LLM call (ack, manual assignment) — don't write over it.
-  if (issue.assignment.routedTo !== 'sheriff' || issue.status !== 'new') return
-  const owner =
-    llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown' ? resolveOwner(llm.category) : null
+  // State may have moved during the LLM call (ack, manual assignment) — don't auto-assign over it.
+  const eligible = issue.assignment.routedTo === 'sheriff' && issue.status === 'new'
+  const confident = llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown'
+  const owner = eligible && confident ? resolveOwner(llm.category) : null
   if (!owner) {
-    console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → 당번 유지`)
+    // 자동 배정 없음 — 분석 결과는 코멘트로 남긴다 (모든 신규 티켓에 분석 코멘트).
+    console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → ${eligible ? '당번 유지' : '배정 변경 없음 (분류 중 상태 이동)'}`)
+    const reason = !eligible
+      ? `분류 완료 시점에 이미 처리 중 (assignee=${issue.assignment.assigneeId}, status=${issue.status}) → 배정 변경 없음`
+      : confident
+        ? `${llm.category} 담당자 미등록 → 당번 유지`
+        : `신뢰도 ${llm.confidence} ≤ ${CONFIDENCE_MIN} → 당번 유지`
+    const comment = buildComment(issue.event, llm, wikiRefs, '자동 배정 없음', reason)
+    if (!canWrite(key)) {
+      console.log(`[svp-server] [${WRITE_MODE}] ${key} 분석 코멘트 미리보기:\n${comment}`)
+      return
+    }
+    try {
+      await postAnalysisComment(key, comment)
+      console.log(`[svp-server] analysis comment posted on ${key}`)
+    } catch (err) {
+      console.error(`[svp-server] analysis comment failed for ${key}: ${err.message}`)
+    }
     return
   }
   const reason = `LLM 분류 ${llm.category} (신뢰도 ${llm.confidence}) → ${llm.category} owner ${owner}`
@@ -221,7 +239,7 @@ async function classifyAndAct(key) {
   }
   console.log(`[svp-server] classified ${key}: ${llm.category}/${llm.confidence} → assignee=${owner}`)
   try {
-    await postComment(key, comment)
+    await postAnalysisComment(key, comment)
   } catch (err) {
     console.error(`[svp-server] comment failed for ${key}: ${err.message}`) // 배정은 이미 성공 — 계속
   }
@@ -484,6 +502,7 @@ console.log(
         : ' — 전면 허용'
   }`
 )
+console.log(`[svp-server] comment-channel: ${commentChannel()} — 분류 완료 시 분석 코멘트 (write 게이트 적용)`)
 console.log(
   `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}${DUMP_DIR ? `\n[svp-server] debug-dump: ${DUMP_DIR} — 신규 티켓 수집 로그 저장` : ''}`
 )
