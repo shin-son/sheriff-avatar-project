@@ -245,10 +245,22 @@ io.use((socket, next) => {
   next()
 })
 
+// Assignable people = everyone who logged in + every wiki module owner (they
+// must be assignable before their first login). ownedModules comes from the
+// module-note frontmatter so the client can rank module owners first (F4).
 function roster() {
+  const modules = listModules()
+  const ids = new Set([...knownMembers, ...modules.map((m) => m.owner)])
+  ids.delete('admin')
+  ids.delete(BOT)
   return [
     { id: 'admin', name: '당번 (admin)', role: 'sheriff', ownedModules: [] },
-    ...[...knownMembers].map((id) => ({ id, name: id, role: 'member', ownedModules: [] }))
+    ...[...ids].map((id) => ({
+      id,
+      name: id,
+      role: 'member',
+      ownedModules: modules.filter((m) => m.owner === id).map((m) => m.module)
+    }))
   ]
 }
 
@@ -297,6 +309,36 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error(`[svp-server] ack transition failed: ${err.message}`)
     }
+  })
+
+  // C→S: sheriff manually assigns the issue (F4, API.md §1). Jira assignee is
+  // the source of truth — write it there and let the tracked-key sync route the
+  // change back to old/new holders, exactly like the auto-assign path.
+  socket.on('issue:reassign', async (payload) => {
+    if (user.role !== 'sheriff') return
+    const issue = [...issues.values()].find((i) => i.event.id === payload?.issueId)
+    const assigneeId = String(payload?.assigneeId ?? '')
+    if (!issue || issue.status === 'resolved' || !assigneeId) return
+    const key = issue.event.jira.key
+    if (!canWrite(key)) {
+      console.log(
+        `[svp-server] [${WRITE_MODE}] reassign from ${user.userId}: would assign ${key} → ${assigneeId} (+댓글) — Jira 변경 안 함`
+      )
+      return
+    }
+    try {
+      await setAssignee(key, assigneeId)
+      console.log(`[svp-server] reassign from ${user.userId}: ${key} → ${assigneeId}`)
+    } catch (err) {
+      console.error(`[svp-server] reassign failed for ${key}: ${err.message}`)
+      return
+    }
+    try {
+      await postComment(key, `[SVP] 당번(${user.userId}) 수동 배정 → ${assigneeId}`)
+    } catch (err) {
+      console.error(`[svp-server] reassign comment failed for ${key}: ${err.message}`) // 배정은 성공 — 계속
+    }
+    void poll() // sync가 assignee 변경을 읽어 기존/신규 담당자에게 issue:updated push
   })
 
   socket.on('disconnect', () => {

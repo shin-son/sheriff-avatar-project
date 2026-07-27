@@ -17,7 +17,10 @@
 > - S→C `issue:new` / `issue:updated` — payload는 `SheriffIssue` 그대로 (envelope 없음).
 >   서버 측 필터링: member = 본인 assignee분만, sheriff = 전체.
 > - C→S `issue:ack` `{ issueId }` — 서버가 Jira를 In Progress로 전이. 해결 메시지는 없다 (Done은 Jira에서만).
-> - 미이식: `issue:reassign` · `wiki:lint` · `wiki:feedback` · `server:error` — 아래 표의 의미 그대로
+> - C→S `issue:reassign` `{ issueId, assigneeId }` — sheriff 전용 수동 배정 (F4). 서버가 Jira assignee
+>   갱신 + 배정 댓글을 남기고, 변경은 tracked-key 폴링 sync가 기존/신규 담당자에게 `issue:updated`로
+>   되돌린다 (Jira = source of truth). `SVP_JIRA_WRITE_MODE` 게이트 적용 — dry-run에서는 로그만.
+> - 미이식: `wiki:lint` · `wiki:feedback` · `server:error` — 아래 표의 의미 그대로
 >   W2에서 Socket.IO 이벤트로 추가한다.
 
 - 서버가 `ws://<server-host>:8791` 리슨 (v2 = 당번 앱, v3 = Linux headless 서버 — [ARCHITECTURE.md](./ARCHITECTURE.md)).
