@@ -197,6 +197,28 @@ const server = createServer(async (req, res) => {
     return send(res, 200, [...tickets.values()])
   }
 
+  // 앱의 "티켓 확인 ↗" CTA가 여는 링크(event.jira.url = /browse/<KEY>). 실제 Jira의
+  // 티켓 화면 대체 — 데모에서 브라우저로 열리므로 간단한 HTML로 응답한다 (없으면 404).
+  const browseMatch = url.pathname.match(/^\/browse\/([^/]+)$/)
+  if (req.method === 'GET' && browseMatch) {
+    const ticket = tickets.get(browseMatch[1])
+    if (!ticket) {
+      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' })
+      return res.end(`<!doctype html><meta charset="utf-8"><body><h1>${browseMatch[1]} not found</h1>`)
+    }
+    const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
+    const comments = ticket.comments.map((c) => `<li>${esc(c.body)}</li>`).join('') || '<li>(없음)</li>'
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(
+      `<!doctype html><meta charset="utf-8"><title>${esc(ticket.key)}</title>` +
+        `<body style="font-family:system-ui;max-width:720px;margin:40px auto;padding:0 16px">` +
+        `<p style="color:#888">[mock Jira]</p><h1>${esc(ticket.key)} — ${esc(ticket.summary)}</h1>` +
+        `<p><b>status:</b> ${esc(ticket.status)} · <b>assignee:</b> ${esc(ticket.assignee ?? '-')}</p>` +
+        `<h2>Description</h2><pre style="white-space:pre-wrap">${esc(ticket.description)}</pre>` +
+        `<h2>Comments</h2><ul>${comments}</ul>`
+    )
+  }
+
   send(res, 404, { error: 'not found' })
 })
 

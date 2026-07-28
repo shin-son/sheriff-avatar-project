@@ -33,6 +33,7 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_ANTHROPIC_API_KEY` | (없음) | `SVP_LLM_PROVIDER=anthropic`일 때만 |
 | `SVP_LLM_CONFIDENCE_MIN` | `80` | 이 점수 **초과**여야 자동 배정 (assignee+댓글+In Progress) |
 | `SVP_JIRA_WRITE_MODE` | **`dry-run`** | 서버발 Jira write 전부(자동 배정 + ack 전이)의 게이트: `dry-run`=로그만 / `label`=`SVP_TEST_LABEL` 티켓만 / `live`=전면 |
+| `SVP_INGEST_MODE` | **`dry-run`** | 해결된 티켓의 vault 반영(F7: raw 동결 + case-log 기록) 게이트: `dry-run`=로그만(vault 안 건드림) / `live`=실제 기록. 데모의 case-log 실시간 갱신 컷은 `live` 필요 |
 | `SVP_COMMENT_CHANNEL` | `rest` | 분석 코멘트 전송 채널: `rest`=Jira REST 직접 / `mcp`=headless claude가 MCP 서버의 Jira 툴로 기입 (서버 호스트에 claude CLI + MCP 설정 json 필요). 이름 미설정·호출 실패 시 REST 폴백. write 게이트를 따른다 |
 | `SVP_COMMENT_MCP_NAME` | (없음) | claude MCP 설정(json)에 등록된 MCP 서버 이름 — `mcp` 채널이 `--allowedTools mcp__<이름>`으로 호출 |
 | `SVP_TEST_LABEL` | `svp-test` | `label` 모드에서 write를 허용하는 Jira 라벨 |

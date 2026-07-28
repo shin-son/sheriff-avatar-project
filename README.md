@@ -63,25 +63,31 @@ raw(불변 증거) → wiki(압축 지식) → schema(규칙)의 3계층을 유�
 
 ## 시작하기
 
+v3는 서버(`npm run server`)가 Jira를 폴링해 분류·배정하고 앱에 push하는 구조다.
+로컬은 mock Jira/Jenkins로 전체 파이프라인을 띄운다.
+
 ```bash
 npm install
 
-# 터미널 1: mock CI/CD 서버 (ws://localhost:8790)
-npm run mock:ci
+# 터미널 1: mock Jira (8792)
+npm run mock:jira
 
-# 터미널 2: 앱 개발 모드
+# 터미널 2: mock Jenkins (8794) — 콘솔 로그 소스
+npm run mock:jenkins
+
+# 터미널 3: v3 서버 (8793) — 폴링·분류·배정·push
+npm run server
+
+# 터미널 4: 앱 개발 모드
 npm run dev
 ```
 
-mock 서버가 주기적으로 CI 이슈 이벤트를 보내면, 앱이 분류·배정 후
-화면 우하단에 팝업 알림을 띄운다. 앱 사이드바에서 사용자(A/B/C)를 전환하며
-"일반 팀원은 자기 이슈만 / 당번은 전체 이슈" 동작을 확인할 수 있다.
+로그인으로 역할이 정해진다 — **admin/admin = 당번(전체 이슈)**, **아이디=비밀번호 = 팀원(자기 이슈만)**.
+서버가 mock Jira의 티켓을 폴링해 분류·배정하면 앱이 화면 우하단에 팝업 알림을 띄운다.
+새 티켓은 `POST http://localhost:8792/demo/trigger`로 재현한다([API.md §4](./docs/API.md)).
 
-실제 CI/CD 서버 주소는 환경변수로 지정한다:
-
-```bash
-set SVP_CI_WS_URL=wss://ci.example.com/events
-```
+실제 Jira/Jenkins 접속과 write 게이트(`dry-run`/`label`/`live`) 설정은 `.env`에 둔다 —
+[.env.example](./.env.example)와 [docs/SETUP.md](./docs/SETUP.md) 참고.
 
 ## EXE 인스톨러 빌드
 
@@ -99,17 +105,20 @@ npm run dist
 npm install          # 1. package-lock.json이 바뀐 경우 (merge 후엔 습관적으로 실행 권장)
 npm run typecheck    # 2. 타입 체크 통과
 npm run build        # 3. 프로덕션 빌드 성공
-npm run mock:ci      # 4. (터미널 1) mock 서버
-npm run dev          # 5. (터미널 2) 스모크 테스트 →
+# 4. 스모크 테스트 — mock Jira/Jenkins + 서버 + 앱 (각 별도 터미널)
+npm run mock:jira
+npm run mock:jenkins
+npm run server
+npm run dev
 ```
 
-스모크 테스트에서 확인할 것 (약 1분):
+스모크 테스트에서 확인할 것 (약 1분, admin/admin 로그인):
 
-- [ ] 사이드바에 초록색 "CI/CD 연결됨" 표시
+- [ ] 서버 콘솔에 seed 티켓 폴링 로그(`new CIOPS-...`)와 `classifier: on/off` 표시
 - [ ] 새 이슈 수신 시 우하단 팝업이 뜨고, 클릭하면 해당 이슈로 이동
-- [ ] 사용자 전환: member → 컴팩트 창(내 이슈만) / sheriff → 대시보드(전체 이슈)
-- [ ] 이슈 "해결 완료" → `wiki-vault/case-log.md`·`log.md`·`index.md` 자동 갱신
-- [ ] "🔍 WIKI 점검" 버튼이 보고서 카드를 띄움
+- [ ] 로그인 역할: 팀원(아이디=비밀번호) → 컴팩트 창(내 이슈만) / 당번(admin/admin) → 대시보드(전체 이슈)
+- [ ] 티켓을 Jira에서 Done → `wiki-vault/case-log.md`·`log.md`·`index.md` 갱신 (`SVP_INGEST_MODE=live`일 때)
+- [ ] "위키 점검" 버튼이 보고서 카드를 띄움
 
 ### 병합 시 주의: wiki-vault 자동 갱신 파일
 
@@ -130,6 +139,6 @@ npm run dev          # 5. (터미널 2) 스모크 테스트 →
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 목표 구조 (클라이언트·서버 + Jira 중심) 와 데이터 흐름
 - [docs/API.md](./docs/API.md) — 클라이언트↔서버 WS·Jira REST·LLM 계약 명세
 - [docs/BACKEND.md](./docs/BACKEND.md) — 백엔드 핵심 기능(F1~F8) 명세와 완료 기준
-- [docs/DEMO-SCENARIO.md](./docs/DEMO-SCENARIO.md) — 데모 시나리오 (15분, 4장면)
+- [docs/DEMO-SCENARIO.md](./docs/DEMO-SCENARIO.md) — 데모 영상 시나리오 (3~5분, 4장면)
 - [docs/ROI.md](./docs/ROI.md) — 도입 효과 추정 (사내 실측 기반: 일 294건 × triage 20~30분 vs 당번 3~4시간)
 - [wiki-vault/](./wiki-vault/) — LLM-WIKI (Obsidian으로 열 수 있음)

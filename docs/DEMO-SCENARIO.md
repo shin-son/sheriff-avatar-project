@@ -2,8 +2,8 @@
 
 > **v3 기준 갱신 (2026-07-16)**: 서버는 앱과 분리된 별도 프로세스(`npm run server`)이고, 역할은
 > 로그인이 결정하며(admin/admin=당번, 아이디=비밀번호=팀원), 분류는 Claude(Bedrock)가 실제로 수행한다.
-> **장면 3~4의 compounding(해결 → case-log 기록 → 재발 시 자동 배정)은 서버측 ingest(F7, 민석 W2)가
-> 붙은 뒤에 촬영 가능** — 그 전까지는 장면 1~2(티켓 유입 → LLM 분류 → 자동 배정 → Done 반영)만 유효하다.
+> **장면 3~4의 compounding(해결 → case-log 기록 → 재발 시 자동 배정)** 은 서버측 ingest(F7)로 구현돼 있다.
+> 단, ingest는 기본 dry-run이라 **`SVP_INGEST_MODE=live`를 켜야** case-log가 실제로 기록된다(아래 체크리스트).
 
 > 목표: **"CI 실패 → Jira 티켓 → LLM이 WIKI를 읽고 담당자 매칭 → Jira에서 해결 → WIKI가 실시간으로 배운다"**
 > 를 3~5분 영상 한 편으로 보여준다. 핵심 컷은 두 개 —
@@ -37,6 +37,7 @@ bob은 내레이션으로만 언급. 서버(`npm run server`)와 mock Jira는 �
 - [ ] `git restore wiki-vault` — 이전 테스트로 오염된 case-log/index/log 초기화
 - [ ] mock Jira 기동(8792) → `npm run server`(8793) → 앱 2개 로그인(admin/admin, alice/alice), 연결 초록불 확인
 - [ ] `.env`: **`SVP_JIRA_WRITE_MODE=live`** (데모는 실제 배정·댓글·전이를 보여줘야 함 — 기본 dry-run이면 아무것도 안 바뀜)
+- [ ] `.env`: **`SVP_INGEST_MODE=live`** (장면 3~4 case-log 실시간 기록 컷 — 기본 dry-run이면 vault가 안 바뀌어 컷이 나오지 않음)
 - [ ] 폴링 주기 확인 — 서버 기본 5초(`SVP_SERVER_POLL_MS`)면 데모에 충분
 - [ ] Obsidian으로 `wiki-vault/` 열고 `case-log.md`를 화면에 띄워두기. 외부 파일 변경이 즉시 반영되는지 확인
 - [ ] LLM env 유효 확인 — `AWS_REGION`(+SSO 로그인) 또는 `SVP_ANTHROPIC_API_KEY`. 시작 로그 `classifier: on` (off면 신뢰도가 전부 placeholder)
