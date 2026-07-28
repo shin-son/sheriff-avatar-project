@@ -22,7 +22,7 @@ import { loadIssueCache, saveIssueCache } from './cache.mjs'
 import { classifierEnabled, classify, selectNotes } from './classifier.mjs'
 import { extractBuildUrl, fetchFailureLog, probeBuildUrl } from './jenkins.mjs'
 import { fetchRawLogViaTool, formatLogViaSkill } from './ci-test-fetch.mjs'
-import { INGEST_MODE, alreadyIngested, ingestResolved } from './ingest.mjs'
+import { INGEST_MODE, ingestResolved } from './ingest.mjs'
 import { commentChannel, postAnalysisComment } from './comment-channel.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { listCatalog, listModules, queryWiki, readNotes, resolveOwner } from './wiki-query.mjs'
@@ -449,7 +449,8 @@ async function poll() {
 
     // 2) Tracked tickets: status/assignee sync by key — independent of the base
     //    JQL, so tickets that left it (e.g. `status != Resolved`) are still seen.
-    const tracked = [...issues.entries()].filter(([, i]) => i.status !== 'resolved').map(([k]) => k)
+    // resolved 티켓도 포함 — reopen(resolved→open) 전이를 감지하려면 계속 재조회해야 한다.
+    const tracked = [...issues.keys()]
     if (tracked.length > 0) {
       for (const t of await search(`key in (${tracked.join(',')})`)) {
         ticketLabels.set(t.key, t.fields.labels ?? [])
@@ -462,18 +463,29 @@ async function poll() {
         const assigneeChanged = (assignee && assignee !== BOT ? assignee : null) !== currentAssignee
         if (!statusChanged && !assigneeChanged) continue
         const before = issue.assignment.assigneeId
+        const wasResolved = issue.status === 'resolved'
         if (assigneeChanged) Object.assign(issue, routeByAssignee(issue.event, assignee, t.key))
         if (statusChanged) issue.status = status
         issue.event.jira.status = t.fields.status.statusCategory.key
         console.log(`[svp-server] sync ${t.key}: status=${issue.status} assignee=${issue.assignment.assigneeId}${assigneeChanged ? ` (was ${before})` : ''}`)
         // The previous holder also gets the update so their list drops/updates it.
         emitIssue('issue:updated', issue, assigneeChanged ? [before] : [])
-        // F7: on entering `resolved`, freeze evidence into the vault (once per key).
+        // Reopen (resolved → open): 다시 활성 큐로 복귀. 재시작 후에도 재추적되도록 캐시를 복원한다.
+        if (wasResolved && status && status !== 'resolved') {
+          issueCache.set(t.key, {
+            receivedAt: issue.receivedAt,
+            log: issue.event.log,
+            url: issue.event.url,
+            classification: issue.classification
+          })
+          saveIssueCache(issueCache)
+          console.log(`[svp-server] reopened ${t.key} → 활성 큐 복귀`)
+        }
+        // F7: on entering `resolved`, ingest evidence. 멱등성은 resolvedAt(Jira updated)
+        // 기준으로 ingestResolved 내부에서 판정 — reopen 후 재해결도 버전 raw로 안전 재기록.
         if (statusChanged && status === 'resolved') {
           if (issueCache.delete(t.key)) saveIssueCache(issueCache) // 종결 — 캐시 정리
-          if (!alreadyIngested(t.key)) {
-            void ingestResolved(issue) // fire-and-forget — never block the poll loop
-          }
+          void ingestResolved(issue, t.fields.updated) // fire-and-forget — never block the poll loop
         }
       }
     }
