@@ -19,6 +19,30 @@ const TOOL_TIMEOUT_MS = 60_000
 const SKILL_TIMEOUT_MS = 180_000
 const MAX_BUFFER = 16 * 1024 * 1024
 
+// claude CLI는 있으나 /format-ci-log 스킬이 없는 환경(스킬 미포함 clean checkout)
+// 에서는 exit 0 + "Unknown command: /format-ci-log" 같은 짧은 에러/대화 출력을 낸다.
+// 이게 정상 결과로 오인돼 raw 로그를 덮어쓰면 분류 입력이 오염된다. 아래 시그니처·
+// 하한으로 걸러낸다 — 거부되면 호출부가 raw 로그를 그대로 쓰므로 과다 거부는 안전하다.
+const FORMAT_ERROR_SIGNATURES =
+  /unknown command|no such command|command not found|not a recognized|do(n't| not) (have|recognize|know)/i
+// 실제 양식화된 실패 로그는 이보다 훨씬 길다. 짧은 출력은 에러/거부로 간주.
+const MIN_FORMATTED_LEN = 200
+
+/**
+ * 스킬 출력이 raw 로그를 대체할 만한 "진짜 양식화 결과"인지 판정 (화이트리스트).
+ * exit 실패·빈 출력·FORMAT_FAILED sentinel·에러 시그니처·비현실적으로 짧은 출력을
+ * 모두 거부한다. 거부 시 호출부는 raw 로그를 그대로 사용한다.
+ */
+export function isFormattedLog(ok, out) {
+  return (
+    ok &&
+    out !== '' &&
+    !out.startsWith('FORMAT_FAILED') &&
+    out.length >= MIN_FORMATTED_LEN &&
+    !FORMAT_ERROR_SIGNATURES.test(out)
+  )
+}
+
 /** execFile → { ok, out }. Never throws — 실패는 호출부 폴백으로 이어진다. */
 function run(cmd, args, timeout) {
   return new Promise((resolve) => {
@@ -58,9 +82,9 @@ export async function formatLogViaSkill(log) {
       ['-p', `/format-ci-log ${file}`, '--allowedTools', 'Read', '--add-dir', tmpdir()],
       SKILL_TIMEOUT_MS
     )
-    if (!ok || out === '' || out.startsWith('FORMAT_FAILED')) {
+    if (!isFormattedLog(ok, out)) {
       const reason = err ? err.message : out || 'empty output'
-      console.error(`[svp-server] format-ci-log skill failed: ${reason}`)
+      console.error(`[svp-server] format-ci-log skill failed (raw 로그 사용): ${reason.slice(0, 120)}`)
       return null
     }
     return out

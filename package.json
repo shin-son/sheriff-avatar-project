@@ -10,6 +10,7 @@
     "dev:frameless": "set SVP_GLASS=frameless&& electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "node --test \"server/**/*.test.mjs\"",
     "dist": "electron-vite build && electron-builder --win",
     "mock:ci": "node mock/ci-server.mjs",
     "mock:jira": "node mock/jira-server.mjs",
