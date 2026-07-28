@@ -134,6 +134,27 @@ src/
   근거 인용을 포함한 structured output(`{ match, quotedNote, quotedResolution }`)으로 **lint 후보에만** 올린다.
   query 감점 권한은 사람 판정에만 있고, 위키 수정·삭제는 어떤 경우에도 자동으로 하지 않는다 (사람 PR 전용).
 - Jira는 reopen이 가능하므로 ingest 1회 규칙에는 처리 완료 키 기록이 필요하다 (reopen → 재해결 시 중복 기록 방지).
+  현재 구현의 멱등성 키는 `raw/jira/<티켓키>.md` 파일 존재 = **티켓 단위(평생 1회)**다 (`server/ingest.mjs` `alreadyIngested`).
+
+  #### ⚠️ 논의 필요 — reopen 후 재해결이 vault에 안 남는다
+
+  멱등성이 "티켓 단위"라 "해결 이벤트 단위"가 아니다. 그래서 두 상황을 구분하지 못한다:
+  - (막고 싶은 것) 재시작·폴링 겹침으로 **같은 해결을 두 번 봄** → 중복 방지 ✅
+  - (막으면 안 되는 것) **첫 fix가 틀려서 reopen됐고 다른 fix로 재해결** → 이것도 스킵됨 ❌ (raw 갱신·case-log·log 전부 no-op)
+
+  **리스크:** reopen은 첫 해결이 틀렸다는 신호인데, vault엔 **틀린 첫 해결이 canonical로 남고 교정된 두 번째 해결은 유실**된다.
+  self-improving wiki가 가장 학습 가치 높은 케이스(실패 fix → 교정 fix)를 놓치고, 틀린 근거로 다음 분류를 할 수 있다.
+  (2026-07-28 사내 검증 중 확인 — reopen 후 재해결 시 `ingested` 로그·case-log 엔트리 모두 안 생김.)
+
+  **옵션 (팀 결정 필요):**
+  1. **현 동작 유지 + 한계 문서화** — 가장 가벼움. 발표 Q&A("fix가 틀리면?")엔 이 TODO로 답한다.
+  2. **해결 이벤트 단위 멱등성** — 키를 `티켓키 + resolved 타임스탬프`(또는 마지막 resolution 댓글 해시)로.
+     더 늦은 resolve면 재ingest 허용(raw는 `raw/jira/<key>-<n>.md`로 버전 동결, case-log는 새 엔트리 append).
+     중복(재시작)은 여전히 막힘. **지식 품질 관점에서 정공법이나 로직 추가 필요.**
+  3. **reopen 감지 + 재ingest 1회** — resolved 티켓도 sync 대상에 넣어 reopen을 감지(현재는 resolved가 추적에서 빠져
+     재시작 없이는 reopen 자체를 못 봄) 후 다음 resolve 때 한 번 더 ingest.
+
+  결론은 팀 논의 후 정한다. 결정 전까지는 **옵션 1(현 동작 + 이 문서)** 이 유효 상태다.
 
 ### vault 저장소와 리뷰 경계
 

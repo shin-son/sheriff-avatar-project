@@ -22,7 +22,11 @@ const VAULT_DIR =
 export const INGEST_MODE = process.env.SVP_INGEST_MODE ?? 'dry-run'
 const INFRA_FILES = new Set(['README.md', 'index.md', 'log.md'])
 
-/** Idempotency key = the frozen jira raw. Survives restart (disk, not memory). */
+/**
+ * Idempotency key = the frozen jira raw. Survives restart (disk, not memory).
+ * 티켓 단위(평생 1회)이므로 reopen 후 재해결은 반영되지 않는다 — 지식 유실 리스크와
+ * 대안은 docs/ARCHITECTURE.md "논의 필요 — reopen 후 재해결이 vault에 안 남는다" 참고 (팀 결정 전).
+ */
 export function alreadyIngested(key) {
   return existsSync(join(VAULT_DIR, 'raw', 'jira', `${key}.md`))
 }
