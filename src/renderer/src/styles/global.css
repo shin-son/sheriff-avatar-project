@@ -1026,6 +1026,71 @@ select:focus-visible {
 }
 
 /* 담당자 배정 (F4) — module owners are ranked first in the list */
+.candidates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.candidate-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--glass-raised);
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--paper);
+  font-size: 12px;
+  transition: border-color 0.15s;
+}
+
+.candidate-item:hover {
+  border-color: var(--sky);
+}
+
+.candidate-item.selected {
+  border-color: var(--sky);
+  background: rgba(85, 179, 255, 0.1);
+}
+
+.candidate-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.source-gerrit { background: rgba(255, 165, 0, 0.25); color: #ffa500; }
+.source-wiki   { background: rgba(85, 179, 255, 0.2); color: var(--sky); }
+.source-case-log { background: rgba(120, 220, 120, 0.2); color: #78dc78; }
+
+.candidate-name {
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.candidate-reason {
+  color: var(--dust);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-assign-btn {
+  margin-top: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
 .assign-row {
   display: flex;
   gap: 8px;

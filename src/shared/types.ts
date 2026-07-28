@@ -56,6 +56,19 @@ export interface Assignment {
   reason: string
 }
 
+export type CandidateSource = 'gerrit' | 'wiki' | 'case-log'
+
+/** A recommended assignee candidate for human-in-the-loop selection. */
+export interface CandidateAssignee {
+  /** Jira username or email used for setAssignee. */
+  id: string
+  /** Display name shown in the picker. */
+  name: string
+  source: CandidateSource
+  /** Human-readable reason shown in the picker (e.g. "Gerrit CL 311437 last committer"). */
+  reason: string
+}
+
 export type IssueStatus = 'new' | 'acknowledged' | 'resolved'
 
 /** The fully processed issue shown in the app. */
@@ -67,6 +80,8 @@ export interface SheriffIssue {
   receivedAt: string
   /** Server re-push of an already-analyzed issue (restart restore) — clients skip the toast. */
   restored?: boolean
+  /** Recommended assignee candidates for human-in-the-loop selection (confidence ≤ 80). */
+  candidates?: CandidateAssignee[]
 }
 
 export type Role = 'member' | 'sheriff'
