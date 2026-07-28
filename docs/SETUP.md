@@ -37,7 +37,7 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_COMMENT_CHANNEL` | `rest` | 분석 코멘트 전송 채널: `rest`=Jira REST 직접 / `mcp`=headless claude가 MCP 서버의 Jira 툴로 기입 (서버 호스트에 claude CLI + MCP 설정 json 필요). 이름 미설정·호출 실패 시 REST 폴백. write 게이트를 따른다 |
 | `SVP_COMMENT_MCP_NAME` | (없음) | claude MCP 설정(json)에 등록된 MCP 서버 이름 — `mcp` 채널이 `--allowedTools mcp__<이름>`으로 호출 |
 | `SVP_TEST_LABEL` | `svp-test` | `label` 모드에서 write를 허용하는 Jira 라벨 |
-| `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 분류 근거로 읽는 vault 경로. **앱도 인식** (선택) — 설정 시 "위키 열기/점검"이 이 경로(공유 vault)를 사용. 미설정 시 EXE는 설치 시점의 번들 스냅샷을 열므로 서버 vault와 어긋난다 |
+| `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 분류 근거로 읽는 vault 경로. **앱도 인식** (선택) — 설정 시 "위키 열기/점검"이 이 경로(공유 vault)를 사용. 미설정 시 EXE는 설치 시점의 번들 스냅샷을 열므로 서버 vault와 어긋난다. **Obsidian 사용 시 머신당 최초 1회** 해당 폴더를 "Open folder as vault"로 등록해야 한다 — 미등록이면 `obsidian://` 열기가 "Unable to find a vault" 에러를 띄운다 (URI는 등록된 vault만 연다) |
 | `SVP_SERVER_PORT` | `8793` | 서버 Socket.IO 리슨 포트 |
 | `SVP_SERVER_POLL_MS` | `5000` | 서버 폴링 주기(ms) |
 | `SVP_PUSH_URL` | `http://localhost:8793` | 중앙 서버 Socket.IO 주소 — **앱에 필요한 유일한 설정** (서버가 원격이면 그 주소로) |
