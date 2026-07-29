@@ -1126,6 +1126,13 @@ select:focus-visible {
   margin-bottom: 6px;
 }
 
+/* 컴팩트(팀원) 뷰 — 해결된 이슈 아래 참고 노트 평가 블록 */
+.citem-refs {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hair-faint);
+}
+
 /* 노트 유용성 👍/👎 — hover는 opacity 전환 (DESIGN.md 상호작용 패턴) */
 .ref-fb {
   display: inline-flex;

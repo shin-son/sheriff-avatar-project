@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { AppState, SheriffIssue, WsStatus } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
 
@@ -68,6 +68,13 @@ export default function CompactView({
 
 function CompactItem({ issue, highlighted }: { issue: SheriffIssue; highlighted: boolean }) {
   const { event, classification, assignment, status } = issue
+  // 해결한 담당자가 근거 노트를 평가한다 — 실제로 고친 사람이 노트의 유효성을
+  // 가장 잘 안다 (feedback loop, CLAUDE.md wiki 규칙). 해결 확정 후에만 노출.
+  const [voted, setVoted] = useState<Record<string, boolean>>({})
+  const vote = (noteTitle: string, helpful: boolean) => {
+    window.svp.wikiFeedback(noteTitle, helpful)
+    setVoted((v) => ({ ...v, [noteTitle]: helpful }))
+  }
   // 티켓을 열기만 한다 — In Progress 전이는 담당자가 Jira에서 직접, 폴링이 반영.
   // jira.url이 browse 링크 — event.url은 CICD 파이프라인 링크일 수 있다.
   const checkTicket = () => {
@@ -110,6 +117,36 @@ function CompactItem({ issue, highlighted }: { issue: SheriffIssue; highlighted:
           </button>
         )}
       </div>
+      {status === 'resolved' && classification.wikiRefs.length > 0 && (
+        <div className="citem-refs">
+          <p className="fb-prompt">해결 완료 — 참고된 노트가 도움됐는지 평가해주세요</p>
+          {classification.wikiRefs.map((r) => (
+            <div key={r.file} className="detail-ref">
+              <span className="ref-title">{r.title}</span>
+              {voted[r.title] === undefined ? (
+                <span className="ref-fb">
+                  <button
+                    className="fb-btn"
+                    title="이 노트가 해결에 도움됨"
+                    onClick={() => vote(r.title, true)}
+                  >
+                    👍
+                  </button>
+                  <button
+                    className="fb-btn"
+                    title="이 노트가 도움 안 됨 — 부정 누적 시 정리 후보"
+                    onClick={() => vote(r.title, false)}
+                  >
+                    👎
+                  </button>
+                </span>
+              ) : (
+                <span className="ref-fb-done">{voted[r.title] ? '👍' : '👎'} 반영됨</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </article>
   )
 }
