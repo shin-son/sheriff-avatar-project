@@ -32,18 +32,6 @@ export default function Cockpit({ team, user, wsStatus, muted, counts, onToggleM
             {user.role === 'sheriff' ? '당번 · SHERIFF' : '팀원 · MEMBER'}
           </span>
           <span className="cockpit-name">{me?.name}</span>
-          {/* 로그인이 신원을 결정한다 (v3) — 명단은 표시만, 전환 없음 */}
-          <div className="cockpit-team">
-            {team.map((m) => (
-              <span
-                key={m.id}
-                className={`avatar ${m.role === 'sheriff' ? 'is-sheriff' : ''}`}
-                title={`${m.name} — ${m.ownedModules.join(' · ')}`}
-              >
-                {m.name.charAt(0)}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
 

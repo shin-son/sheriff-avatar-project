@@ -357,24 +357,6 @@ select:focus-visible {
   letter-spacing: -0.2px;
 }
 
-.cockpit-team {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 5px;
-}
-
-.cockpit-team .avatar {
-  width: 22px;
-  height: 22px;
-  font-size: 10px;
-}
-
-/* Sheriff presence gets a faint brass ring (brass = sole warm brand cue). */
-.cockpit-team .avatar.is-sheriff {
-  border-color: rgba(217, 164, 65, 0.55);
-}
-
 .cockpit-stats {
   margin-left: auto;
   display: flex;
