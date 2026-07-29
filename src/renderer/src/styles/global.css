@@ -1120,10 +1120,49 @@ select:focus-visible {
 }
 
 .detail-ref {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--paper);
   padding: 3px 0;
+}
+
+.ref-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 노트 유용성 👍/👎 — hover는 opacity 전환 (DESIGN.md 상호작용 패턴) */
+.ref-fb {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.fb-btn {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 150ms;
+}
+
+.fb-btn:hover {
+  opacity: 1;
+}
+
+.ref-fb-done {
+  font-size: 10px;
+  color: var(--dust);
+  white-space: nowrap;
 }
 
 .detail-meta {
