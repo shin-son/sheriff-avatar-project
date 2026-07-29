@@ -166,29 +166,35 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
         {classification.wikiRefs.length > 0 && (
           <div className="detail-section">
             <div className="detail-label">참고 (LLM-WIKI)</div>
+            {/* 평가는 해결 확정 후에만 — 결과를 알고 나서야 노트가 옳은 근거였는지
+                판단할 수 있다 (feedback loop, CLAUDE.md wiki 규칙). */}
+            {status === 'resolved' && (
+              <p className="fb-prompt">해결 완료 — 참고된 노트가 분류에 도움됐는지 평가해주세요</p>
+            )}
             {classification.wikiRefs.map((r) => (
               <div key={r.file} className="detail-ref">
                 <span className="ref-title">{r.title}</span>
-                {voted[r.title] === undefined ? (
-                  <span className="ref-fb">
-                    <button
-                      className="fb-btn"
-                      title="이 노트가 분류에 도움됨"
-                      onClick={() => vote(r.title, true)}
-                    >
-                      👍
-                    </button>
-                    <button
-                      className="fb-btn"
-                      title="이 노트가 도움 안 됨 — 부정 누적 시 정리 후보"
-                      onClick={() => vote(r.title, false)}
-                    >
-                      👎
-                    </button>
-                  </span>
-                ) : (
-                  <span className="ref-fb-done">{voted[r.title] ? '👍' : '👎'} 반영됨</span>
-                )}
+                {status === 'resolved' &&
+                  (voted[r.title] === undefined ? (
+                    <span className="ref-fb">
+                      <button
+                        className="fb-btn"
+                        title="이 노트가 분류에 도움됨"
+                        onClick={() => vote(r.title, true)}
+                      >
+                        👍
+                      </button>
+                      <button
+                        className="fb-btn"
+                        title="이 노트가 도움 안 됨 — 부정 누적 시 정리 후보"
+                        onClick={() => vote(r.title, false)}
+                      >
+                        👎
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="ref-fb-done">{voted[r.title] ? '👍' : '👎'} 반영됨</span>
+                  ))}
               </div>
             ))}
           </div>

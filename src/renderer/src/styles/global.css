@@ -1119,6 +1119,13 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+/* 해결 확정 후에만 표시되는 평가 안내 */
+.fb-prompt {
+  font-size: 11px;
+  color: var(--dust);
+  margin-bottom: 6px;
+}
+
 /* 노트 유용성 👍/👎 — hover는 opacity 전환 (DESIGN.md 상호작용 패턴) */
 .ref-fb {
   display: inline-flex;
