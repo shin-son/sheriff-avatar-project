@@ -3,7 +3,7 @@
 // 스킵해 case-log/raw 중복·덮어쓰기를 막는지 보장.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decideIngest } from './ingest.mjs'
+import { decideIngest, signatureOf, isDuplicateRecurrence } from './ingest.mjs'
 
 const T1 = '2026-07-29T00:00:00.000Z'
 const T2 = '2026-07-29T10:00:00.000Z'
@@ -28,4 +28,43 @@ test('더 늦은 resolvedAt(reopen 후 재해결)은 재기록 n+1', () => {
 test('resolvedAt 부재 시: prev 있으면 스킵(중복 방지 우선), 없으면 첫 기록', () => {
   assert.equal(decideIngest({ at: T1, n: 1 }, undefined).skip, true)
   assert.deepEqual(decideIngest(undefined, undefined), { skip: false, n: 1 })
+})
+
+// ── D: 중복 dedup ─────────────────────────────────────────────────────────
+const DAY = 24 * 60 * 60 * 1000
+
+test('signatureOf: 로그의 TC name 우선', () => {
+  assert.equal(
+    signatureOf({ log: 'TC name or file : auth.token-refresh.sh\nFail Log: ...', title: '[x] Foo Failed' }),
+    'auth.token-refresh.sh'
+  )
+})
+
+test('signatureOf: TC 없으면 제목 정규화([..] 접두·Failed 접미 제거)', () => {
+  assert.equal(
+    signatureOf({ log: 'no tc marker', title: '[DEV_CICD][proj][T1] : auth.login.sh Failed' }),
+    'auth.login.sh'
+  )
+})
+
+test('isDuplicateRecurrence: 다른 티켓·같은 모듈·시간창 내 = 재발', () => {
+  const prev = { anchorKey: 'CIOPS-1', module: 'auth', count: 1, lastAt: '2026-07-29T00:00:00.000Z' }
+  assert.equal(
+    isDuplicateRecurrence(prev, { key: 'CIOPS-2', module: 'auth', at: '2026-07-29T05:00:00.000Z', n: 1 }, 14 * DAY),
+    true
+  )
+})
+
+test('isDuplicateRecurrence: anchor 자기자신·재해결(n>1)·다른 모듈·창 만료는 재발 아님', () => {
+  const prev = { anchorKey: 'CIOPS-1', module: 'auth', count: 1, lastAt: '2026-07-29T00:00:00.000Z' }
+  // 같은 티켓(anchor 재해결)
+  assert.equal(isDuplicateRecurrence(prev, { key: 'CIOPS-1', module: 'auth', at: '2026-07-29T05:00:00.000Z', n: 1 }, 14 * DAY), false)
+  // reopen 재해결 n>1
+  assert.equal(isDuplicateRecurrence(prev, { key: 'CIOPS-2', module: 'auth', at: '2026-07-29T05:00:00.000Z', n: 2 }, 14 * DAY), false)
+  // 다른 모듈
+  assert.equal(isDuplicateRecurrence(prev, { key: 'CIOPS-2', module: 'payment', at: '2026-07-29T05:00:00.000Z', n: 1 }, 14 * DAY), false)
+  // 시간창 만료(20일 뒤)
+  assert.equal(isDuplicateRecurrence(prev, { key: 'CIOPS-2', module: 'auth', at: '2026-08-18T00:00:00.000Z', n: 1 }, 14 * DAY), false)
+  // prev 없음
+  assert.equal(isDuplicateRecurrence(undefined, { key: 'CIOPS-2', module: 'auth', at: '2026-07-29T05:00:00.000Z', n: 1 }, 14 * DAY), false)
 })
