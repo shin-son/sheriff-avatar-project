@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { SheriffIssue } from '@shared/types'
 import { deriveStats } from '../stats'
 
@@ -5,14 +6,56 @@ interface Props {
   issues: SheriffIssue[]
 }
 
+const OPEN_KEY = 'svp.dashboard.open'
+
 /** 당번 전용 전체 현황 — 처리 상태 · 모듈별 · 추정 중복. issues에서 파생만 한다. */
 export default function StatusBoard({ issues }: Props) {
   const s = deriveStats(issues)
   const maxTotal = Math.max(1, ...s.modules.map((m) => m.total))
+  // 접힘 상태는 localStorage에 저장 — 당번이 한번 접으면 유지된다. 기본 펼침.
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(OPEN_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggle = (): void =>
+    setOpen((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(OPEN_KEY, next ? '1' : '0')
+      } catch {
+        /* localStorage 불가 환경 — 무시 */
+      }
+      return next
+    })
 
   return (
     <section className="statusboard" aria-label="전체 현황">
-      <div className="sb-tiles">
+      <div className="sb-head">
+        <button
+          className="sb-toggle"
+          onClick={toggle}
+          aria-expanded={open}
+          title={open ? '현황 접기' : '현황 펼치기'}
+        >
+          <span className={`sb-chev${open ? ' open' : ''}`} aria-hidden="true">
+            ▾
+          </span>
+          <span className="sb-head-title">전체 현황</span>
+        </button>
+        {!open && (
+          <span className="sb-head-summary">
+            당번 {s.sheriffWaiting} · 자동 {s.autoAssigned} · 해결 {s.resolved}
+            {s.dupIssueCount > 0 ? ` · 중복 ${s.dupIssueCount}` : ''}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <>
+          <div className="sb-tiles">
         <Tile label="전체" value={s.total} />
         <Tile label="당번 대기" value={s.sheriffWaiting} tone="warn" />
         <Tile label="자동 배정" value={s.autoAssigned} tone="info" />
@@ -90,6 +133,8 @@ export default function StatusBoard({ issues }: Props) {
             서명 기반 추정 — flaky·별개 회귀일 수 있어 병합은 당번이 확인 후 Jira에서 처리
           </p>
         </div>
+      )}
+        </>
       )}
     </section>
   )

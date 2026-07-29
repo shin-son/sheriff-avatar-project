@@ -1739,6 +1739,57 @@ body.frameless .workspace {
   margin: 0 0 14px;
 }
 
+/* 접기/펼치기 헤더 */
+.sb-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sb-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  padding: 2px 2px;
+  cursor: pointer;
+  color: var(--paper);
+  font: inherit;
+}
+.sb-toggle:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.sb-chev {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--dust);
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+.sb-chev.open {
+  transform: rotate(0deg);
+}
+.sb-head-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dust);
+}
+.sb-head-summary {
+  font-size: 12px;
+  color: var(--dust);
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-chev {
+    transition: none;
+  }
+}
+
 .sb-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
