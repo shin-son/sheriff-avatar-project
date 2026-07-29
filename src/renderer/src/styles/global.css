@@ -1795,16 +1795,49 @@ body.frameless .workspace {
   margin-bottom: 10px;
 }
 
+.sb-modhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.sb-modhead .sb-sub {
+  margin-bottom: 0;
+}
+.sb-legend {
+  display: inline-flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sb-legend .lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--dust);
+}
+.sb-legend .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.dot.warn { background: #f5b23a; }
+.dot.info { background: var(--sky); }
+.dot.good { background: #6fcf7f; }
+
 .sb-modules {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 .sb-mod {
   display: grid;
-  grid-template-columns: 120px 1fr 34px;
+  grid-template-columns: 110px 1fr max-content;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .sb-mod-name {
   font-size: 12.5px;
@@ -1813,27 +1846,44 @@ body.frameless .workspace {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sb-bar {
-  display: flex;
-  height: 10px;
-  border-radius: 5px;
-  overflow: hidden;
+/* 트랙은 전체 폭, fill 길이는 전역 최대 대비 절대량 → 모듈 간 비교 가능 */
+.sb-track {
+  height: 12px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+.sb-fill {
+  display: flex;
+  height: 100%;
   gap: 2px;
-}
-.sb-bar .seg {
   min-width: 3px;
-  border-radius: 2px;
 }
-.sb-bar .seg.warn { background: #f5b23a; }
-.sb-bar .seg.info { background: var(--sky); }
-.sb-bar .seg.good { background: #6fcf7f; }
-.sb-mod-count {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--dust);
+.sb-fill .seg {
+  min-width: 3px;
+}
+.sb-fill .seg.warn { background: #f5b23a; }
+.sb-fill .seg.info { background: var(--sky); }
+.sb-fill .seg.good { background: #6fcf7f; }
+
+/* 상태별 숫자 — 색으로 상태 구분, 0은 흐리게 */
+.sb-counts {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 26px);
+  gap: 6px;
   text-align: right;
+}
+.sb-counts .c {
+  font-size: 13px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+.sb-counts .c.warn { color: #f5b23a; }
+.sb-counts .c.info { color: var(--sky); }
+.sb-counts .c.good { color: #6fcf7f; }
+.sb-counts .c.zero {
+  color: var(--dust);
+  opacity: 0.4;
 }
 
 .sb-dups {

@@ -8,6 +8,7 @@ interface Props {
 /** 당번 전용 전체 현황 — 처리 상태 · 모듈별 · 추정 중복. issues에서 파생만 한다. */
 export default function StatusBoard({ issues }: Props) {
   const s = deriveStats(issues)
+  const maxTotal = Math.max(1, ...s.modules.map((m) => m.total))
 
   return (
     <section className="statusboard" aria-label="전체 현황">
@@ -27,26 +28,44 @@ export default function StatusBoard({ issues }: Props) {
 
       {s.modules.length > 0 && (
         <div className="sb-block">
-          <div className="sb-sub">모듈별 현황</div>
+          <div className="sb-modhead">
+            <span className="sb-sub">모듈별 현황</span>
+            <span className="sb-legend">
+              <span className="lg">
+                <i className="dot warn" />당번 대기
+              </span>
+              <span className="lg">
+                <i className="dot info" />자동 배정
+              </span>
+              <span className="lg">
+                <i className="dot good" />해결
+              </span>
+            </span>
+          </div>
           <div className="sb-modules">
             {s.modules.map((m) => (
               <div className="sb-mod" key={m.module}>
                 <span className="sb-mod-name" title={m.module}>
                   {m.module}
                 </span>
-                <span
-                  className="sb-bar"
-                  title={`당번 ${m.sheriffWaiting} · 자동 ${m.autoAssigned} · 해결 ${m.resolved}`}
-                >
-                  {m.sheriffWaiting > 0 && (
-                    <span className="seg warn" style={{ flexGrow: m.sheriffWaiting }} />
-                  )}
-                  {m.autoAssigned > 0 && (
-                    <span className="seg info" style={{ flexGrow: m.autoAssigned }} />
-                  )}
-                  {m.resolved > 0 && <span className="seg good" style={{ flexGrow: m.resolved }} />}
+                <span className="sb-track" title={`전체 ${m.total}`}>
+                  <span className="sb-fill" style={{ width: `${(m.total / maxTotal) * 100}%` }}>
+                    {m.sheriffWaiting > 0 && (
+                      <span className="seg warn" style={{ flexGrow: m.sheriffWaiting }} />
+                    )}
+                    {m.autoAssigned > 0 && (
+                      <span className="seg info" style={{ flexGrow: m.autoAssigned }} />
+                    )}
+                    {m.resolved > 0 && (
+                      <span className="seg good" style={{ flexGrow: m.resolved }} />
+                    )}
+                  </span>
                 </span>
-                <span className="sb-mod-count">{m.total}</span>
+                <span className="sb-counts">
+                  <b className={`c warn${m.sheriffWaiting ? '' : ' zero'}`}>{m.sheriffWaiting}</b>
+                  <b className={`c info${m.autoAssigned ? '' : ' zero'}`}>{m.autoAssigned}</b>
+                  <b className={`c good${m.resolved ? '' : ' zero'}`}>{m.resolved}</b>
+                </span>
               </div>
             ))}
           </div>
