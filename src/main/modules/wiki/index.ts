@@ -13,8 +13,13 @@ import type { CIEvent, SheriffIssue, WikiLintReport, WikiMatch } from '@shared/t
  *   feedback — 👍/👎 votes on note usefulness; the loop that keeps junk out
  */
 
-/** Absolute path of the wiki vault — also used to open notes in Obsidian. */
+/** Absolute path of the wiki vault — also used to open notes in Obsidian.
+ * SVP_WIKI_DIR (the same variable the server uses) points the app at the live
+ * shared vault, so 위키 열기/점검 sees what the server actually reads and
+ * ingests. Without it the packaged app falls back to its bundled snapshot,
+ * which goes stale as the server keeps ingesting. */
 export function vaultDir(): string {
+  if (process.env.SVP_WIKI_DIR) return process.env.SVP_WIKI_DIR
   return app.isPackaged
     ? join(process.resourcesPath, 'wiki-vault')
     : join(app.getAppPath(), 'wiki-vault')

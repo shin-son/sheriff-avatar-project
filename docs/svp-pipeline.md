@@ -48,7 +48,7 @@ flowchart TB
     TRIG["sync: resolved 진입 + 미ingest 확인 (PR16)<br/>→ void ingestResolved (fire-and-forget)"]
     GETRAW["jira.mjs getIssueRaw (PR16)<br/>fields=description,comment"]
     SUMM["classifier.mjs summarizeResolution (PR16)<br/>LLM: symptom · cause · resolution<br/>무자격이면 symptom만"]
-    INGEST["ingest.mjs ingestResolved (PR16)<br/>INGEST_MODE 게이트 · 멱등 raw/jira 존재<br/>freeze raw · appendCaseLog · rebuildIndex"]
+    INGEST["ingest.mjs ingestResolved (PR16)<br/>INGEST_MODE 게이트 · 멱등 resolvedAt(.ingest-state)<br/>freeze raw(재해결 -rN) · appendCaseLog · rebuildIndex"]
   end
 
   subgraph VAULT["LLM-WIKI vault (wiki-vault/)"]
@@ -115,7 +115,7 @@ confidence 80 초과면 Jira에 자동 배정한다.
 
 **② OUTBOUND — 해결 감지 → ingest (파랑 #16이 핵심)**
 
-`poll()`의 sync 단계가 티켓의 `resolved` 진입을 감지하면(미ingest일 때 1회) **`ingestResolved`(#16)** 가
+`poll()`의 sync 단계가 티켓의 `resolved` 진입을 감지할 때마다(해결 이벤트 단위 멱등 · reopen 후 재해결은 버전 기록) **`ingestResolved`(#16)** 가
 `getIssueRaw`로 description·해결 코멘트를 가져오고, `summarizeResolution`(LLM)이 symptom/cause/
 resolution을 채운 뒤, **#15 스키마**대로 `raw/jira`·`raw/ci`를 동결하고 `case-log`·`index`·`log`를
 갱신한다. 축적된 case-log는 반복 사례를 known-failure로 승격시켜 **다음 분류의 신뢰도를 높인다(compounding).**

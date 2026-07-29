@@ -1120,10 +1120,49 @@ select:focus-visible {
 }
 
 .detail-ref {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--paper);
   padding: 3px 0;
+}
+
+.ref-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 노트 유용성 👍/👎 — hover는 opacity 전환 (DESIGN.md 상호작용 패턴) */
+.ref-fb {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.fb-btn {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  background: var(--glass-raised);
+  border: 1px solid var(--hair-faint);
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 150ms;
+}
+
+.fb-btn:hover {
+  opacity: 1;
+}
+
+.ref-fb-done {
+  font-size: 10px;
+  color: var(--dust);
+  white-space: nowrap;
 }
 
 .detail-meta {
@@ -1794,4 +1833,207 @@ body.frameless .workspace {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+/* ── 전체 현황 대시보드 (StatusBoard) — 당번 전용 ─────────────────────── */
+.statusboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+/* 접기/펼치기 헤더 */
+.sb-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sb-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  padding: 2px 2px;
+  cursor: pointer;
+  color: var(--paper);
+  font: inherit;
+}
+.sb-toggle:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.sb-chev {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--dust);
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+.sb-chev.open {
+  transform: rotate(0deg);
+}
+.sb-head-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dust);
+}
+.sb-head-summary {
+  font-size: 12px;
+  color: var(--dust);
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-chev {
+    transition: none;
+  }
+}
+
+.sb-block {
+  background: var(--glass);
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.sb-sub {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dust);
+  margin-bottom: 10px;
+}
+
+.sb-modhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.sb-modhead .sb-sub {
+  margin-bottom: 0;
+}
+.sb-legend {
+  display: inline-flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sb-legend .lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--dust);
+}
+.sb-legend .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.dot.warn { background: #f5b23a; }
+.dot.info { background: var(--sky); }
+.dot.good { background: #6fcf7f; }
+
+.sb-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.sb-mod {
+  display: grid;
+  grid-template-columns: 110px 1fr max-content;
+  align-items: center;
+  gap: 12px;
+}
+.sb-mod-name {
+  font-size: 12.5px;
+  color: var(--paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 트랙은 전체 폭, fill 길이는 전역 최대 대비 절대량 → 모듈 간 비교 가능 */
+.sb-track {
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+.sb-fill {
+  display: flex;
+  height: 100%;
+  gap: 2px;
+  min-width: 3px;
+}
+.sb-fill .seg {
+  min-width: 3px;
+}
+.sb-fill .seg.warn { background: #f5b23a; }
+.sb-fill .seg.info { background: var(--sky); }
+.sb-fill .seg.good { background: #6fcf7f; }
+
+/* 상태별 숫자 — 색으로 상태 구분, 0은 흐리게 */
+.sb-counts {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 26px);
+  gap: 6px;
+  text-align: right;
+}
+.sb-counts .c {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sb-counts .c.warn { color: #f5b23a; }
+.sb-counts .c.info { color: var(--sky); }
+.sb-counts .c.good { color: #6fcf7f; }
+.sb-counts .c.zero {
+  color: var(--dust);
+  opacity: 0.4;
+}
+
+.sb-dups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-dup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.sb-dup-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f5b23a;
+  background: rgba(245, 178, 58, 0.15);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.sb-dup-mod {
+  flex-shrink: 0;
+  color: var(--paper);
+  font-weight: 500;
+}
+.sb-dup-keys {
+  color: var(--dust);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--dust);
+  opacity: 0.85;
 }

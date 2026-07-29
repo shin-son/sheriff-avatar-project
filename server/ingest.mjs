@@ -8,7 +8,7 @@
 // Scope note: raw/gerrit is written only when a Change-Id is supplied; the
 // Gerrit fetch is a later source adapter. Without LLM credentials the case-log
 // symptom is still captured (summarizeResolution fallback), cause/resolution 불명.
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { appendFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,18 +22,49 @@ const VAULT_DIR =
 export const INGEST_MODE = process.env.SVP_INGEST_MODE ?? 'dry-run'
 const INFRA_FILES = new Set(['README.md', 'index.md', 'log.md'])
 
-/** Idempotency key = the frozen jira raw. Survives restart (disk, not memory). */
-export function alreadyIngested(key) {
-  return existsSync(join(VAULT_DIR, 'raw', 'jira', `${key}.md`))
+// 해결 이벤트 단위 멱등성 상태: { <jira key>: { at: <resolvedAt ISO>, n: <재기록 횟수> } }.
+// raw/jira/ 아래 숨김 파일 — listNoteFiles가 raw·`.` 시작을 제외하므로 index에 안 걸린다.
+// reopen 후 재해결 시 '더 늦은 resolvedAt'만 재기록하고, 재시작·중복 폴링(같은 resolvedAt)은
+// 스킵해 중복 기록을 막는다 (raw 불변 원칙은 버전 파일 raw/jira/<key>-r<n>.md로 유지).
+const INGEST_STATE_FILE = join(VAULT_DIR, 'raw', 'jira', '.ingest-state.json')
+const ingestState = loadIngestState()
+
+function loadIngestState() {
+  try {
+    return JSON.parse(readFileSync(INGEST_STATE_FILE, 'utf-8'))
+  } catch {
+    return {}
+  }
+}
+
+function saveIngestState() {
+  mkdirSync(dirname(INGEST_STATE_FILE), { recursive: true })
+  return writeFile(INGEST_STATE_FILE, JSON.stringify(ingestState, null, 2), 'utf-8')
+}
+
+/**
+ * 이 resolve 이벤트를 ingest할지 결정 (순수 함수 — 테스트 대상).
+ * 첫 해결은 항상 기록(n=1), reopen 후 더 늦은 resolvedAt이면 재기록(n+1),
+ * 같은/이전 resolvedAt(재시작·중복 폴링)이나 resolvedAt 부재 시 prev 있으면 스킵.
+ */
+export function decideIngest(prev, resolvedAt) {
+  if (!prev) return { skip: false, n: 1 }
+  if (!resolvedAt || prev.at >= resolvedAt) return { skip: true, n: prev.n }
+  return { skip: false, n: prev.n + 1 }
 }
 
 /**
  * File a resolved issue: freeze raw evidence → append case-log → refresh
  * index/log. Fire-and-forget from the poll loop; never throws into it.
+ * `resolvedAt`(Jira updated 시각)로 해결 이벤트 단위 멱등성을 판정 — reopen 후
+ * 재해결은 버전 raw + supersede 표식으로 안전하게 재기록한다.
  */
-export async function ingestResolved(issue) {
+export async function ingestResolved(issue, resolvedAt) {
   const key = issue.event.jira.key
-  if (alreadyIngested(key)) return
+  const decision = decideIngest(ingestState[key], resolvedAt)
+  if (decision.skip) return
+  const n = decision.n
+  const rawName = n === 1 ? key : `${key}-r${n}` // 불변 raw 보존: 재해결은 새 파일로
   const capturedAt = new Date().toISOString()
   try {
     let jiraRaw = { description: issue.event.log, comments: [] }
@@ -43,17 +74,19 @@ export async function ingestResolved(issue) {
       console.error(`[svp-server] ingest ${key}: jira raw fetch failed (${err.message}) — event 원문으로 동결`)
     }
     if (INGEST_MODE !== 'live') {
-      console.log(`[svp-server] [${INGEST_MODE}] ingest ${key}: would freeze raw/jira + raw/ci, case-log append — vault 변경 안 함`)
+      console.log(`[svp-server] [${INGEST_MODE}] ingest ${key} (#${n}): would freeze raw/jira/${rawName} + raw/ci, case-log append — vault 변경 안 함`)
       return
     }
     // P0b: LLM reads the raw evidence to fill symptom/cause/resolution.
     const filled = await summarizeResolution(issue.event, { comments: jiraRaw.comments })
-    await freezeJiraRaw(key, issue, jiraRaw, capturedAt)
-    await freezeCiRaw(key, issue, capturedAt)
-    await appendCaseLog(issue, capturedAt, filled)
-    await appendLog('ingest', `${key} ${issue.event.title}`)
+    await freezeJiraRaw(rawName, key, issue, jiraRaw, capturedAt)
+    await freezeCiRaw(rawName, key, issue, capturedAt)
+    await appendCaseLog(issue, capturedAt, filled, n, rawName)
+    await appendLog('ingest', `${key}${n > 1 ? ` (재해결 #${n})` : ''} ${issue.event.title}`)
     await rebuildIndex()
-    console.log(`[svp-server] ingested ${key}: raw/jira + raw/ci 동결, case-log 기록`)
+    ingestState[key] = { at: resolvedAt ?? capturedAt, n } // 성공 후에만 갱신 (dry-run은 미갱신)
+    await saveIngestState()
+    console.log(`[svp-server] ingested ${key}${n > 1 ? ` (재해결 #${n}, 이전 supersede)` : ''}: raw/jira/${rawName} + raw/ci 동결, case-log 기록`)
   } catch (err) {
     console.error(`[svp-server] ingest failed for ${key}: ${err.message}`)
   }
@@ -67,7 +100,7 @@ function writeRaw(source, name, body) {
   return writeFile(join(dir, `${name}.md`), body, 'utf-8')
 }
 
-function freezeJiraRaw(key, issue, { description, comments }, capturedAt) {
+function freezeJiraRaw(rawName, key, issue, { description, comments }, capturedAt) {
   const body = [
     '---',
     'type: raw',
@@ -86,10 +119,10 @@ function freezeJiraRaw(key, issue, { description, comments }, capturedAt) {
     comments.length ? comments.join('\n\n') : '(없음)',
     ''
   ].join('\n')
-  return writeRaw('jira', key, body)
+  return writeRaw('jira', rawName, body)
 }
 
-function freezeCiRaw(key, issue, capturedAt) {
+function freezeCiRaw(rawName, key, issue, capturedAt) {
   const body = [
     '---',
     'type: raw',
@@ -109,12 +142,12 @@ function freezeCiRaw(key, issue, capturedAt) {
     issue.event.log || '(없음)',
     ''
   ].join('\n')
-  return writeRaw('ci', key, body)
+  return writeRaw('ci', rawName, body)
 }
 
 /* ── case-log / index.md / log.md ───────────────────────────────────────── */
 
-function appendCaseLog(issue, capturedAt, filled) {
+function appendCaseLog(issue, capturedAt, filled, n, rawName) {
   const key = issue.event.jira.key
   const refs = issue.classification.wikiRefs?.length
     ? issue.classification.wikiRefs.map((r) => r.title).join(', ')
@@ -122,14 +155,16 @@ function appendCaseLog(issue, capturedAt, filled) {
   // symptom/cause/resolution: LLM(summarizeResolution)이 raw를 읽어 채운다 (P0b).
   // 자격증명 없으면 fallback으로 symptom만 채워진 채 들어온다.
   const entry = [
-    `\n## ${issue.event.id} — ${issue.event.title}`,
+    `\n## ${issue.event.id} — ${issue.event.title}${n > 1 ? ` (재해결 #${n})` : ''}`,
+    // 재해결(reopen 후): 이전 기록을 대체함을 명시 — query/lint가 교정본을 우선하게 한다.
+    ...(n > 1 ? [`- note: reopen 후 재해결 (재기록 #${n}, 이전 기록 supersede)`] : []),
     `- date: ${capturedAt}`,
     `- module: ${issue.classification.category}`,
     `- type: ${issue.event.type}`,
     `- confidence: ${issue.classification.confidence}`,
     `- assignee: ${issue.assignment.assigneeName} (${issue.assignment.routedTo})`,
-    `- jira: ${key} — 원문 사본은 raw/jira/${key}.md`,
-    `- ci-build: ${key} — 원문 사본은 raw/ci/${key}.md`,
+    `- jira: ${key} — 원문 사본은 raw/jira/${rawName}.md`,
+    `- ci-build: ${key} — 원문 사본은 raw/ci/${rawName}.md`,
     `- symptom: ${filled.symptom}`,
     `- cause: ${filled.cause}`,
     `- resolution: ${filled.resolution}`,

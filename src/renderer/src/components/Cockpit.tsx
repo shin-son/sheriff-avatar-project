@@ -11,8 +11,8 @@ interface Props {
   user: UserConfig
   wsStatus: WsStatus
   muted: boolean
-  /** Lane counts — these three figures mirror the triage board below. */
-  counts: { triage: number; stream: number; done: number }
+  /** Lane counts (앞 세 개는 아래 보드 레인과 일치) + 추정 중복(같은 실패 서명). */
+  counts: { triage: number; stream: number; done: number; dup: number }
   onToggleMuted: () => void
 }
 
@@ -60,6 +60,10 @@ export default function Cockpit({ team, user, wsStatus, muted, counts, onToggleM
         <div className="stat-tile">
           <span className="stat-num">{counts.done}</span>
           <span className="stat-label">해결</span>
+        </div>
+        <div className="stat-tile" title="같은 실패 서명으로 열린 티켓(추정) — 병합은 Jira에서 확인 후">
+          <span className="stat-num">{counts.dup}</span>
+          <span className="stat-label">추정 중복</span>
         </div>
       </div>
 

@@ -86,7 +86,7 @@ flowchart LR
 | `resolved` | Done | 담당자가 **Jira에서 Done 처리** (유일 경로) → 폴링으로 확정 |
 
 - 담당자가 Jira에서 직접 상태를 바꿔도 서버가 폴링으로 감지해 앱에 반영한다 (양방향 동기화, Jira 우선).
-- ingest는 **Jira에서 Done이 확인된 시점**에 1회만 수행한다.
+- ingest는 **Jira에서 Done이 확인된 각 시점**에 수행한다 — reopen 후 재해결도 재기록한다(버전 raw + case-log supersede 표식). 재시작·중복 폴링 등 **같은 해결 이벤트**(동일 resolvedAt)는 스킵해 중복을 막는다.
 
 ## 가시성 규칙 & 뷰 모드
 
@@ -124,7 +124,7 @@ src/
 | 동작 | 트리거 | 하는 일 |
 |---|---|---|
 | query | 신규 티켓 감지 시 자동 | 관련 노트 검색, 불일치 누적 노트는 감점 |
-| ingest | Jira Done 확정 시 자동 (1회) | **LLM이 Jira 해결 코멘트를 근거로 case-log 작성**, index/log 갱신 |
+| ingest | Jira Done 확정마다 자동 (재해결 시 버전 기록) | **LLM이 Jira 해결 코멘트를 근거로 case-log 작성**, index/log 갱신 |
 | lint | 당번의 "WIKI 점검" 버튼 (hub 경유, sheriff 전용 메시지) | 고아 노트·불일치 누적 노트(사람 판정 + LLM 대조) 보고 |
 | feedback | Done 확정 시 담당자 toast (hub 경유) | "참조 노트의 원인 = 실제 원인?" **일치/불일치** 판정 저장 (불일치 3+ → query 감점) |
 
@@ -133,7 +133,7 @@ src/
 - **LLM 대조 (보조 신호)**: ingest 때 LLM이 노트 내용과 해결 코멘트를 대조해 불일치를 감지하면
   근거 인용을 포함한 structured output(`{ match, quotedNote, quotedResolution }`)으로 **lint 후보에만** 올린다.
   query 감점 권한은 사람 판정에만 있고, 위키 수정·삭제는 어떤 경우에도 자동으로 하지 않는다 (사람 PR 전용).
-- Jira는 reopen이 가능하므로 ingest 1회 규칙에는 처리 완료 키 기록이 필요하다 (reopen → 재해결 시 중복 기록 방지).
+- Jira reopen 대응: 멱등성은 **해결 이벤트 단위**다 (`server/ingest.mjs` `decideIngest`, 상태는 `raw/jira/.ingest-state.json`의 resolvedAt). 재시작·중복 폴링(같은 resolvedAt)은 스킵해 중복 기록을 막고, **reopen 후 재해결(더 늦은 resolvedAt)은 재기록**한다 — raw는 덮어쓰지 않고 `raw/jira/<키>-r<n>.md`로 버전 동결, case-log 새 엔트리에 `이전 supersede` 표식을 단다. (틀린 첫 기록의 실제 제거는 lint/feedback 몫.)
 
 ### vault 저장소와 리뷰 경계
 
@@ -142,7 +142,7 @@ src/
 - v3에서 운영 vault는 **Linux 서버 호스트에 위치**한다 — 서버 프로세스가 유일한 읽기/쓰기 주체이고,
   사내 git remote로 백업·리뷰한다. 클라이언트(당번 포함)는 vault 파일에 직접 접근하지 않는다.
 - 리뷰는 파일 두 계층으로 나눈다:
-  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`, `raw/jira/*.md`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
+  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`, `raw/jira/*.md`·`raw/ci/*.md`(재해결은 `-r<n>` 버전), `raw/jira/.ingest-state.json`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
     해결 건마다 PR을 만드는 것은 비현실적.
   - **사람이 관리하는 노트** (`modules/*.md`의 known-failure) — 수정·삭제는 PR 리뷰를 거친다.
     lint가 지목한 노트의 diff를 리뷰하는 이 시점이 사람이 사실성을 검토하는 지점이다.
