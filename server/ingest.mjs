@@ -53,6 +53,69 @@ export function decideIngest(prev, resolvedAt) {
   return { skip: false, n: prev.n + 1 }
 }
 
+// ── D: 중복 티켓 dedup (backend 위생) ───────────────────────────────────────
+// 서로 다른 티켓이 같은 실패 서명이면 case-log '지식'은 하나(anchor)로 유지하고
+// 나머지는 포인터 + 재발 카운트만 남긴다(LLM summarize 호출도 스킵). raw 증거는
+// 티켓마다 보존한다. 상태: { <signature>: { anchorKey, module, count, tickets[], lastAt } }.
+const SIGNATURE_INDEX_FILE = join(VAULT_DIR, 'raw', 'jira', '.signature-index.json')
+const sigIndex = loadSigIndex()
+// 오탐(flaky·별개 회귀) 방지: 같은 모듈 + 이 기간 내에서만 재발로 묶는다. 기본 14일.
+const DEDUP_WINDOW_MS = Number(process.env.SVP_DEDUP_WINDOW_DAYS ?? 14) * 24 * 60 * 60 * 1000
+
+function loadSigIndex() {
+  try {
+    return JSON.parse(readFileSync(SIGNATURE_INDEX_FILE, 'utf-8'))
+  } catch {
+    return {}
+  }
+}
+
+function saveSigIndex() {
+  mkdirSync(dirname(SIGNATURE_INDEX_FILE), { recursive: true })
+  return writeFile(SIGNATURE_INDEX_FILE, JSON.stringify(sigIndex, null, 2), 'utf-8')
+}
+
+/** 실패 서명 — 로그의 'TC name or file' 우선, 없으면 제목 정규화([..] 접두·Failed 접미 제거). */
+export function signatureOf(event) {
+  const m = (event.log ?? '').match(/TC name or file\s*:\s*(\S+)/i)
+  if (m) return m[1].toLowerCase()
+  return (event.title ?? '')
+    .replace(/^(\[[^\]]*\]\s*)+/g, '')
+    .replace(/^[\s:|-]+/, '')
+    .replace(/\s*[:|-]?\s*(failed|fail)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * 이 해결이 '다른 티켓의 재발(추정)'인지 판정 (순수 함수 — 테스트 대상).
+ * 첫 해결(n===1)만, 다른 anchor, 같은 모듈, 시간창 내일 때만 재발로 본다.
+ * reopen 재해결(n>1)은 #40이 supersede로 처리하므로 여기 대상이 아니다.
+ */
+export function isDuplicateRecurrence(prevSig, { key, module, at, n }, windowMs) {
+  if (n !== 1 || !prevSig || !at) return false
+  if (prevSig.anchorKey === key) return false
+  if (prevSig.module !== module) return false
+  return new Date(at).getTime() - new Date(prevSig.lastAt).getTime() <= windowMs
+}
+
+/**
+ * ingest 모드 결정 (순수 함수 — 테스트 대상). 순서가 중요하다:
+ *  - 'anchor-reresolve' : anchor 티켓의 재해결 → supersede 풀 엔트리, 카운트 유지.
+ *  - 'member-reresolve' : 이미 dedup된 비-anchor 티켓의 재해결 → 포인터, 카운트 유지,
+ *    **재anchor 금지**(이 분기가 없으면 anchor가 뒤집히고 재발 이력이 소실됐다).
+ *  - 'recurrence'       : 새 중복 티켓(같은 서명·모듈·창 내) → 포인터, 카운트+1.
+ *  - 'full'             : 신규 서명 / 창 만료 새 티켓 → 풀 엔트리 + 새 anchor.
+ */
+export function classifyIngest(prevSig, { key, module, at, n }, windowMs) {
+  if (!prevSig) return 'full'
+  if (prevSig.anchorKey === key) return 'anchor-reresolve'
+  if ((prevSig.tickets ?? []).includes(key)) return 'member-reresolve'
+  if (isDuplicateRecurrence(prevSig, { key, module, at, n }, windowMs)) return 'recurrence'
+  return 'full'
+}
+
 /**
  * File a resolved issue: freeze raw evidence → append case-log → refresh
  * index/log. Fire-and-forget from the poll loop; never throws into it.
@@ -66,6 +129,12 @@ export async function ingestResolved(issue, resolvedAt) {
   const n = decision.n
   const rawName = n === 1 ? key : `${key}-r${n}` // 불변 raw 보존: 재해결은 새 파일로
   const capturedAt = new Date().toISOString()
+  const at = resolvedAt ?? capturedAt
+  const sig = signatureOf(issue.event)
+  const moduleCat = issue.classification.category
+  const prevSig = sigIndex[sig]
+  const mode = classifyIngest(prevSig, { key, module: moduleCat, at, n }, DEDUP_WINDOW_MS)
+  const pointer = mode === 'recurrence' || mode === 'member-reresolve'
   try {
     let jiraRaw = { description: issue.event.log, comments: [] }
     try {
@@ -74,19 +143,44 @@ export async function ingestResolved(issue, resolvedAt) {
       console.error(`[svp-server] ingest ${key}: jira raw fetch failed (${err.message}) — event 원문으로 동결`)
     }
     if (INGEST_MODE !== 'live') {
-      console.log(`[svp-server] [${INGEST_MODE}] ingest ${key} (#${n}): would freeze raw/jira/${rawName} + raw/ci, case-log append — vault 변경 안 함`)
+      const how = pointer
+        ? `${mode === 'recurrence' ? '재발(추정)' : '재해결'} → ${prevSig.anchorKey} 포인터, summarize 스킵`
+        : `raw/jira/${rawName} + raw/ci, case-log append`
+      console.log(`[svp-server] [${INGEST_MODE}] ingest ${key} (#${n}): would ${how} — vault 변경 안 함`)
       return
     }
-    // P0b: LLM reads the raw evidence to fill symptom/cause/resolution.
-    const filled = await summarizeResolution(issue.event, { comments: jiraRaw.comments })
+    // raw 증거는 재발이어도 티켓마다 동결한다 (dedup은 case-log 지식층만).
     await freezeJiraRaw(rawName, key, issue, jiraRaw, capturedAt)
     await freezeCiRaw(rawName, key, issue, capturedAt)
-    await appendCaseLog(issue, capturedAt, filled, n, rawName)
-    await appendLog('ingest', `${key}${n > 1 ? ` (재해결 #${n})` : ''} ${issue.event.title}`)
+    if (pointer) {
+      // 포인터 경로 — recurrence는 새 중복(count+1·티켓 추가), member-reresolve는
+      // 이미 dedup된 티켓의 재해결(count·anchor·tickets 유지 — 재anchor 금지).
+      const isRec = mode === 'recurrence'
+      const relation = isRec ? '재발(추정)' : '재해결'
+      const count = isRec ? prevSig.count + 1 : prevSig.count
+      await appendCaseLogPointer(issue, capturedAt, prevSig.anchorKey, count, rawName, relation)
+      await appendLog('ingest', `${key} ${relation} → ${prevSig.anchorKey} (누적 ${count}건)`)
+      sigIndex[sig] = {
+        ...prevSig,
+        count,
+        tickets: isRec ? [...prevSig.tickets, key] : prevSig.tickets,
+        lastAt: at
+      }
+      console.log(`[svp-server] deduped ${key}: ${relation} → ${prevSig.anchorKey} (누적 ${count}건), summarize 스킵`)
+    } else {
+      // 'full'(신규 서명·창 만료) / 'anchor-reresolve'(anchor 재해결) → 풀 엔트리.
+      const filled = await summarizeResolution(issue.event, { comments: jiraRaw.comments })
+      await appendCaseLog(issue, capturedAt, filled, n, rawName)
+      await appendLog('ingest', `${key}${n > 1 ? ` (재해결 #${n})` : ''} ${issue.event.title}`)
+      sigIndex[sig] =
+        mode === 'anchor-reresolve'
+          ? { ...prevSig, lastAt: at } // anchor 재해결(reopen): 카운트 유지
+          : { anchorKey: key, module: moduleCat, count: 1, tickets: [key], lastAt: at }
+      console.log(`[svp-server] ingested ${key}${n > 1 ? ` (재해결 #${n}, 이전 supersede)` : ''}: raw/jira/${rawName} + raw/ci 동결, case-log 기록`)
+    }
     await rebuildIndex()
-    ingestState[key] = { at: resolvedAt ?? capturedAt, n } // 성공 후에만 갱신 (dry-run은 미갱신)
-    await saveIngestState()
-    console.log(`[svp-server] ingested ${key}${n > 1 ? ` (재해결 #${n}, 이전 supersede)` : ''}: raw/jira/${rawName} + raw/ci 동결, case-log 기록`)
+    ingestState[key] = { at, n } // 성공 후에만 갱신 (dry-run은 미갱신)
+    await Promise.all([saveIngestState(), saveSigIndex()])
   } catch (err) {
     console.error(`[svp-server] ingest failed for ${key}: ${err.message}`)
   }
@@ -169,6 +263,22 @@ function appendCaseLog(issue, capturedAt, filled, n, rawName) {
     `- cause: ${filled.cause}`,
     `- resolution: ${filled.resolution}`,
     `- wiki-refs: ${refs}`,
+    ''
+  ].join('\n')
+  return appendFile(join(VAULT_DIR, 'case-log.md'), entry, 'utf-8')
+}
+
+/** D: 포인터 엔트리 — 풀 지식(symptom/cause/resolution)은 anchor에 있고, 여기엔 링크·카운트만. */
+function appendCaseLogPointer(issue, capturedAt, anchorKey, count, rawName, relation = '재발 추정') {
+  const key = issue.event.jira.key
+  const entry = [
+    `\n## ${issue.event.id} — ${issue.event.title} (${relation} → ${anchorKey}, 누적 ${count}건)`,
+    `- date: ${capturedAt}`,
+    `- module: ${issue.classification.category}`,
+    `- type: ${issue.event.type}`,
+    `- jira: ${key} — 원문 사본은 raw/jira/${rawName}.md`,
+    `- ci-build: ${key} — 원문 사본은 raw/ci/${rawName}.md`,
+    `- ref: 해결 근거는 ${anchorKey} 참조 (같은 실패 서명 — 병합은 당번이 Jira에서 확인)`,
     ''
   ].join('\n')
   return appendFile(join(VAULT_DIR, 'case-log.md'), entry, 'utf-8')
