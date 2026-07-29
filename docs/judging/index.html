@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVP 모의 심사 리포트 — 3라운드 종합</title>
+<style>
+  :root {
+    --ground:#FAF8F4; --surface:#FFFFFF; --surface-2:#F3EFE6; --ink:#241E14; --ink-2:#55493A;
+    --muted:#6E6353; --line:#E5DFD2; --brass:#9A7B1F; --brass-soft:#EAE0C4; --ghost:#D8CEB8;
+    --red:#B3402F; --green:#4A6B3A; --green-soft:#E6EDDD;
+  }
+  @media (prefers-color-scheme: dark){:root{
+    --ground:#171410; --surface:#201C15; --surface-2:#2A251C; --ink:#EDE6D8; --ink-2:#C9BEAC;
+    --muted:#A2988A; --line:#3A3428; --brass:#CBA23E; --brass-soft:#3A311B; --ghost:#4A4230;
+    --red:#E06A55; --green:#8FAE7C; --green-soft:#24301C;
+  }}
+  :root[data-theme="dark"]{--ground:#171410;--surface:#201C15;--surface-2:#2A251C;--ink:#EDE6D8;--ink-2:#C9BEAC;--muted:#A2988A;--line:#3A3428;--brass:#CBA23E;--brass-soft:#3A311B;--ghost:#4A4230;--red:#E06A55;--green:#8FAE7C;--green-soft:#24301C;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--ground)}
+  body{background:var(--ground);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Segoe UI",sans-serif;line-height:1.65;font-size:15.5px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:900px;margin:0 auto;padding:48px 24px 96px}
+  .serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+  .mono{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:.86em}
+  .num{font-variant-numeric:tabular-nums}
+  header{border-bottom:3px double var(--line);padding-bottom:28px;margin-bottom:36px}
+  .eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:11.5px;color:var(--brass);font-weight:700;margin:0 0 10px}
+  h1{font-size:29px;line-height:1.25;margin:0 0 6px;font-weight:800;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:0;font-size:14px}
+  .hero{display:flex;align-items:center;gap:26px;flex-wrap:wrap;margin-top:26px}
+  .hero-score{display:flex;align-items:baseline;gap:8px;border-right:1px solid var(--line);padding-right:26px}
+  .hero-score .from{font-size:24px;color:var(--muted);font-weight:600}
+  .hero-score .arrow{font-size:20px;color:var(--muted)}
+  .hero-score .big{font-size:64px;line-height:1;font-weight:600;color:var(--brass);letter-spacing:-.02em}
+  .hero-score .of{font-size:16px;color:var(--muted)}
+  .chip{font-size:13px;font-weight:700;color:var(--green);background:var(--green-soft);border-radius:20px;padding:3px 11px;align-self:center}
+  .verdict{flex:1;min-width:250px}
+  .verdict p{margin:0;font-size:15px;color:var(--ink-2);max-width:46ch}
+  .verdict strong{color:var(--ink)}
+  section{margin-top:52px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-weight:700;margin:0 0 18px;display:flex;align-items:center;gap:12px}
+  h2::after{content:"";flex:1;height:1px;background:var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+  tbody th{font-weight:700;color:var(--ink)}
+  tbody th small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+  .final{color:var(--brass);font-weight:800}
+  .delta{color:var(--green);font-size:12px;font-weight:700}
+  .total-row td,.total-row th{border-top:2px solid var(--ink);font-size:16px}
+  .total-row .final{font-size:20px}
+  /* bars */
+  .chart{display:grid;grid-template-columns:max-content 1fr max-content;gap:12px 16px;align-items:center;margin-top:8px}
+  .chart .head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700}
+  .dim{font-weight:700;font-size:14px}
+  .track{background:var(--surface-2);border-radius:4px;height:16px;position:relative;overflow:hidden}
+  .g1{position:absolute;inset:0 auto 0 0;background:var(--ghost);border-radius:3px}
+  .fill{position:absolute;inset:0 auto 0 0;background:var(--brass);border-radius:3px}
+  .tick80{position:absolute;left:80%;top:-3px;bottom:-3px;width:1px;background:var(--ink);opacity:.28;z-index:2}
+  .sc{font-weight:700;font-size:14px;text-align:right;white-space:nowrap;min-width:96px}
+  .sc .was{color:var(--muted);font-weight:400;font-size:12px}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin:0 3px 0 10px}
+  .note{margin-top:12px;font-size:12.5px;color:var(--muted)}
+  /* rounds */
+  .round{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px 24px;margin-top:16px}
+  .round h3{margin:0 0 4px;font-size:16px;font-weight:800}
+  .round h3 .d{color:var(--muted);font-weight:500;font-size:12px;margin-left:8px}
+  .round .score{font-size:15px;font-weight:700;color:var(--brass)}
+  .round ul{margin:12px 0 0;padding-left:18px}
+  .round li{font-size:13.5px;color:var(--ink-2);margin-bottom:5px}
+  .round li strong{color:var(--ink)}
+  .lever{list-style:none;margin:0;padding:0;counter-reset:l}
+  .lever li{counter-increment:l;display:flex;gap:16px;align-items:flex-start;padding:14px 4px;border-bottom:1px solid var(--line)}
+  .lever li:last-child{border-bottom:none}
+  .lever li::before{content:counter(l);font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:22px;font-weight:600;color:var(--brass);min-width:26px;text-align:center}
+  .lever .t{font-weight:700;font-size:14px;margin:0 0 2px}
+  .lever .dd{margin:0;font-size:13px;color:var(--muted);max-width:70ch}
+  .method{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);margin-top:52px;padding-top:20px}
+  .method p{margin:0 0 6px;max-width:80ch}
+  code{background:var(--surface-2);border-radius:4px;padding:1px 5px;font-family:ui-monospace,Consolas,monospace;font-size:.86em}
+  .theme-btn{position:fixed;top:14px;right:14px;background:var(--surface);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<button class="theme-btn" onclick="var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark')">◐ 테마</button>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">★ 해커톤 모의 심사 · 3라운드 종합</p>
+    <h1>Sheriff aVatar Project (SVP)</h1>
+    <p class="sub">기준: 기술성 30 · 창의성 25 · 완성도 20 · 비즈니스 15 · 전달력 10 &nbsp;|&nbsp; 전체 PR 병합 상태(<span class="mono">integration/current</span>) 기준</p>
+    <div class="hero">
+      <div class="hero-score serif num"><span class="from">72.0</span><span class="arrow">→</span><span class="from">77.7</span><span class="arrow">→</span><span class="big">82.2</span><span class="of">/ 100</span></div>
+      <span class="chip num">▲ +10.2</span>
+      <div class="verdict"><p><strong>세 라운드에 걸쳐 72.0 → 82.2로 상승.</strong> 완성도가 dedup 데이터 무결성 버그 봉합으로 91까지 올랐고, 전달력은 repo 내 발표 덱 확보로 크게 개선. 남은 상한은 창의성(조합 신규성)과 데모 영상 부재.</p></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>항목별 궤적 — 3라운드</h2>
+    <table class="num">
+      <thead><tr><th>항목</th><th>가중</th><th>1차 (7-27)</th><th>2차 (7-28)</th><th>최종 (7-29)</th><th>Δ</th></tr></thead>
+      <tbody>
+        <tr><th>기술성 <small>코드·아키텍처·난이도</small></th><td>30%</td><td>77</td><td>80</td><td class="final">83</td><td class="delta">+6</td></tr>
+        <tr><th>창의성 <small>차별성·유사사례</small></th><td>25%</td><td>65</td><td>69</td><td class="final">74</td><td class="delta">+9</td></tr>
+        <tr><th>완성도 <small>데모·버그·안정성·UX</small></th><td>20%</td><td>72</td><td>86</td><td class="final">91</td><td class="delta">+19</td></tr>
+        <tr><th>비즈니스 <small>적용성·ROI·실용성</small></th><td>15%</td><td>76</td><td>81</td><td class="final">81</td><td class="delta">+5</td></tr>
+        <tr><th>전달력 <small>발표·스토리텔링</small></th><td>10%</td><td>68</td><td>71</td><td class="final">84</td><td class="delta">+16</td></tr>
+        <tr class="total-row"><th>가중 총점</th><td></td><td>72.0</td><td>77.7</td><td class="final">82.2</td><td class="delta">+10.2</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>최종 점수 (1차 대비)</h2>
+    <div class="chart" role="img" aria-label="최종 점수: 기술성 83, 창의성 74, 완성도 91, 비즈니스 81, 전달력 84">
+      <span class="head">항목</span><span class="head">1차 → 최종 (0–100)</span><span class="head" style="text-align:right">점수</span>
+      <span class="dim">기술성</span><span class="track"><span class="g1" style="width:77%"></span><span class="fill" style="width:83%"></span><span class="tick80"></span></span><span class="sc">83 <span class="was">← 77</span></span>
+      <span class="dim">창의성</span><span class="track"><span class="g1" style="width:65%"></span><span class="fill" style="width:74%"></span><span class="tick80"></span></span><span class="sc">74 <span class="was">← 65</span></span>
+      <span class="dim">완성도</span><span class="track"><span class="g1" style="width:72%"></span><span class="fill" style="width:91%"></span><span class="tick80"></span></span><span class="sc">91 <span class="was">← 72</span></span>
+      <span class="dim">비즈니스</span><span class="track"><span class="g1" style="width:76%"></span><span class="fill" style="width:81%"></span><span class="tick80"></span></span><span class="sc">81 <span class="was">← 76</span></span>
+      <span class="dim">전달력</span><span class="track"><span class="g1" style="width:68%"></span><span class="fill" style="width:84%"></span><span class="tick80"></span></span><span class="sc">84 <span class="was">← 68</span></span>
+    </div>
+    <p class="note">세로선은 80점(자동 배정) 기준선.<span class="swatch" style="background:var(--ghost)"></span>1차<span class="swatch" style="background:var(--brass)"></span>최종.</p>
+  </section>
+
+  <section>
+    <h2>라운드별 요약</h2>
+    <div class="round">
+      <h3>1차 심사 <span class="d">2026-07-27 · plain main</span> — <span class="score">72.0</span></h3>
+      <ul>
+        <li><strong>강점</strong>: 실환경 생존 설계(3단 write 게이트·재시작 멱등성·Jira source-of-truth), Jenkins 9MB 콘솔 로그 발굴 어댑터.</li>
+        <li><strong>감점</strong>: 재현된 로그 오염 버그(<code>ci-test-fetch</code>), 데모 지뢰(<code>SVP_INGEST_MODE</code> 미문서화·404 CTA), ROI 산식 불일치, 발표 덱 부재, 테스트 0개.</li>
+      </ul>
+    </div>
+    <div class="round">
+      <h3>2차 재심사 <span class="d">2026-07-28 · PR #33·34·35·36 병합</span> — <span class="score">77.7 (+5.7)</span></h3>
+      <ul>
+        <li><strong>완성도 72→86</strong>: 로그 오염 버그 수정+최초 테스트, 데모 지뢰 제거, 후보 assignee 리스트.</li>
+        <li><strong>비즈니스 76→81</strong>: ROI 산식 정합+LLM 비용 섹션.</li>
+        <li><strong>창의성 65→69</strong>: Gerrit+wiki 다중신호 후보 융합.</li>
+        <li>남은 갭: 발표 덱 부재(전달력 상한), 창의성 조합 신규성.</li>
+      </ul>
+    </div>
+    <div class="round">
+      <h3>최종 <span class="d">2026-07-29 · 전체 PR + dedup 버그 수정</span> — <span class="score">82.2 (+4.5)</span></h3>
+      <ul>
+        <li><strong>완성도 86→91</strong>: reopen 재ingest(데이터 무결성)·중복 dedup·현황 대시보드, 그리고 <strong>재심사가 찾은 dedup anchor-reset 버그를 봉합</strong>(순수 함수 <code>classifyIngest</code>+회귀 테스트, 18/18 통과).</li>
+        <li><strong>전달력 71→84</strong>: repo 내 self-contained 발표 덱(<code>docs/deck/</code>) 확보 — "발표 자료 존재" 25→80.</li>
+        <li><strong>창의성 69→74</strong>: self-cleaning(dedup)·self-correcting(reopen supersede)가 "주장→테스트된 코드"로 실체화.</li>
+        <li><strong>기술성 80→83</strong>: 핵심 결정 로직 순수 함수 분리·테스트(18개).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>남은 점수 레버</h2>
+    <ol class="lever">
+      <li><div><p class="t">데모 영상 (전달력)</p><p class="dd">덱은 있으나 <strong>실제 동작 영상이 아직 없음</strong>. 핵심 컷(재발 시 자동 배정·case-log 실시간 기록)을 촬영하면 전달력 84→~90.</p></div></li>
+      <li><div><p class="t">retrieval 계층 자기교정 봉합 (창의성)</p><p class="dd">supersede·dedup 카운트가 아직 <code>wiki-query</code> 랭킹에 반영 안 됨 — "쓸수록 정확"의 마지막 한 칸. 교정본이 다음 분류를 이기게 하면 창의성이 오름.</p></div></li>
+      <li><div><p class="t">dry-run 실측 (창의성·비즈니스)</p><p class="dd">자동 배정률·중복 카운트·before/after 정확도를 사내 dry-run으로 측정 → "self-improving"을 숫자로 증명. ROI 30% 가정도 실측으로 확정.</p></div></li>
+      <li><div><p class="t">잔존 소형 부채 (기술성·완성도)</p><p class="dd">서명 인덱스를 <code>(sig, module)</code> 복합 키로(이론적 재anchor 충돌 차단), 서버/렌더러 <code>signatureOf</code> 중복 통합. 낮은 우선순위.</p></div></li>
+    </ol>
+    <p class="note">90점은 창의성의 구조적 상한(개별 메커니즘은 선례 존재, 신규성은 조합에 있음) 때문에 폴리싱만으로는 도달하기 어렵다 — 현실적 최적은 83~84.</p>
+  </section>
+
+  <div class="method">
+    <p><strong>심사 방법</strong> — 각 라운드마다 5개 심사축을 독립 에이전트가 검증(코드 리뷰 + <code>npm run typecheck</code>/테스트 실행 + mock 파이프라인 라이브 기동 + 유사 솔루션 웹 검색). 점수는 이전 라운드를 기준선으로 델타 평가.</p>
+    <p>대상: 전체 PR 병합 상태(#33·34·35·36·38·40·41·44·45 + dedup 버그 수정). 1차 = plain main. 배점: 기술성 30 · 창의성 25 · 완성도 20 · 비즈니스 15 · 전달력 10.</p>
+  </div>
+</div>
+</body>
+</html>
