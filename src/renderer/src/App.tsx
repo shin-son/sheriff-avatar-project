@@ -6,6 +6,7 @@ import CompactView from './components/CompactView'
 import DetailPanel from './components/DetailPanel'
 import IssueCard from './components/IssueCard'
 import LoginView from './components/LoginView'
+import StatusBoard from './components/StatusBoard'
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
@@ -247,6 +248,8 @@ export default function App() {
               )}
             </div>
           )}
+
+          {sorted.length > 0 && <StatusBoard issues={sorted} />}
 
           {visible.length === 0 ? (
             <div className="watchtower">
