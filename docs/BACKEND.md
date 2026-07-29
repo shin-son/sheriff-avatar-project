@@ -94,9 +94,9 @@
 
 ## F7 — 해결 감지 → WIKI ingest
 
-- **책임**: 티켓이 Done으로 확정된 시점에 LLM이 Jira 해결 코멘트를 근거로 case-log를 작성 (+ index/log 갱신), 1회만.
+- **책임**: 티켓이 Done으로 확정된 시점에 LLM이 Jira 해결 코멘트를 근거로 case-log를 작성 (+ index/log 갱신). reopen 후 재해결은 버전 raw + supersede 표식으로 재기록한다.
 - 해결 경로는 **Jira에서 Done 처리가 유일** — 앱에는 해결 버튼이 없다 ([ARCHITECTURE.md](./ARCHITECTURE.md) 데이터 흐름 8단계).
-- **완료 기준**: Jira Done 처리 시 case-log에 정확히 1건 기록. 같은 티켓을 Done↔Reopen 반복해도 중복 ingest 없음.
+- **완료 기준**: 해결 이벤트당 case-log 1건. 재시작·중복 폴링(같은 resolvedAt)은 중복 없이 스킵되고, reopen 후 재해결(더 늦은 resolvedAt)은 `-r<n>` 버전으로 재기록된다.
 
 ## F8 — WIKI 위생 (lint / feedback)
 
