@@ -7,6 +7,7 @@ import DetailPanel from './components/DetailPanel'
 import IssueCard from './components/IssueCard'
 import LoginView from './components/LoginView'
 import StatusBoard from './components/StatusBoard'
+import { deriveStats } from './stats'
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
@@ -166,6 +167,8 @@ export default function App() {
     (i) => i.status !== 'resolved' && i.assignment.routedTo === 'feature-owner'
   )
   const done = visible.filter((i) => i.status === 'resolved')
+  // 단일 파생 지점: Cockpit 데크(추정 중복)와 상세 대시보드가 같은 수치를 쓴다.
+  const boardStats = deriveStats(visible)
 
   return (
     <div className="shell">
@@ -178,7 +181,12 @@ export default function App() {
             user={state.user}
             wsStatus={state.wsStatus}
             muted={state.notificationsMuted}
-            counts={{ triage: triage.length, stream: stream.length, done: done.length }}
+            counts={{
+              triage: triage.length,
+              stream: stream.length,
+              done: done.length,
+              dup: boardStats.dupIssueCount
+            }}
             onToggleMuted={toggleMuted}
           />
           <div className="toolbar">
@@ -249,7 +257,7 @@ export default function App() {
             </div>
           )}
 
-          {sorted.length > 0 && <StatusBoard issues={sorted} />}
+          {visible.length > 0 && <StatusBoard stats={boardStats} />}
 
           {visible.length === 0 ? (
             <div className="watchtower">
