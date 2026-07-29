@@ -3,7 +3,7 @@
 // 스킵해 case-log/raw 중복·덮어쓰기를 막는지 보장.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decideIngest, signatureOf, isDuplicateRecurrence } from './ingest.mjs'
+import { decideIngest, signatureOf, isDuplicateRecurrence, classifyIngest } from './ingest.mjs'
 
 const T1 = '2026-07-29T00:00:00.000Z'
 const T2 = '2026-07-29T10:00:00.000Z'
@@ -67,4 +67,26 @@ test('isDuplicateRecurrence: anchor 자기자신·재해결(n>1)·다른 모듈�
   assert.equal(isDuplicateRecurrence(prev, { key: 'CIOPS-2', module: 'auth', at: '2026-08-18T00:00:00.000Z', n: 1 }, 14 * DAY), false)
   // prev 없음
   assert.equal(isDuplicateRecurrence(undefined, { key: 'CIOPS-2', module: 'auth', at: '2026-07-29T05:00:00.000Z', n: 1 }, 14 * DAY), false)
+})
+
+// ── classifyIngest: dedup 모드 판정 (anchor-reset 버그 회귀 방지) ──────────
+test('classifyIngest: 신규 서명은 full', () => {
+  assert.equal(classifyIngest(undefined, { key: 'A', module: 'auth', at: '2026-07-29T00:00:00.000Z', n: 1 }, 14 * DAY), 'full')
+})
+
+test('classifyIngest: anchor 티켓 재해결은 anchor-reresolve', () => {
+  const prev = { anchorKey: 'A', module: 'auth', count: 2, tickets: ['A', 'B'], lastAt: '2026-07-29T00:00:00.000Z' }
+  assert.equal(classifyIngest(prev, { key: 'A', module: 'auth', at: '2026-07-29T05:00:00.000Z', n: 2 }, 14 * DAY), 'anchor-reresolve')
+})
+
+test('classifyIngest: 이미 dedup된 비-anchor 티켓의 재해결은 member-reresolve (버그 수정)', () => {
+  // 이 케이스가 예전엔 full로 빠져 anchor를 B로 덮어쓰고 재발 이력을 소실시켰다.
+  const prev = { anchorKey: 'A', module: 'auth', count: 2, tickets: ['A', 'B'], lastAt: '2026-07-29T00:00:00.000Z' }
+  assert.equal(classifyIngest(prev, { key: 'B', module: 'auth', at: '2026-07-29T06:00:00.000Z', n: 2 }, 14 * DAY), 'member-reresolve')
+})
+
+test('classifyIngest: 새 중복 티켓(창 내)은 recurrence, 창 만료는 full', () => {
+  const prev = { anchorKey: 'A', module: 'auth', count: 1, tickets: ['A'], lastAt: '2026-07-29T00:00:00.000Z' }
+  assert.equal(classifyIngest(prev, { key: 'C', module: 'auth', at: '2026-07-29T05:00:00.000Z', n: 1 }, 14 * DAY), 'recurrence')
+  assert.equal(classifyIngest(prev, { key: 'C', module: 'auth', at: '2026-08-20T00:00:00.000Z', n: 1 }, 14 * DAY), 'full')
 })
