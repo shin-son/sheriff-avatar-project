@@ -24,8 +24,8 @@ wiki-vault/
   log.md                   시간순 작업 기록 — 자동 append
   case-log.md              해결 사례 원장 — 자동 append
   modules/<module>.md      모듈별 known-failure 지식 노트
-  raw/jira/<티켓키>.md       Jira 티켓 원문 사본 — 자동 생성, 불변
-  raw/ci/<빌드ID>.md          CI/CD 실패 빌드 로그 발췌 — 자동 생성, 불변
+  raw/jira/<티켓키>.md       Jira 티켓 원문 사본 — 자동 생성, 불변 (재해결은 <키>-r<n>.md)
+  raw/ci/<빌드ID>.md          CI/CD 실패 빌드 로그 발췌 — 자동 생성, 불변 (재해결은 -r<n>)
   raw/gerrit/<Change-Id>.md   Gerrit 패치 원문(제목·파일·diff 발췌) — 자동 생성, 불변
 ```
 
@@ -37,8 +37,8 @@ frontmatter로 상호 링크한다 (아래 "raw correlation key"). ingest는 이
 |---|---|---|
 | `modules/<module>.md` | **압축된 지식.** 반복 실패 패턴(known-failure)의 축적처이자 분류 신뢰도의 주 근거 | 사람 PR + ingest LLM 초안 PR (F7) |
 | `case-log.md` | **사례 원장.** 해결된 이슈를 건별로 보존하는 축적층. 반복 사례는 모듈 노트로 승격된다 | 앱 append (F7부터 LLM이 내용 작성) |
-| `raw/jira/<티켓키>.md` | **원자료 사본.** 해결(Done) 확정 시점의 티켓 원문(설명·해결 코멘트)을 증거로 동결. Jira 보존 정책·티켓 삭제와 무관하게 역참조를 보장 | 앱이 Done 확정 시 1회 생성 (F7) — 이후 수정 금지 |
-| `raw/ci/<빌드ID>.md` | **실패 신호 원문.** 이슈를 유발한 CI/CD 빌드의 실패 테스트·스택트레이스·로그 발췌. 티켓 설명보다 정확한 1차 증상 | 앱이 Done 확정 시 1회 생성 (F7) — 이후 수정 금지 |
+| `raw/jira/<티켓키>.md` | **원자료 사본.** 해결(Done) 확정 시점의 티켓 원문(설명·해결 코멘트)을 증거로 동결. Jira 보존 정책·티켓 삭제와 무관하게 역참조를 보장 | 서버가 해결 확정 시 생성 (F7) — 이후 수정 금지(불변). reopen 후 재해결은 `<키>-r<n>.md`로 버전 추가 |
+| `raw/ci/<빌드ID>.md` | **실패 신호 원문.** 이슈를 유발한 CI/CD 빌드의 실패 테스트·스택트레이스·로그 발췌. 티켓 설명보다 정확한 1차 증상 | 서버가 해결 확정 시 생성 (F7) — 이후 수정 금지(불변). 재해결은 `-r<n>` 버전 |
 | `raw/gerrit/<Change-Id>.md` | **해결 증거 원문.** 이슈를 고친 Gerrit 패치(제목·변경 파일·diff 발췌). `resolution`을 채우는 가장 강한 근거 — 코멘트 텍스트보다 실제 변경이 낫다 | 앱이 Done 확정 시 1회 생성 (F7) — 이후 수정 금지 |
 | `index.md` | **카탈로그.** query의 진입점 — 노트당 한 줄(링크 + 요약) | 앱이 재생성 — 수동 편집 금지 |
 | `log.md` | **연대기.** ingest/lint 작업의 append-only 기록 | 앱 append — 수동 편집 금지 |
@@ -128,7 +128,7 @@ F7(해결 감지→ingest)에서 LLM이 Jira 해결 코멘트·연결된 CI/Gerr
 
 - **키가 안 잡히는 경우**(예: 커밋 메시지에 Jira 키가 없어 Gerrit↔Jira를 못 잇는 경우)는
   링크를 억지로 채우지 않고 생략한다. 있는 링크만 신뢰한다.
-- 소스별 raw는 각각 티켓·빌드·Change당 1개. ingest 1회 규칙과 동일한 키로 중복을 막는다.
+- 소스별 raw는 **해결 이벤트당 1개** — reopen 후 재해결은 `<키>-r<n>`로 버전 추가한다(불변 원문 보존). 재시작·중복 폴링 등 중복은 `raw/jira/.ingest-state.json`의 resolvedAt로 막는다.
 
 ### raw 항목 — `raw/jira/<티켓키>.md`
 
