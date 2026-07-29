@@ -15,6 +15,13 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
   const { event, classification, assignment, status } = issue
   const confClass = classification.confidence > 80 ? 'high' : 'low'
   const [pick, setPick] = useState('')
+  // Feedback loop (CLAUDE.md wiki 규칙): 담당자의 노트 유용성 투표. 한 이슈에서
+  // 노트당 1회 — 저장은 main의 feedback store, lint가 부정 누적을 읽는다.
+  const [voted, setVoted] = useState<Record<string, boolean>>({})
+  const vote = (noteTitle: string, helpful: boolean) => {
+    window.svp.wikiFeedback(noteTitle, helpful)
+    setVoted((v) => ({ ...v, [noteTitle]: helpful }))
+  }
 
   // Module owners first in the picker (wiki frontmatter → TeamMember.ownedModules).
   // The classifier's category is the trusted module; CI's own module field is the fallback.
@@ -161,7 +168,27 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
             <div className="detail-label">참고 (LLM-WIKI)</div>
             {classification.wikiRefs.map((r) => (
               <div key={r.file} className="detail-ref">
-                {r.title}
+                <span className="ref-title">{r.title}</span>
+                {voted[r.title] === undefined ? (
+                  <span className="ref-fb">
+                    <button
+                      className="fb-btn"
+                      title="이 노트가 분류에 도움됨"
+                      onClick={() => vote(r.title, true)}
+                    >
+                      👍
+                    </button>
+                    <button
+                      className="fb-btn"
+                      title="이 노트가 도움 안 됨 — 부정 누적 시 정리 후보"
+                      onClick={() => vote(r.title, false)}
+                    >
+                      👎
+                    </button>
+                  </span>
+                ) : (
+                  <span className="ref-fb-done">{voted[r.title] ? '👍' : '👎'} 반영됨</span>
+                )}
               </div>
             ))}
           </div>
