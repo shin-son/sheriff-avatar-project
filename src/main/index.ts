@@ -11,7 +11,7 @@ import { loadNotificationsMuted, saveNotificationsMuted } from './config'
 import { ToastManager } from './modules/notifications/toast'
 import { createPushListener } from './modules/push'
 import type { PushListener, PushSession } from './modules/push'
-import { lintWiki, recordFeedback, vaultDir } from './modules/wiki'
+import { recordFeedback, vaultDir } from './modules/wiki'
 
 // v3 client (docs/arch-v3-server-split): the app is a pure client. Login
 // establishes the session; the server decides role/issues and pushes them.
@@ -261,7 +261,9 @@ app.whenReady().then(() => {
     return notificationsMuted
   })
 
-  ipcMain.handle('wiki:lint', () => lintWiki())
+  // 서버 vault 점검 (제안 4) — 클라이언트 로컬 vault가 아니라 운영 vault를 본다.
+  // 미접속·타임아웃·권한 거부는 null → renderer가 안내 문구를 띄운다.
+  ipcMain.handle('wiki:lint', () => pushListener?.requestLint() ?? null)
 
   // Window controls live in the renderer title bar (titleBarStyle: 'hidden').
   ipcMain.on('window:minimize', () => mainWindow?.minimize())

@@ -1,4 +1,4 @@
-import type { SheriffIssue, TeamMember, UserConfig, WsStatus } from '@shared/types'
+import type { SheriffIssue, TeamMember, UserConfig, WikiLintReport, WsStatus } from '@shared/types'
 
 /** Demo credentials until SVP-5 lands (server: admin/admin → sheriff, id/id → member). */
 export interface PushCredentials {
@@ -38,4 +38,6 @@ export interface PushListener {
   reassignIssue(issueId: string, assigneeId: string): void
   /** C→S: 담당자의 노트 원인 일치/불일치 피드백 → 서버 vault에 누적 (query 감점, F8). */
   sendFeedback(noteTitle: string, helpful: boolean): void
+  /** C→S (sheriff only): 서버 vault 점검 요청 — 실패/미접속/타임아웃이면 null. */
+  requestLint(): Promise<WikiLintReport | null>
 }
