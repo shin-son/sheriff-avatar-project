@@ -3,17 +3,21 @@
 > 개발(mock)과 사내 Jira 실연동 테스트의 실행 방법. 배경 구조는 [ARCHITECTURE.md](./ARCHITECTURE.md),
 > 프로토콜은 [API.md](./API.md) 참고.
 > **사내 실제 값(URL·PAT·JQL)은 이 repo 어디에도 커밋하지 않는다** (CLAUDE.md 절대 규칙 4).
-> 실제 값 모음은 사내 팀 노트에만 둔다.
+> 실제 값은 [docs/INTERNAL-ASSETS.md](./INTERNAL-ASSETS.md) 템플릿에 채워 사내에서만 관리한다.
 
 ## 요구사항
 
 - Node.js 20+ / git
 - 사내 테스트: Jira Personal Access Token (Jira 프로필 → Personal Access Tokens에서 발급)
 - 사내 PC에서는 repo를 **pull만** 한다 — 코드 수정·push는 사외에서만 (CLAUDE.md 절대 규칙 2)
+- (선택 — 사내 전용) `python3` + `.tool/Jenkins/fetch_ci_test.py`(1차 CI 로그 수집),
+  claude CLI + `.claude/skills/format-ci-log`(로그 정형화), Gerrit MCP(담당자 후보 조회).
+  전부 gitignored 사내 자산이며, 없으면 각각 Jenkins 직통 수집 / raw 로그 그대로 / wiki owner
+  후보만으로 자동 강등되어 동작에는 지장 없다. 상세는 [docs/INTERNAL-ASSETS.md](./INTERNAL-ASSETS.md)
 
 ## 설정 (.env)
 
-프로젝트 루트의 `.env` 파일을 앱이 시작 시 읽는다 (셸 환경변수가 있으면 그쪽이 우선).
+프로젝트 루트의 `.env` 파일을 서버와 앱 모두 시작 시 읽는다 (셸 환경변수가 있으면 그쪽이 우선).
 
 ```bash
 cp .env.example .env    # Windows: copy .env.example .env
@@ -27,20 +31,27 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_JIRA_BOT` | `cicd_ap` | "사람 배정 전" 취급하는 bot 계정 — 이 assignee면 당번 큐로 라우팅 |
 | `SVP_JENKINS_USER` / `SVP_JENKINS_TOKEN` | (없음) | Jenkins Basic auth (계정 + API Token — 프로필 → Configure에서 발급). 미설정이면 인증 헤더 없이 시도 (mock용). 티켓 description의 빌드 링크에서 콘솔 로그 꼬리를 가져와 분류·ingest 로그를 보강 — 링크 없음/실패 시 description 로그로 폴백 |
 | `SVP_JENKINS_LOG_TAIL` | `6000` | 콘솔 꼬리 폴백(TC 구간을 못 찾을 때)의 유지 크기(chars). 찾은 TC 구간은 통짜 보존된다 |
-| `SVP_LLM_PROVIDER` | `bedrock` | 분류기 LLM 경로 — `bedrock`(Messages 엔드포인트) / **`bedrock-invoke`(표준 Bedrock InvokeModel — 사내처럼 Mantle이 막힌 환경)** / `anthropic`(사외 dev) |
+| `SVP_JENKINS_TIMEOUT_MS` | `15000` | Jenkins HTTP 타임아웃(ms) — 샤드 콘솔이 ~9MB라 다운로드 여유 포함 |
+| `SVP_LLM_PROVIDER` | `bedrock` | 분류기 LLM 경로 — `bedrock`(Messages 엔드포인트) / **`bedrock-invoke`(표준 Bedrock InvokeModel — 사내처럼 Mantle이 막힌 환경)** / `anthropic`(사외 dev). 코드 기본값은 `bedrock`이지만 `.env.example`은 사내 기준인 `bedrock-invoke`를 기입해 둔다 |
 | `SVP_LLM_MODEL` | provider별 기본 | `bedrock-invoke` 기본값은 `global.anthropic.claude-opus-4-8` (global inference profile — on-demand ID는 400). 환경이 다르면 콘솔의 ID로 교체 |
+| `SVP_LLM_TIMEOUT_MS` | `30000` | LLM SDK 클라이언트 타임아웃(ms) — 분류·노트 선택·해결 요약 호출 공통 |
 | `AWS_REGION` | (없음) | Bedrock 리전. **미설정이면 분류기 비활성** — 티켓은 당번 큐에 유지되고 서버는 정상 동작 |
 | `SVP_ANTHROPIC_API_KEY` | (없음) | `SVP_LLM_PROVIDER=anthropic`일 때만 |
 | `SVP_LLM_CONFIDENCE_MIN` | `80` | 이 점수 **초과**여야 자동 배정 (assignee+댓글+In Progress) |
 | `SVP_JIRA_WRITE_MODE` | **`dry-run`** | 서버발 Jira write 전부(자동 배정 + ack 전이)의 게이트: `dry-run`=로그만 / `label`=`SVP_TEST_LABEL` 티켓만 / `live`=전면 |
 | `SVP_INGEST_MODE` | **`dry-run`** | 해결된 티켓의 vault 반영(F7: raw 동결 + case-log 기록) 게이트: `dry-run`=로그만(vault 안 건드림) / `live`=실제 기록. 데모의 case-log 실시간 갱신 컷은 `live` 필요 |
+| `SVP_DEDUP_WINDOW_DAYS` | `14` | ingest dedup 시간창(일): 같은 실패 서명·같은 모듈의 새 티켓이 이 기간 내에 해결되면 case-log에 풀 엔트리 대신 anchor 포인터(재발 추정, 누적 카운트)로 기록 |
+| `SVP_RECUR_BOOST_CAP` | `4` | query 시 재발 가중 상한 — 재발 count가 n인 anchor 엔트리는 점수 `+min(n-1, cap)` |
+| `SVP_FEEDBACK_DEMOTE` | `3` | 👎(원인 불일치) 누적이 이 값 이상이고 👍보다 많은 노트는 query 점수 반감 (F8) |
 | `SVP_COMMENT_CHANNEL` | `rest` | 분석 코멘트 전송 채널: `rest`=Jira REST 직접 / `mcp`=headless claude가 MCP 서버의 Jira 툴로 기입 (서버 호스트에 claude CLI + MCP 설정 json 필요). 이름 미설정·호출 실패 시 REST 폴백. write 게이트를 따른다 |
 | `SVP_COMMENT_MCP_NAME` | (없음) | claude MCP 설정(json)에 등록된 MCP 서버 이름 — `mcp` 채널이 `--allowedTools mcp__<이름>`으로 호출 |
 | `SVP_TEST_LABEL` | `svp-test` | `label` 모드에서 write를 허용하는 Jira 라벨 |
 | `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 분류 근거로 읽는 vault 경로. **앱도 인식** (선택) — 설정 시 "위키 열기/점검"이 이 경로(공유 vault)를 사용. 미설정 시 EXE는 설치 시점의 번들 스냅샷을 열므로 서버 vault와 어긋난다. **Obsidian 사용 시 머신당 최초 1회** 해당 폴더를 "Open folder as vault"로 등록해야 한다 — 미등록이면 `obsidian://` 열기가 "Unable to find a vault" 에러를 띄운다 (URI는 등록된 vault만 연다) |
+| `SVP_DEBUG_DUMP_DIR` | (없음 — 꺼짐) | 설정 시 신규 티켓의 수집 로그(description + Jenkins 구간)를 `<dir>/<티켓키>.log`로 저장 — ingest 전 수집 데이터 검증용 |
 | `SVP_SERVER_PORT` | `8793` | 서버 Socket.IO 리슨 포트 |
 | `SVP_SERVER_POLL_MS` | `5000` | 서버 폴링 주기(ms) |
 | `SVP_PUSH_URL` | `http://localhost:8793` | 중앙 서버 Socket.IO 주소 — **앱에 필요한 유일한 설정** (서버가 원격이면 그 주소로) |
+| `SVP_GLASS` | (미설정) | 앱 창 모드(앱 전용): 미설정=acrylic(Win11 미만은 solid) / `frameless`=투명 프레임리스 / `solid`=불투명 강제 — 화면 녹화 시 창 뒤 바탕화면이 찍히지 않게 한다 |
 | `NODE_EXTRA_CA_CERTS` | (없음) | 사내 자체 CA pem 경로. **`.env`로는 동작하지 않음** — Node가 프로세스 시작 시 읽으므로 셸(systemd는 `Environment=`)에서 설정 |
 
 ## 사외 개발 (mock)
@@ -54,13 +65,19 @@ npm run dev              # 터미널 4 — 앱 (로그인: admin/admin = 당번,
 ```
 
 - 당번+팀원 동시 확인: `npm run dev`를 한 번 더 실행 (Vite가 다음 포트를 자동 사용, 캐시 경고는 무해)
-- 담당자 배정 재현: `curl -X PUT localhost:8792/rest/api/2/issue/<KEY>/assignee -d '{"name":"shin.son"}'`
+- 담당자 배정 재현: `curl -X PUT localhost:8792/rest/api/2/issue/<KEY>/assignee -d '{"name":"alice"}'`
   → 다음 폴링에서 그 계정으로 로그인한 앱에 push된다
 
 - 새 티켓 흘리기: `curl -X POST localhost:8792/demo/trigger -d '{"scenario":"payment-e2e"}'`
   (시나리오 목록은 `mock/jira-server.mjs` 상단)
 - 해결 재현: `curl -X POST localhost:8792/demo/resolve -d '{"key":"CIOPS-1004","comment":"원인 수정"}'`
-- 기존 mock CI 경로도 병존: `npm run mock:ci` (WebSocket push)
+
+## 검증 명령
+
+```bash
+npm run typecheck    # 타입 체크 — 커밋 전 필수
+npm test             # node --test — server 순수 함수 22개 테스트 (ingest dedup·재발 가중·피드백 감점·스킬 출력 판정)
+```
 
 ## 사내 실연동 테스트
 
@@ -129,10 +146,11 @@ journalctl -u svp-server -f       # 로그 확인
 ## 사내 검증 시나리오 — 가짜 티켓으로 자동 배정+댓글 확인
 
 실 Jira에서 write(배정·댓글·전이)가 실제로 동작하는지, **가짜 티켓 하나만으로** 안전하게 확인하는 절차.
-예시는 reporter=shin.son, 기대 배정 결과=min5eok.kim 기준 — 계정명은 환경에 맞게 바꾼다.
+`<사내 계정 1>`(reporter)·`<사내 계정 2>`(기대 배정 결과) 등 사내 값은
+[docs/INTERNAL-ASSETS.md](./INTERNAL-ASSETS.md) 템플릿에 채워 관리한다 — 이 문서에는 자리표시자만 둔다.
 
 > **중요**: 가짜 티켓의 시작 assignee는 **비워두거나 bot(cicd_ap)** 이어야 한다.
-> 사람이 이미 배정된 티켓은 분류 대상에서 제외된다 — min5eok.kim은 티켓에 미리 넣는 값이 아니라
+> 사람이 이미 배정된 티켓은 분류 대상에서 제외된다 — `<사내 계정 2>`는 티켓에 미리 넣는 값이 아니라
 > **자동 배정의 기대 결과**이고, 그 근거는 vault 노트의 `owner:` 필드다.
 
 1. **vault에 테스트 노트** — 서버의 `SVP_WIKI_DIR` 안에 `modules/svp-selftest.md`:
@@ -141,7 +159,7 @@ journalctl -u svp-server -f       # 로그 확인
    ---
    type: module
    module: svp-selftest
-   owner: min5eok.kim
+   owner: <사내 계정 2>
    tags: [selftest]
    updated: 2026-07-16
    ---
@@ -177,16 +195,16 @@ journalctl -u svp-server -f       # 로그 확인
 3. **서버 env — 이중 안전장치** (테스트 세션 동안만):
 
    ```bash
-   SVP_JIRA_JQL=project = <프로젝트> AND reporter = shin.son AND labels = svp-test  # ① 이 티켓만 보임
-   SVP_JIRA_WRITE_MODE=label                                                       # ② 그중 svp-test만 write
+   SVP_JIRA_JQL=project = <프로젝트> AND reporter = <사내 계정 1> AND labels = svp-test  # ① 이 티켓만 보임
+   SVP_JIRA_WRITE_MODE=label                                                            # ② 그중 svp-test만 write
    AWS_REGION=<리전>
    ```
 
 4. **기대 결과** (`journalctl -u svp-server -f` 또는 포그라운드 로그):
    1. `new <KEY> assignee=- → admin` — 당번 큐 유입
-   2. 수 초 내 `classified <KEY>: svp-selftest/9x → assignee=min5eok.kim`
-   3. **Jira 화면**: assignee=min5eok.kim + "🤖 Sheriff Avatar 자동 분석" 댓글 + In Progress
-   4. `min5eok.kim`(=비밀번호) 로그인 앱에 티켓 push
+   2. 수 초 내 `classified <KEY>: svp-selftest/9x → assignee=<사내 계정 2>`
+   3. **Jira 화면**: assignee=`<사내 계정 2>` + "🤖 Sheriff Avatar 자동 분석" 댓글 + In Progress
+   4. `<사내 계정 2>`(=비밀번호) 로그인 앱에 티켓 push
    - 음성 대조군: 노트와 무관한 가짜 티켓 하나 더 → `→ 당번 유지` 로그만, write 없음
 
 5. **정리**: 가짜 티켓 Done/삭제, `modules/svp-selftest.md` 삭제, `.env`를 팀 JQL + `dry-run`으로 복귀.
@@ -204,5 +222,6 @@ journalctl -u svp-server -f       # 로그 확인
 | `jenkins api/json failed ...: 500 <!DOCTYPE HTML>...` (차단 페이지) | `NODE_USE_ENV_PROXY=1`(Bedrock용)로 인해 fetch가 사내 프록시를 타고, 프록시가 내부 Jenkins IP를 차단 | 서버 코드가 Jenkins만 `node:http` 직통으로 호출하므로 최신 코드면 발생하지 않음. 단발 `node -e "fetch(...)"` 진단은 플래그 유무에 따라 결과가 달라지니 주의 |
 | 배정했는데 팀원 앱에 안 옴 | 로그인 아이디 ≠ Jira assignee name | 서버 로그의 `sync ...: assignee=<값>`과 로그인 아이디 대조 |
 
-v3 서버는 이슈를 메모리로 추적한다 — 서버를 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다.
-(v2 앱 내장 폴러의 중복 방지 저장소 `%APPDATA%\sheriff-avatar-project\svp-processed-tickets.json`은 v2 전용.)
+v3 서버는 티켓 상태를 Jira에서 재조회해 복원하고, 초도분석 결과(Jenkins 보강 로그·LLM 분류)는
+`server/issue-cache.json`에 캐시된다 — mock Jira를 재기동해 티켓 키가 재사용될 때는 이 파일을
+지워야 새 티켓이 다시 분석된다.
