@@ -49,6 +49,13 @@ export default function App() {
     document.documentElement.classList.add('js-ready')
   }, [])
 
+  // 위키 점검은 버튼이 아니라 상시 정보 — 당번 로그인 시 자동 실행되고
+  // StatusBoard가 헬스 스코어·정리 후보를 표시한다 (재점검은 보드의 ↻).
+  useEffect(() => {
+    if (state?.authed && state.user.role === 'sheriff') runLint()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.authed, state?.user.role])
+
   useEffect(() => {
     void window.svp.getState().then(setState)
     const offs = [
@@ -222,58 +229,14 @@ export default function App() {
             >
               위키 열기 ↗
             </button>
-            <button
-              className="btn"
-              onClick={runLint}
-              title="서버 vault 점검 (스키마·공백·고아·부정 신호 누적)"
-            >
-              위키 점검
-            </button>
           </div>
 
-          {lintFailed && (
-            <div className="lint-card">
-              <div className="lint-head">
-                <strong>위키 점검 실패</strong>
-                <button className="toast-close" onClick={() => setLintFailed(false)}>
-                  ✕
-                </button>
-              </div>
-              <p className="lint-ok">서버 응답 없음 — 연결 상태를 확인하고 다시 시도하세요</p>
-            </div>
-          )}
-
-          {lintReport && (
-            <div className="lint-card">
-              <div className="lint-head">
-                <strong>위키 점검 결과</strong>
-                <span className="lint-count">노트 {lintReport.noteCount}개</span>
-                {lintReport.healthScore !== undefined && (
-                  <span className="lint-count">헬스 {lintReport.healthScore}/100</span>
-                )}
-                <button className="toast-close" onClick={() => setLintReport(null)}>
-                  ✕
-                </button>
-              </div>
-              {(lintReport.issues ?? []).length === 0 ? (
-                <p className="lint-ok">정리할 노트 없음 — 노트를 클릭해 열람하려면 위의 위키 열기를 사용하세요</p>
-              ) : (
-                <ul className="lint-list">
-                  {(lintReport.issues ?? []).map((it, idx) => (
-                    <li key={`${it.note}-${idx}`}>
-                      <span className={`lint-sev lint-sev-${it.severity}`}>{it.severity}</span>{' '}
-                      <button className="lint-note" onClick={() => window.svp.openWiki(it.note)}>
-                        {it.note}
-                      </button>{' '}
-                      — {it.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {visible.length > 0 && <StatusBoard stats={boardStats} />}
+          <StatusBoard
+            stats={boardStats}
+            lint={lintReport}
+            lintFailed={lintFailed}
+            onLintRefresh={runLint}
+          />
 
           {visible.length === 0 ? (
             <div className="watchtower">
@@ -343,7 +306,6 @@ export default function App() {
               ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
           }}
           onOpenWiki={() => window.svp.openWiki()}
-          onLintWiki={runLint}
           onClose={() => setPaletteOpen(false)}
         />
       )}
