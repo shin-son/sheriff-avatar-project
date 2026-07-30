@@ -132,6 +132,16 @@ export interface HubErrorPayload {
   message: string
 }
 
+export type LintSeverity = 'critical' | 'warn' | 'info'
+
+/** One graded finding in a lint report (server lint, 제안 4 Phase 1). */
+export interface WikiLintIssue {
+  severity: LintSeverity
+  /** Note file (orphans) or note title (feedback candidates). */
+  note: string
+  message: string
+}
+
 /** Result of a wiki health check (lint operation). */
 export interface WikiLintReport {
   generatedAt: string
@@ -141,6 +151,10 @@ export interface WikiLintReport {
   /** Notes with accumulated negative feedback (removal candidates). */
   unhelpfulNotes: string[]
   suggestions: string[]
+  /** Server lint only — severity-graded findings; absent from the legacy client lint. */
+  issues?: WikiLintIssue[]
+  /** Server lint only — 0~100, penalty per finding severity. */
+  healthScore?: number
 }
 
 export interface AppState {
