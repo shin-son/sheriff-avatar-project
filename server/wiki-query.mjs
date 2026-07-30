@@ -13,6 +13,11 @@ const VAULT_DIR =
 
 // Schema/auto-generated files and raw/ originals are not query targets (README.md).
 const INFRA_FILES = new Set(['README.md', 'index.md', 'log.md'])
+// case-log은 파일 통짜가 아니라 '엔트리 단위'로 스코어링한다(아래 caseLogEntries) —
+// dedup/재해결 포인터 제외(①) + 서명 재발 count 가중(②). retrieval 자기교정 Phase 1.
+const CASE_LOG = 'case-log.md'
+const SIG_INDEX_FILE = join(VAULT_DIR, 'raw', 'jira', '.signature-index.json')
+const RECUR_BOOST_CAP = Number(process.env.SVP_RECUR_BOOST_CAP ?? 4)
 
 function listMarkdownFiles(dir) {
   const out = []
@@ -138,6 +143,59 @@ function noteSignals(content, fm) {
 }
 
 /**
+ * case-log.md 텍스트 → 검색 대상 엔트리 배열 (순수 함수 — 테스트 대상).
+ * ① dedup/재해결 '포인터' 엔트리(`(재발 추정|재해결) → anchor`)는 지식이 아니라 링크이므로 제외.
+ * 같은 티켓 id의 full 엔트리가 여러 개면 '최신'만 남긴다 — reopen 교정본이 이전 기록을 supersede.
+ */
+export function caseLogEntries(text) {
+  if (!text) return []
+  const byId = new Map()
+  for (const body of text.split(/\n(?=## )/)) {
+    if (!body.trim().startsWith('## ')) continue
+    const heading = body.split('\n', 1)[0]
+    if (/\((?:재발 추정|재해결)\s*→/.test(heading)) continue // ① 포인터 제외
+    const id = heading.match(/^##\s+(\S+)\s+—/)?.[1] ?? heading
+    byId.set(id, {
+      id,
+      title: heading.replace(/^##\s+/, '').trim(),
+      module: body.match(/^-\s*module\s*:\s*(.+)$/m)?.[1]?.trim() ?? null,
+      body
+    })
+  }
+  return [...byId.values()]
+}
+
+/** ② 재발 가중 — 서명 재발 count가 높은 known-failure를 상향(상한 있음). 순수 함수. */
+export function recurrenceBoost(count, cap = RECUR_BOOST_CAP) {
+  return !count || count <= 1 ? 0 : Math.min(count - 1, cap)
+}
+
+/** .signature-index.json → { 티켓id: 재발count } (없거나 파싱 실패 시 빈 맵). */
+function loadRecurrenceCounts() {
+  try {
+    const idx = JSON.parse(readFileSync(SIG_INDEX_FILE, 'utf-8'))
+    const m = {}
+    for (const g of Object.values(idx)) for (const t of g.tickets ?? []) m[t] = g.count
+    return m
+  } catch {
+    return {}
+  }
+}
+
+/** 공통 키워드/신호 스코어 (기존 queryWiki 규칙과 동일 — module 매치 +3, 그 외 +1, note-signal +2). */
+function scoreText(content, keywords, event, ticketText) {
+  const haystack = content.toLowerCase()
+  let score = 0
+  for (const keyword of keywords) {
+    if (haystack.includes(keyword)) score += keyword === event.module ? 3 : 1
+  }
+  for (const signal of noteSignals(content, parseFrontmatter(content))) {
+    if (ticketText.includes(signal)) score += 2
+  }
+  return score
+}
+
+/**
  * 초도분석 scorer — two directions:
  *  - event → note (Electron adapter behavior): keywords = module + title words
  *    >3 chars; module match +3, other keyword substring +1.
@@ -161,18 +219,27 @@ export function queryWiki(event) {
   } catch {
     return []
   }
+  const recCounts = loadRecurrenceCounts()
   for (const file of files) {
     const content = readFileSync(file, 'utf-8')
+    if (basename(file) === CASE_LOG) {
+      // case-log: 엔트리 단위 — 포인터 제외·최신 우선(①), 재발 count 가중(②).
+      for (const entry of caseLogEntries(content)) {
+        const base = scoreText(entry.body, keywords, event, ticketText)
+        if (base <= 0) continue
+        matches.push({
+          file: `${CASE_LOG}#${entry.id}`,
+          title: entry.title,
+          score: base + recurrenceBoost(recCounts[entry.id]),
+          body: entry.body,
+          module: entry.module,
+          owner: null
+        })
+      }
+      continue
+    }
     const fm = parseFrontmatter(content)
-    const haystack = content.toLowerCase()
-    let score = 0
-    for (const keyword of keywords) {
-      if (!haystack.includes(keyword)) continue
-      score += keyword === event.module ? 3 : 1
-    }
-    for (const signal of noteSignals(content, fm)) {
-      if (ticketText.includes(signal)) score += 2
-    }
+    const score = scoreText(content, keywords, event, ticketText)
     if (score > 0) {
       matches.push({
         file: relative(VAULT_DIR, file).replaceAll('\\', '/'),
