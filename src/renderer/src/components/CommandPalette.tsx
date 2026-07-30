@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SheriffIssue } from '@shared/types'
 import { TYPE_LABEL } from '../format'
+import { moduleOf } from '../stats'
 
 interface QuickAction {
   id: string
@@ -58,7 +59,7 @@ export default function CommandPalette({
           [
             i.event.jira?.key ?? '',
             i.event.title,
-            i.event.module,
+            moduleOf(i),
             i.event.branch,
             i.assignment.assigneeName
           ].some((s) => s.toLowerCase().includes(q))

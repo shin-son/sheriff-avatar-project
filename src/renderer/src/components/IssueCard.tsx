@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { SheriffIssue } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
+import { moduleOf } from '../stats'
 
 interface Props {
   issue: SheriffIssue
@@ -44,7 +45,7 @@ export default function IssueCard({ issue, selected, highlighted, onSelect, inde
         </div>
         <div className="row-title">{event.title}</div>
         <div className="row-meta">
-          {event.module} · {event.branch}
+          {moduleOf(issue)} · {event.branch}
         </div>
         <div className="row-assignee">{assignment.assigneeName}</div>
       </button>

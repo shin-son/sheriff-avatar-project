@@ -27,8 +27,9 @@ export interface DashboardStats {
   dupIssueCount: number
 }
 
-/** 분류기 카테고리가 신뢰 모듈. CI의 module은 fallback (DetailPanel과 동일 규칙). */
-function moduleOf(i: SheriffIssue): string {
+/** 분류기 카테고리가 신뢰 모듈, CI의 module은 fallback — 티켓 표시·검색·현황이
+ * 전부 이 한 규칙을 쓴다 (Jira 티켓의 event.module은 항상 'unknown'으로 유입). */
+export function moduleOf(i: SheriffIssue): string {
   const c = i.classification.category
   return c && c !== 'unknown' ? c : i.event.module || 'unknown'
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CandidateAssignee, SheriffIssue, TeamMember } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
+import { moduleOf } from '../stats'
 
 interface Props {
   issue: SheriffIssue
@@ -24,11 +25,8 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
   }
 
   // Module owners first in the picker (wiki frontmatter → TeamMember.ownedModules).
-  // The classifier's category is the trusted module; CI's own module field is the fallback.
-  const module =
-    classification.category && classification.category !== 'unknown'
-      ? classification.category
-      : event.module
+  // moduleOf: 분류 category 우선, CI module은 fallback (표시·검색·현황 공통 규칙).
+  const module = moduleOf(issue)
   const isOwner = (m: TeamMember) => m.ownedModules.includes(module)
   const teamCandidates = team
     .filter((m) => m.role === 'member')
@@ -201,7 +199,7 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
         )}
 
         <div className="detail-section detail-meta">
-          {event.module} · {event.branch} · {formatIssueTime(event.timestamp)}
+          {module} · {event.branch} · {formatIssueTime(event.timestamp)}
         </div>
       </div>
     </aside>
