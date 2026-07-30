@@ -201,6 +201,13 @@ function connectAndLogin(username: string, password: string): Promise<PushSessio
     )
     const listener = createPushListener(url, { username, password }, {
       onSession: (session) => {
+        if (settled) {
+          // 로그인 후에도 서버가 roster 갱신을 내려준다 (새 팀원 로그인/assignee
+          // 등장) — F4 배정 후보 목록이 로그인 시점 스냅샷에 갇히지 않게 반영.
+          team = session.team
+          mainWindow?.webContents.send('state:refresh')
+          return
+        }
         sessionStartedAt = Date.now()
         settle(() => resolve(session))
       },
