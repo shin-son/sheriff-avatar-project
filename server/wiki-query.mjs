@@ -23,7 +23,7 @@ const RECUR_BOOST_CAP = Number(process.env.SVP_RECUR_BOOST_CAP ?? 4)
 const FEEDBACK_FILE = join(VAULT_DIR, '.feedback.json')
 const FEEDBACK_DEMOTE = Number(process.env.SVP_FEEDBACK_DEMOTE ?? 3)
 
-function loadFeedback() {
+export function loadFeedback() {
   try {
     return JSON.parse(readFileSync(FEEDBACK_FILE, 'utf-8'))
   } catch {
@@ -43,13 +43,17 @@ export function recordFeedback(noteTitle, helpful) {
   return e
 }
 
-/** ③ 불일치 누적(👎 threshold 이상, 그리고 일치보다 많음) 노트는 점수 반감. 순수 함수. */
-export function feedbackDemotion(score, entry, threshold = FEEDBACK_DEMOTE) {
-  if (entry && entry.down >= threshold && entry.down > (entry.up ?? 0)) return Math.floor(score / 2)
-  return score
+/** 불일치 누적(👎 threshold 이상, 그리고 일치보다 많음) 판정 — query 감점과 lint 정리 후보가 공유. */
+export function isUnhelpful(entry, threshold = FEEDBACK_DEMOTE) {
+  return !!entry && entry.down >= threshold && entry.down > (entry.up ?? 0)
 }
 
-function listMarkdownFiles(dir) {
+/** ③ 불일치 누적 노트는 점수 반감. 순수 함수. */
+export function feedbackDemotion(score, entry, threshold = FEEDBACK_DEMOTE) {
+  return isUnhelpful(entry, threshold) ? Math.floor(score / 2) : score
+}
+
+export function listMarkdownFiles(dir) {
   const out = []
   for (const name of readdirSync(dir)) {
     // 숨김 폴더 제외: 사내 vault에는 .obsidian/, .claude/(스킬) 등이 함께 있다 —
@@ -78,7 +82,7 @@ function parseFrontmatter(content) {
   return fields
 }
 
-function toTitle(file, content) {
+export function toTitle(file, content) {
   const heading = content.split('\n').find((l) => l.startsWith('# '))
   return heading ? heading.slice(2).trim() : basename(file, '.md')
 }
