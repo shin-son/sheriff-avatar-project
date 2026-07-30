@@ -133,4 +133,6 @@ export interface AppState {
   notificationsMuted: boolean
   /** False until the server accepts a login — the renderer shows the login view. */
   authed: boolean
+  /** 자동 배정 게이트(서버 SVP_LLM_CONFIDENCE_MIN) — 브래스 스타 표기 기준. */
+  confidenceMin: number
 }

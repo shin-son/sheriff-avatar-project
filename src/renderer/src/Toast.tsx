@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react'
 import type { SheriffIssue } from '@shared/types'
 
 export default function Toast() {
-  const [issue, setIssue] = useState<SheriffIssue | null>(null)
+  const [data, setData] = useState<{ issue: SheriffIssue; confidenceMin: number } | null>(null)
 
-  useEffect(() => window.svp.onToastData(setIssue), [])
+  useEffect(() => window.svp.onToastData(setData), [])
 
-  if (!issue) return null
+  if (!data) return null
+  const { issue, confidenceMin } = data
   const conf = issue.classification.confidence
 
   return (
     <div className="toast" onClick={() => window.svp.toastClick(issue.event.id)}>
-      <span className={`star-badge ${conf > 80 ? 'high' : 'low'}`} title={`신뢰도 ${conf}`}>
+      <span className={`star-badge ${conf > confidenceMin ? 'high' : 'low'}`} title={`신뢰도 ${conf}`}>
         <span className="star-num">{conf}</span>
       </span>
       <div className="toast-content">

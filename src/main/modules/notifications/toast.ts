@@ -12,7 +12,7 @@ const TTL_MS = 9000
 export class ToastManager {
   private windows: BrowserWindow[] = []
 
-  show(issue: SheriffIssue): void {
+  show(issue: SheriffIssue, confidenceMin = 80): void {
     const { workArea } = screen.getPrimaryDisplay()
     const slot = this.windows.length
     const x = workArea.x + workArea.width - WIDTH - MARGIN
@@ -34,7 +34,7 @@ export class ToastManager {
     })
     win.setAlwaysOnTop(true, 'screen-saver')
     win.webContents.on('did-finish-load', () => {
-      win.webContents.send('toast:data', issue)
+      win.webContents.send('toast:data', { issue, confidenceMin })
       win.showInactive()
     })
     if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
