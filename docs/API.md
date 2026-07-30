@@ -1,193 +1,118 @@
 # SVP API 명세
 
-> 대상 구조는 [ARCHITECTURE.md](./ARCHITECTURE.md) 참고. 이 문서는 3개 경계의 프로토콜을 명세한다:
-> **① 클라이언트 ↔ 서버(WS)**, **② 서버 ↔ Jira(REST)**, **③ 서버 ↔ Claude API(LLM)**. ④는 개발용 mock Jira.
-> payload의 타입은 `src/shared/types.ts`를 따른다 (필요한 타입 확장은 [§5](#5-sharedtypests-확장-제안)).
+> v3 서버(`server/`) 기준의 **실제 구현 계약**만 기술한다. payload 타입은 [src/shared/types.ts](../src/shared/types.ts),
+> 전체 구조는 [ARCHITECTURE.md](./ARCHITECTURE.md) 참고.
 
-## 1. 클라이언트 ↔ 서버 (WebSocket)
+## 1. 클라이언트 ↔ 서버 (Socket.IO)
 
-> **2026-07-15 갱신 — 전송 계층 Socket.IO 확정.** 아래 raw-WS envelope 규격은 메시지의 **의미**(종류·필터링
-> 규칙) 명세로 유지하되, 실제 전송은 Socket.IO 이벤트다. 현행 프로토타입 계약
-> (`mock/svp-server.mjs` ↔ `src/main/modules/push/`):
->
-> - 접속/로그인: `io(SVP_PUSH_URL, { auth: { username, password } })` — 데모 인증(SVP-5 전:
->   admin/admin = sheriff, 아이디=비밀번호 = member). 실패 시 `connect_error("AUTH_FAILED")`,
->   성공 시 S→C `session` `{ user: UserConfig, team: TeamMember[] }` 후 그 세션이 볼 미해결 이슈를
->   `issue:new`로 재생(복원). 재접속은 socket.io-client 내장.
-> - S→C `issue:new` / `issue:updated` — payload는 `SheriffIssue` 그대로 (envelope 없음).
->   서버 측 필터링: member = 본인 assignee분만, sheriff = 전체.
-> - (2026-07-27 제거) `issue:ack` — "티켓 확인"은 티켓을 브라우저로 열기만 한다. In Progress 전이는
->   담당자가 Jira에서 직접 하고, 폴링 sync가 status 변화를 감지해 `issue:updated`로 반영한다.
-> - C→S `issue:reassign` `{ issueId, assigneeId }` — sheriff 전용 수동 배정 (F4). 서버가 Jira assignee
->   갱신 + 배정 댓글을 남기고, 변경은 tracked-key 폴링 sync가 기존/신규 담당자에게 `issue:updated`로
->   되돌린다 (Jira = source of truth). `SVP_JIRA_WRITE_MODE` 게이트 적용 — dry-run에서는 로그만.
-> - 미이식: `wiki:lint` · `wiki:feedback` · `server:error` — 아래 표의 의미 그대로
->   W2에서 Socket.IO 이벤트로 추가한다.
+서버는 `SVP_SERVER_PORT`(기본 **8793**)에서 리슨, 클라이언트는 `SVP_PUSH_URL`(기본 `http://localhost:8793`)로 접속.
+envelope 없음 — 모든 이벤트 payload는 bare 객체다. 재접속은 socket.io-client 내장. 같은 userId의 중복 로그인은 기존 소켓을 끊는다.
 
-- 서버가 `ws://<server-host>:8791` 리슨 (v2 = 당번 앱, v3 = Linux headless 서버 — [ARCHITECTURE.md](./ARCHITECTURE.md)).
-  포트는 `SVP_HUB_PORT`로 변경 가능.
-- 클라이언트는 `SVP_SERVER_URL` (예: `ws://192.168.0.10:8791`)로 접속. 끊기면 3초 간격 재접속 (기존 정책 유지).
-- **v3: 당번 대시보드도 이 프로토콜의 클라이언트다.** role은 클라이언트가 주장하지 않는다 —
-  서버가 `client:hello`의 `clientId`로 팀 설정에서 판별한다 (member/sheriff).
-- 인증: **v1은 사내망 신뢰 기반으로 `clientId`만** 사용. 토큰 인증은 Week 3 재검토 (TODO(SVP-5) —
-  v3에서 서버가 별도 호스트가 되면 우선순위 상향).
+- **로그인**: `io(SVP_PUSH_URL, { auth: { username, password } })`. 데모 인증(SVP-5 전): `admin`/`admin` → sheriff,
+  아이디=비밀번호 → member. 실패 시 `connect_error("AUTH_FAILED")` — 클라이언트는 재시도하지 않고 로그인 화면으로.
+- **서버 측 필터링**: member 세션에는 본인 assignee 이슈만, sheriff 세션에는 전체가 push된다.
 
-### 메시지 envelope
-
-모든 메시지는 JSON 텍스트 프레임 하나:
-
-```json
-{ "v": 1, "type": "issue:assigned", "ts": "2026-07-20T09:00:00Z", "payload": { } }
-```
-
-`v`는 프로토콜 버전(현재 1). 모르는 `type`은 무시한다 (전방 호환).
-
-### 메시지 목록
-
-| 방향 | type | payload | 설명 |
+| 방향 | 이벤트 | payload | 설명 |
 |---|---|---|---|
-| C→S | `client:hello` | `{ clientId, appVersion }` | 접속 직후 1회. 서버는 `server:welcome`으로 응답 |
-| S→C | `server:welcome` | `{ user: UserConfig, team: TeamMember[], issues: SheriffIssue[] }` | 이슈 스냅샷 (재접속 시 상태 복원) — member는 본인 배정분, **v3: sheriff는 전체** |
-| S→C | `issue:assigned` | `{ issue: SheriffIssue }` | 새 이슈 배정 push — member 세션에는 **본인 배정분만**, **v3: sheriff 세션에는 전체** |
-| S→C | `issue:updated` | `{ issue: SheriffIssue }` | 상태 변경·재배정 반영. 재배정으로 자신이 제외되면 `issue.assignment`로 판별해 목록에서 제거 |
-| C→S | ~~`issue:ack`~~ | `{ issueId }` | **제거(2026-07-27)** — "티켓 확인"은 티켓을 열기만 한다. In Progress는 담당자가 Jira에서 직접 옮기고 서버가 폴링으로 감지한다. **해결 메시지도 없다** — Done도 Jira에서만 |
-| C→S | `issue:reassign` | `{ issueId, assigneeId }` | **v3 신설, sheriff 전용** — 수동 재배정 (F4). 서버가 Jira assignee 갱신 + 기존/신규 담당자에게 `issue:updated` push. member 세션이 보내면 `server:error(FORBIDDEN)` |
-| C→S | `wiki:lint` | `{}` | **v3 신설, sheriff 전용** — WIKI 점검 실행 요청 (F8). 응답은 `wiki:lint:result` |
-| S→C | `wiki:lint:result` | `{ report: WikiLintReport }` | lint 보고서 — 요청한 sheriff 세션에만 전송 |
-| C→S | `wiki:feedback` | `{ noteTitle, helpful: boolean }` | 참조 노트 👍/👎 (서버의 feedback 저장소에 기록) |
-| S→C | `server:error` | `{ code, message }` | 요청 처리 실패 (예: `JIRA_TRANSITION_FAILED`, `FORBIDDEN`) — 클라이언트는 토스트로 표시 |
+| S→C | `session` | `{ user: UserConfig, team: TeamMember[] }` | 접속 직후 1회. 이어서 이 세션이 볼 미해결 이슈를 `issue:new`로 재생(복원) |
+| S→C | `issue:new` | `SheriffIssue` | 신규 이슈. 서버 재시작 캐시 복원분은 `restored: true` — 클라이언트는 toast 스킵 |
+| S→C | `issue:updated` | `SheriffIssue` | 분류 완료·status/assignee sync 반영. 재배정 시 **기존 담당자에게도** 전송(목록에서 제거용) |
+| C→S | `issue:reassign` | `{ issueId, assigneeId }` | sheriff 전용 수동 배정(F4). `issueId` = `event.id`(= Jira key). 서버가 Jira assignee PUT + 배정 댓글 → 폴링 sync가 `issue:updated`로 되돌림. write 게이트(§2) 적용 |
+| C→S | `wiki:feedback` | `{ note: string, helpful: boolean }` | 참조 노트 일치/불일치 피드백. **키 이름은 `note`**(값은 노트 제목) — 서버 vault에 누적, 👎 누적 노트는 query 감점 |
 
-- 하트비트: WS 표준 ping/pong, 서버가 30초 주기. 2회 무응답 시 세션 종료(클라이언트는 재접속 루프 진입).
-- `client:hello`의 `clientId`가 `TEAM`에 없으면 서버는 `server:error(UNKNOWN_CLIENT)` 후 연결 종료.
-- v2 이행기: 당번 대시보드는 같은 프로세스 IPC(`window.svp`)를 유지하며, v3 이행 1단계에서 위 sheriff
-  세션 규칙으로 대체한다 ([ARCHITECTURE.md — 이행 계획](./ARCHITECTURE.md)). sheriff 전용 메시지의 권한
-  판별은 서버가 세션 role로 한다 — 클라이언트 UI에서 숨기는 것은 편의일 뿐 보안 경계가 아니다.
+`SheriffIssue`는 `candidates?: CandidateAssignee[]`를 포함한다 — confidence ≤ 80일 때 서버가 빌드한
+human-in-the-loop 배정 후보(gerrit/wiki/case-log 출처).
 
-## 2. 서버 ↔ Jira (REST)
+## 2. 서버 ↔ Jira (REST v2)
 
-- 사내 Jira Server/DC 기준 REST v2. 인증은 PAT(Bearer 토큰).
-- 환경변수 (`.env`, gitignore 대상 — 절대 커밋 금지):
+인증: `Authorization: Bearer ${SVP_JIRA_PAT}` (미설정 시 헤더 생략 — mock용).
 
-| 변수 | 예시 | 설명 |
+| 용도 | 호출 |
+|---|---|
+| 신규 티켓 폴링 | `GET /rest/api/2/search?jql=(${SVP_JIRA_JQL}) ORDER BY created ASC` — fields: `summary,description,status,created,updated,assignee,labels` |
+| 추적 티켓 sync | `GET /rest/api/2/search?jql=key in (k1,k2,...)` — **key 목록만**, base JQL과 독립 |
+| 담당자 지정 | `PUT /rest/api/2/issue/{key}/assignee` body `{ "name": "<username>" }` |
+| 댓글 | `POST /rest/api/2/issue/{key}/comment` body `{ "body": "..." }` |
+| 상태 전이 | `GET /rest/api/2/issue/{key}/transitions`로 이름 매칭(예: `In Progress`) 후 `POST .../transitions` `{ transition: { id } }` |
+| ingest 원문 동결 | `GET /rest/api/2/issue/{key}?fields=description,comment` (F7 — resolved 시) |
+
+- **신규 폴링에 `created >=` 경계를 쓰지 않는 이유**: 그 경계는 JIRA 프로필 타임존으로 해석되어(서버 PC와 다름)
+  신규 티켓이 조용히 누락된다. 대신 base JQL 전체를 매번 조회하고 이미 아는 키는 메모리에서 스킵한다
+  (팀 JQL이 Resolved를 제외하므로 활성 집합은 작다).
+- **tracked-key sync가 별도인 이유**: base JQL을 벗어난 티켓(예: Resolved 전이)의 status/assignee 변화를
+  계속 봐야 하기 때문. resolved → open 재전이(reopen)도 이 경로로 감지한다.
+- **쓰기 게이트**: 서버발 Jira write 전부(자동 배정 3종 + 수동 reassign)는 `SVP_JIRA_WRITE_MODE`를 따른다 —
+  `dry-run`(기본, 로그만) / `label`(`SVP_TEST_LABEL` 라벨 티켓만) / `live`(전면 허용).
+- **자동 배정 (confidence > 80 AND owner 해석 가능)**: ① assignee PUT(실패 시 전체 중단 — 배정 없이 "자동 배정"
+  댓글 금지) → ② 분석 댓글 → ③ In Progress 전이(②③ 실패는 로그 후 진행).
+- **분석 댓글은 분류된 모든 신규 bot-배정 티켓에 게시된다** — 자동 배정이 안 된 경우(≤80·unknown·owner 미등록·
+  분류 중 상태 이동)에도 "자동 배정 없음" 사유를 담아 게시(write 게이트 적용). 전송 채널은 `SVP_COMMENT_CHANNEL`:
+  `rest`(기본, 위 comment POST) / `mcp`(headless `claude -p`가 `SVP_COMMENT_MCP_NAME` MCP의 Jira 툴로 기입, 실패 시 REST 폴백).
+- 댓글 템플릿(`server/jira.mjs buildComment`): `🤖 Sheriff Avatar 자동 분석` 헤더 + 분류/신뢰도/요약/참고 노트/배정 근거.
+
+## 3. 서버 ↔ LLM (`server/classifier.mjs`)
+
+| provider (`SVP_LLM_PROVIDER`) | 클라이언트 | 비고 |
 |---|---|---|
-| `SVP_JIRA_BASE_URL` | `https://jira.example.internal` | Jira 베이스 URL |
-| `SVP_JIRA_PAT` | `(secret)` | Personal Access Token |
-| `SVP_JIRA_PROJECT` | `CIOPS` | 감시 대상 프로젝트 키 |
-| `SVP_JIRA_LABEL` | `ci-failure` | CI 자동 생성 티켓 식별 라벨 |
-| `SVP_JIRA_POLL_MS` | `30000` | 폴링 주기 (기본 30초) |
+| `bedrock` (기본) | `AnthropicBedrockMantle` (Messages) | `AWS_REGION` 필수. structured output(`output_config` json_schema) + adaptive thinking |
+| `bedrock-invoke` | `AnthropicBedrock` (표준 InvokeModel) | structured output 미지원 — 프롬프트로 JSON 강제 후 파싱. 기본 모델은 global inference profile |
+| `anthropic` | `Anthropic` (직접 API) | `SVP_ANTHROPIC_API_KEY` 필수 (사외 dev) |
 
-### 사용 엔드포인트
+모델은 `SVP_LLM_MODEL`(기본: provider별 Opus 4.8 ID), 타임아웃 `SVP_LLM_TIMEOUT_MS`(기본 30000, maxRetries 1).
+자격증명 미설정 시 분류기 비활성 — 호출 없이 즉시 fallback. **세 호출 모두 절대 throw하지 않는다** — LLM 장애가
+파이프라인을 멈추지 않고, 미분류 티켓은 당번 큐에 남는다.
 
-| 용도 | 호출 | 비고 |
+| 호출 | 입력 | 출력 | 실패 시 fallback |
+|---|---|---|---|
+| `selectNotes` | 로그 발췌 + 노트 카탈로그(경로/제목/module/tags) | `{ hypothesis, files ≤3 }` — 카탈로그 밖 경로는 버림 | `{ hypothesis: '', files: [] }` → 키워드 매칭만 사용 |
+| `classify` | 티켓 정보 + 로그(head 4000+tail 2000 캡) + 노트 본문(개당 3000자 캡) | `{ category, severity, confidence 0–100, summary, evidence }` — category는 vault 모듈 enum ∪ `unknown` | `{ category: 'unknown', confidence: 0 }` → 당번 유지 |
+| `summarizeResolution` | 원본 로그 + 해결 코멘트(+ Gerrit 패치) | `{ symptom, cause, resolution }` — F7 ingest용 | symptom만 유지, cause/resolution `(불명)` |
+
+프롬프트 원칙: confidence는 **wiki 근거 강도**만 반영(근거 없는 고신뢰 금지, >80 = "노트의 known-failure와
+일치해 sheriff 리뷰 없이 배정 가능"), evidence는 실제 참조한 노트 경로만, summary는 한국어 2~3문장.
+
+## 4. 서버 ↔ Jenkins (`server/jenkins.mjs`, `server/ci-test-fetch.mjs`)
+
+티켓 description에는 실패 로그가 없다 — 로그는 TEST 링크의 Jenkins 빌드에서 수집해 `event.log`에 보강한다.
+
+1. `extractBuildUrl`로 티켓 텍스트에서 빌드 URL 추출 → `probeBuildUrl`(5xx/네트워크 실패면 수집 스킵).
+2. **1차**: `.tool/Jenkins/fetch_ci_test.py` 직접 실행(python3, 사내 자산 — repo에 없음, 60초 타임아웃).
+3. **폴백**: `fetchFailureLog` — 중계 빌드의 `api/json` description(500이면 HTML 페이지)에서 `CI TEST RESULT :` 샤드
+   링크 수집 → 실패 샤드(`result !== 'SUCCESS'`)의 콘솔에서 해당 TC의 `[ENABLE]` 실행 구간 추출, 못 찾으면 콘솔 꼬리(`SVP_JENKINS_LOG_TAIL`자).
+4. 확보한 로그는 `format-ci-log` 스킬(headless `claude -p`)로 양식화 — 실패하면 raw 그대로.
+
+호출은 `node:http` 직통(프록시 우회 — Bedrock용 프록시가 내부 Jenkins를 차단), Basic auth
+(`SVP_JENKINS_USER`/`SVP_JENKINS_TOKEN`), 재시도 1회. mock은 `mock/jenkins-server.mjs`(포트 8794, auth 없음).
+
+## 5. mock Jira 데모 엔드포인트 (`mock/jira-server.mjs`, 포트 8792)
+
+§2 엔드포인트의 최소 부분집합(search·issue·comment·assignee·transitions) + 데모용:
+
+- `POST /demo/trigger` body `{ "scenario": "...", "labels": ["svp-test"]? }` — 시나리오 티켓 즉시 생성.
+  시나리오 6종: `auth-token-401` `payment-build` `snapshot-diff` `auth-lint` `payment-e2e` `infra-deploy`.
+  `labels`는 기본 `ci-failure`에 추가(write-mode=label 검증용).
+- `POST /demo/resolve` body `{ "key": "CIOPS-1234", "comment": "..." }` — 해결 코멘트 + Done 전이 (ingest 데모).
+- `GET /demo/tickets` — 내부 티켓 전체(댓글·assignee·상태 검증용).
+- `GET /browse/<KEY>` — 티켓 HTML 페이지 (앱의 "티켓 확인 ↗" CTA가 여는 링크).
+
+## 6. 환경변수
+
+코드가 실제 `process.env`로 읽는 것 전부. 클라이언트 앱에 필요한 것은 `SVP_PUSH_URL` 하나뿐이다.
+
+| 변수 | 기본값 | 읽는 곳 |
 |---|---|---|
-| 신규 티켓 폴링 | `GET /rest/api/2/search` JQL: `project={PROJECT} AND labels={LABEL} AND created >= "{lastPoll}" ORDER BY created ASC` | fields: `summary,description,labels,status,created,assignee` |
-| 티켓 상세 | `GET /rest/api/2/issue/{key}` | CI 로그가 description 또는 첨부에 있음 — 스키마는 사내 확인 후 확정 (TODO(SVP-6)) |
-| 요약 댓글 | `POST /rest/api/2/issue/{key}/comment` | 아래 댓글 템플릿 |
-| 담당자 지정 | `PUT /rest/api/2/issue/{key}/assignee` | `{ "name": "<jira-username>" }` — `TeamMember`에 `jiraUsername` 매핑 필요 |
-| 상태 전이 | `POST /rest/api/2/issue/{key}/transitions` | 전이 ID는 `GET .../transitions`로 조회 후 statusCategory로 매칭 |
-| 해결/변경 감지 | 폴링 JQL: `key in ({추적 중인 키들}) AND updated >= "{lastPoll}"` | Done 확인 시 ingest 트리거 |
-
-- **중복 방지**: 처리한 티켓 키를 `userData/svp-processed-tickets.json`에 영속화. 서버 재시작 시에도 재분류하지 않는다.
-- **장애 정책**: Jira 응답 실패 시 지수 백오프(최대 5분), 파이프라인은 계속 동작. 댓글/전이 실패는 재시도 1회 후
-  당번 대시보드에 경고 표시 (이슈 배정 자체는 실패시키지 않는다).
-
-### Jira 요약 댓글 템플릿
-
-```
-🤖 Sheriff Avatar 자동 분석
-─────────────────────────
-■ 분류: {category} / {event.type} / {severity}
-■ 신뢰도: {confidence}/100 → {배정 결과: "auth 담당 Alice 자동 배정" | "당번 확인 필요"}
-■ 요약: {LLM summary — 담당자가 로그를 열기 전에 상황을 파악할 수 있는 2~3문장}
-■ 참고 (LLM-WIKI):
-  - {wikiRefs[].title} — {한 줄 근거}
-■ 배정 근거: {assignment.reason}
-```
-
-- 댓글은 티켓당 **배정 시 1회**. 재배정 시 갱신 댓글 1회 추가.
-
-## 3. 서버 ↔ Claude API (LLM 분류)
-
-**구현: `server/classifier.mjs` (W2, F3).** 모델은 **Claude Opus 4.8 on AWS Bedrock**
-(`anthropic.claude-opus-4-8`, `@anthropic-ai/bedrock-sdk`의 `AnthropicBedrockMantle` 클라이언트,
-자격증명은 표준 AWS 체인). adaptive thinking 사용, `temperature`/`top_p`는 보내지 않는다(Opus 4.8에서 400).
-structured output은 `output_config.format`(json_schema)으로 강제하고, `category` enum은 호출 시점에
-vault 모듈 노트 목록에서 생성한다 — 모델이 모듈을 지어낼 수 없다.
-
-| 변수 | 기본값 | 설명 |
-|---|---|---|
-| `SVP_LLM_PROVIDER` | `bedrock` | `bedrock`(Messages 엔드포인트) / `bedrock-invoke`(표준 InvokeModel — structured output 미지원이라 프롬프트 JSON 강제+파싱으로 대체) / `anthropic`(사외 dev) |
-| `AWS_REGION` | (없음 — bedrock 필수) | 미설정이면 분류기 비활성(티켓은 당번 큐 유지) |
-| `SVP_ANTHROPIC_API_KEY` | (없음) | provider=anthropic일 때 필수 |
-| `SVP_LLM_MODEL` | provider별 기본 | 모델 override |
-| `SVP_LLM_TIMEOUT_MS` | `30000` | SDK 클라이언트 타임아웃 |
-| `SVP_LLM_CONFIDENCE_MIN` | `80` | 자동 배정 게이트 (초과 시에만) |
-| `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 읽는 vault 경로 |
-
-- **입력**: 티켓 정보(summary, description, CI 로그 발췌 — head 4000자+tail 2000자 캡) +
-  `queryWiki()`(키워드, 양방향) ∪ `selectNotes()`(LLM 드릴다운, SVP-3) 노트 본문(개당 3000자 캡).
-  classify 전에 `selectNotes()`가 별도 LLM 호출로 로그를 읽고 원인을 가설화한 뒤 `listCatalog()`
-  (파일/제목/module/tags만, 본문 없음)에서 관련 노트를 최대 3개 고른다 — 카탈로그 밖 경로는 버리고,
-  무자격증명·실패 시 빈 결과로 폴백(키워드 결과만 사용). 이 선택 단계는 어떤 노트를 classify에 보여줄지만
-  바꿀 뿐, confidence는 여전히 아래 §3 규칙(위키 근거 강도)으로만 산출된다.
-- **출력**: 아래 JSON만 (structured output 강제):
-
-```json
-{
-  "category": "auth",
-  "severity": "major",
-  "confidence": 86,
-  "summary": "token refresh 시 401 — auth.md의 known-failure #2와 동일 패턴. 세션 갱신 로직 회귀로 추정.",
-  "evidence": ["modules/auth.md"]
-}
-```
-
-- `category`는 **vault 모듈 노트의 frontmatter `module:` 값** 또는 `"unknown"` (schema enum으로 강제).
-  담당자는 같은 노트의 `owner:` frontmatter로 해석한다 — **owner 값은 Jira username과 동일해야**
-  자동 배정이 push까지 이어진다 (사내: `owner: shin.son`).
-- `confidence`는 wiki 근거 강도를 반영해야 한다 (근거 없는 고신뢰 금지 — 프롬프트에 명시).
-- **모든 서버발 Jira write는 `SVP_JIRA_WRITE_MODE`를 따른다** (기본 `dry-run` — 로그만.
-  `label` = `SVP_TEST_LABEL` 티켓만, `live` = 전면. 앱 ack로 인한 전이도 동일 게이트).
-- **자동 배정 (confidence > 80 AND owner 해석 가능)**: 서버가 Jira에 순서대로 write —
-  ① `PUT assignee`(실패 시 전체 중단 — 배정 없이 "자동 배정" 댓글 금지) → ② §2 템플릿 댓글 →
-  ③ In Progress 전이(②③ 실패는 경고 후 진행) → poll()이 변경을 되읽어 담당자 앱으로 push.
-  ≤80 / unknown / owner 미해석: **Jira write 없음** (댓글은 배정 시 1회 원칙), 판단 근거는
-  `issue:updated`로 당번 앱에만 표시.
-- **fallback**: API 호출 실패·파싱 실패·타임아웃(30초) 시 `{ category: "unknown", confidence: 0 }`으로 처리
-  → 자동으로 당번 배정. **LLM 장애가 파이프라인을 멈추지 않는다.** 자격증명 미설정 시 분류 시도 자체를 생략.
-- 사내망 프록시/CA: 서버 셸의 `NODE_EXTRA_CA_CERTS`는 Bedrock 호출에도 적용된다.
-
-## 4. mock Jira 서버 (개발·데모용)
-
-`mock/jira-server.mjs` (신규, 기존 `mock/ci-server.mjs` 대체 예정) — 포트 **8792**.
-서버가 사용하는 위 엔드포인트의 최소 부분집합만 구현한다:
-
-- `GET /rest/api/2/search` — 시드 티켓 + 트리거된 티켓 반환 (JQL은 created/updated 시각만 해석)
-- `GET /rest/api/2/issue/{key}` / `POST .../comment` / `PUT .../assignee` / `POST .../transitions`
-- 데모 트리거: `POST /demo/trigger` body `{ "scenario": "auth-token-401" | ..., "labels": ["svp-test"]? }`
-  → 해당 시나리오 티켓을 즉시 생성. 선택 필드 `labels`는 기본 라벨(ci-failure)에 추가된다 —
-  `SVP_JIRA_WRITE_MODE=label` 검증용 (데모 진행자가 curl로 호출, [DEMO-SCENARIO.md](./DEMO-SCENARIO.md) 참고)
-- 데모 해결: `POST /demo/resolve` body `{ "key": "CIOPS-1234", "comment": "token refresh 재시도 로직 수정" }`
-  → 티켓에 해결 코멘트를 달고 상태를 Done으로 전이. 담당자가 실제 Jira에서 resolve하는 행위를 재현하며,
-  서버가 폴링으로 감지해 ingest를 트리거하는 흐름을 데모에서 보여주기 위한 것 (DEMO-SCENARIO.md 장면 2)
-- 받은 댓글·assignee·상태는 메모리에 유지해 `GET /demo/tickets`로 확인 가능 (데모에서 "Jira에 댓글 달렸다" 검증용)
-
-## 5. shared/types.ts 확장 (제안)
-
-```ts
-// 이슈 출처: Jira 티켓이 메인, mock CI는 개발용으로 당분간 병존
-export type IssueSource = 'jira' | 'mock-ci'
-
-export interface JiraTicketRef {
-  key: string        // 예: CIOPS-1234
-  url: string
-  status: string     // Jira statusCategory: 'new' | 'indeterminate' | 'done'
-}
-
-// SheriffIssue에 추가
-//   source: IssueSource
-//   jira?: JiraTicketRef
-
-// TeamMember에 추가
-//   jiraUsername: string   // assignee 지정용
-```
+| `SVP_PUSH_URL` | `http://localhost:8793` | 앱(`src/main/index.ts`) — 서버 Socket.IO 주소 |
+| `SVP_SERVER_PORT` / `SVP_SERVER_POLL_MS` | `8793` / `5000` | server — 리슨 포트 / 폴링 주기 |
+| `SVP_JIRA_BASE_URL` / `SVP_JIRA_PAT` | `http://localhost:8792` / (없음) | server — Jira 주소 / Bearer PAT |
+| `SVP_JIRA_JQL` / `SVP_JIRA_BOT` | `project = CIOPS AND labels = ci-failure` / `cicd_ap` | server — base JQL / bot 계정(= 사람 배정 전) |
+| `SVP_JIRA_WRITE_MODE` / `SVP_TEST_LABEL` | `dry-run` / `svp-test` | server — 쓰기 게이트(§2) |
+| `SVP_LLM_PROVIDER` / `SVP_LLM_MODEL` / `SVP_LLM_TIMEOUT_MS` | `bedrock` / provider별 / `30000` | classifier (§3) |
+| `AWS_REGION` / `SVP_ANTHROPIC_API_KEY` | (없음) | classifier — provider별 자격증명. 미설정 = 분류기 off |
+| `SVP_LLM_CONFIDENCE_MIN` | `80` | server — 자동 배정 게이트(strictly greater) |
+| `SVP_COMMENT_CHANNEL` / `SVP_COMMENT_MCP_NAME` | `rest` / (없음) | comment-channel (§2) |
+| `SVP_JENKINS_USER` / `SVP_JENKINS_TOKEN` | (없음 — mock은 불필요) | jenkins — Basic auth |
+| `SVP_JENKINS_TIMEOUT_MS` / `SVP_JENKINS_LOG_TAIL` | `15000` / `6000` | jenkins — 요청 타임아웃 / 꼬리 폴백 크기 |
+| `SVP_WIKI_DIR` | `<repo>/wiki-vault` | wiki-query·ingest — vault 경로 |
+| `SVP_INGEST_MODE` / `SVP_DEDUP_WINDOW_DAYS` | `dry-run` / `14` | ingest — vault 쓰기 게이트 / case-log 중복 창 |
+| `SVP_RECUR_BOOST_CAP` / `SVP_FEEDBACK_DEMOTE` | `4` / `3` | wiki-query — 재발 가점 상한 / 👎 감점 |
+| `SVP_DEBUG_DUMP_DIR` | (없음 — 꺼짐) | server — 신규 티켓 수집 로그 덤프 |

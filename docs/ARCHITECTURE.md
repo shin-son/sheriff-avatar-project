@@ -1,185 +1,206 @@
-# SVP 아키텍처 (v3 제안 — Linux 서버 · Windows 클라이언트 분리)
+# SVP 아키텍처 (v3 — 현행)
 
-> 이 문서는 **목표 구조**를 명세한다. v2(당번 앱 = 서버 겸용)는 W1에 코드로 구현되었고,
-> v3는 서버를 **별도 Linux 호스트의 headless 프로세스**로 분리한다 — **2026-07-15 회의에서 채택됨**
-> (합의 내용은 바로 아래 절). 차이는 [현재 구현과의 차이](#현재-구현과의-차이),
-> 이행 순서는 [v2 → v3 이행 계획](#v2--v3-이행-계획) 참고.
-> 세부 명세: [API.md](./API.md) (프로토콜), [BACKEND.md](./BACKEND.md) (백엔드 기능), [DEMO-SCENARIO.md](./DEMO-SCENARIO.md) (데모).
-
-## 합의 사항 (2026-07-15 회의)
-
-- **v3 채택.** Linux 호스트는 김병재가 확보 진행 중 — 확보 전까지 서버 프로세스는 임의 PC에서 실행한다.
-- **전송 계층 = Socket.IO 확정** (`SVP_PUSH_URL`, 기본 `http://<서버>:8793`). W1의 raw-WS
-  hub/hub-client는 정리 대상이며, 이 문서의 "hub"는 Socket.IO push 서버로 읽는다.
-  현행 이벤트 계약은 [API.md §1](./API.md).
-- **role은 로그인이 결정한다.** 서버가 로그인 세션에 `{ user, team }`을 내려주고 앱은 그 role의 뷰만
-  렌더링한다. 현행 인증은 데모용(admin/admin = 당번, 아이디=비밀번호 = 팀원) — SVP-5에서 실인증으로 교체.
-- **배정 원장은 Jira의 assignee 필드.** bot 계정(`cicd_ap`, `SVP_JIRA_BOT`)이면 "사람 배정 전" = 당번 큐.
-  **분류기(F3) — W2에서 구현됨** (`server/classifier.mjs`): 신뢰도 **>80**이고 vault 모듈 노트의
-  `owner:`로 담당자가 해석되면 서버가 Jira에 assignee 지정 + 요약 댓글 + In Progress 전이,
-  ≤80이면 bot 유지로 당번 큐. 앱은 항상 assignee만 따라간다. 모든 서버발 write는
-  `SVP_JIRA_WRITE_MODE`(기본 dry-run) 게이트를 거친다 — [API.md §3](./API.md).
-- **Obsidian/vault 열기**: 운영 vault가 서버로 가면, 당번 PC에서 서버의 vault 폴더를 열 수 있게
-  연결(공유 폴더 등)하는 단순안으로 간다.
-- **서버 현황**: `server/`(headless Node, systemd — #13에서 승격)가 폴링 → LLM 분류(F3) →
-  assignee 라우팅 → Socket.IO push → 상태 동기화 → ack 전이까지 구현, 사내 Jira·표준 Bedrock으로
-  검증됨. 남은 승격 작업: 이슈 저장 영속화 · 실인증(SVP-5) · TypeScript화 · wiki ingest/lint 통합(F7·F8).
+> 이 문서는 **현재 구현된 구조**를 기술한다. 코드와 어긋난 내용을 발견하면 그 PR에서 같이 고친다.
+> 설정·운영(.env, Linux systemd 배포)은 [SETUP.md](./SETUP.md), vault 스키마는
+> [wiki-vault/README.md](../wiki-vault/README.md) 참고.
 
 ## 토폴로지
 
-- **서버 = Linux 호스트의 headless Node 프로세스** (Electron 의존 없음). 백엔드 전체
-  (Jira 폴링 → LLM 분류 → 배정 → Jira 댓글 → 클라이언트 push → WIKI 관리)를 실행하며 systemd 서비스로 상시 가동한다.
-  당번 PC의 전원/재부팅과 무관하게 폴링이 지속된다.
-- **전원(당번 포함) 앱 = Windows 클라이언트 (동일 EXE).** 당번 대시보드도 일반 팀원과 **같은 WS 프로토콜의
-  클라이언트**다. 역할 구분은 서버 측 필터링 하나로 끝난다: member 세션에는 자기 배정분만, sheriff 세션에는
-  전체 이슈를 push. 당번 전용 동작(수동 재배정, WIKI 점검)도 같은 WS 위의 role-gated 메시지다.
-- **비밀정보는 서버에만 존재한다.** Jira PAT·Claude API key는 서버 호스트의 `.env`에만 두고,
-  클라이언트 EXE에는 어떤 자격증명도 배포하지 않는다 (클라이언트 설정은 `SVP_SERVER_URL` 하나).
-- 클라이언트는 Jira·WIKI·LLM에 직접 접근하지 않는다 — 모든 것은 서버 경유 (v2와 동일).
-- 이슈의 유입은 **Jira 티켓 폴링**이 메인이다. 사내 CI/CD가 실패 시 Jira 티켓을 자동 생성하고(기존 사내 인프라),
-  서버가 Jira REST API를 주기 폴링해 신규 티켓을 감지한다.
+- **서버** = headless Node 프로세스 (`server/*.mjs`, plain ESM, 포트 `SVP_SERVER_PORT` 기본 8793).
+  백엔드 전체 — Jira 폴링 → Jenkins 로그 보강 → LLM 분류 → 배정 → Jira write → Socket.IO push →
+  해결 시 vault ingest — 를 실행한다. 운영 홈은 Linux 호스트의 systemd 서비스 (`npm run server`는 로컬 실행).
+- **전원(당번 포함) 앱 = Windows Electron 클라이언트 (동일 EXE, 순수 클라이언트).**
+  로그인 → push 수신 → UI 렌더링만 한다. 역할 구분은 서버 측 필터링 하나로 끝난다:
+  member 세션에는 자기 배정분만, sheriff 세션에는 전체 이슈를 push.
+- **비밀정보는 서버에만 존재한다.** Jira PAT·Jenkins token·LLM 자격증명은 서버 호스트의 `.env`에만.
+  클라이언트 설정은 `SVP_PUSH_URL` 하나 (기본 `http://localhost:8793`).
+- 이슈 유입은 **Jira 티켓 폴링**이다. 사내 CI/CD가 실패 시 Jira 티켓을 자동 생성하고(기존 사내 인프라),
+  서버가 Jira REST를 주기 폴링해 감지한다. 클라이언트는 Jira·WIKI·LLM에 직접 접근하지 않는다.
+
+## 전체 파이프라인
 
 ```mermaid
-flowchart LR
-    CI["사내 CI/CD"] -- "실패 → 티켓 자동 생성" --> JIRA[("사내 Jira")]
-    subgraph SERVER["Linux 호스트 — SVP 서버 (headless, systemd)"]
-        POLLER["jira/ 폴러"] --> CLS["classifier/<br/>LLM 분류 (신뢰도 0~100)"]
-        WIKI[("wiki-vault/")] -- "query" --> CLS
-        CLS --> ROUTER["assignment/ 라우터"]
-        ROUTER --> HUB["push — Socket.IO 서버 :8793"]
-        POLLER -- "Done 확정 → LLM ingest" --> WIKI
-    end
-    JIRA -- "REST 폴링 (신규/상태변경)" --> POLLER
-    ROUTER -- "요약 댓글 + assignee 지정" --> JIRA
-    HUB -- "본인 이슈만 push" --> A["Windows 클라이언트 A<br/>(member — 컴팩트 창 + 팝업)"]
-    HUB -- "본인 이슈만 push" --> B["Windows 클라이언트 B<br/>(member — 컴팩트 창 + 팝업)"]
-    HUB -- "전체 이슈 push" --> C["Windows 클라이언트 C<br/>(sheriff — 대시보드)"]
-    A -- "ack / feedback" --> HUB
-    B -- "ack / feedback" --> HUB
-    C -- "재배정 / WIKI 점검" --> HUB
+flowchart TB
+  subgraph EXT["외부 시스템 · 클라이언트"]
+    JIRA[("Jira 사내<br/>description = ' : ' key-value HTML<br/>로그 없음 · TEST 링크는 Jenkins")]
+    RELAY["Jenkins CI_MAIN_JOB 중계빌드<br/>api/json description 안에<br/>CI TEST RESULT 샤드 링크"]
+    SHARD["Jenkins CI_TEST 샤드빌드 (복수)<br/>console 약 9MB · [ENABLE] TC 마커"]
+    GERRIT["Gerrit (MCP 경유)<br/>TC 파일 마지막 커미터 조회"]
+    CLIENT["클라이언트 Electron 앱<br/>로그인 · role별 뷰 · toast"]
+    LLMN["LLM — classifier.mjs<br/>bedrock · bedrock-invoke · anthropic<br/>실패/무자격 시 fallback"]
+  end
+
+  subgraph SRV["SVP v3 서버 (server/*.mjs · headless Node · systemd)"]
+    POLL["index.mjs poll() — SVP_SERVER_POLL_MS(5s)<br/>1) base JQL 전체 조회 + 알려진 키 스킵<br/>2) 추적 키 status/assignee sync"]
+    CACHE["cache.mjs issue-cache.json<br/>초도분석 결과 영속화<br/>재시작 시 재수집·재분류 방지"]
+    NORM["normalize() — HTML 제거<br/>' : ' key-value 파싱 · Step→type<br/>module='unknown' (LLM 몫)"]
+    JENK["ci-test-fetch.mjs + jenkins.mjs<br/>probeBuildUrl → 1차 fetch_ci_test.py<br/>폴백: 샤드 추적 → [ENABLE] TC 구간/꼬리"]
+    FMT["formatLogViaSkill<br/>headless claude -p /format-ci-log<br/>실패 시 raw 로그 그대로"]
+    ROUTE["routeByAssignee<br/>bot/빈값 → sheriff 큐 · 사람 → 그 세션<br/>저장된 LLM 분류가 placeholder 대체"]
+    WQ["wiki-query.mjs queryWiki<br/>키워드/신호 스코어 상위 3<br/>재발 가중 + 피드백 감점"]
+    SEL["classifier.mjs selectNotes<br/>LLM 드릴다운 — 원인 가설 →<br/>카탈로그에서 노트 최대 3 선택"]
+    CLS["classifier.mjs classify<br/>category · severity · confidence 0-100"]
+    ACT["classifyAndAct<br/>>80 & owner 해석 → 자동 배정 3종<br/>≤80 → 당번 유지 + 후보 첨부"]
+    CAND["buildCandidates<br/>Gerrit 마지막 커미터 + wiki owner"]
+    JWRITE["jira.mjs + comment-channel.mjs<br/>setAssignee · 분석 댓글(rest/mcp) · 전이<br/>SVP_JIRA_WRITE_MODE 게이트"]
+    PUSH["Socket.IO push (서버측 필터)<br/>session · issue:new · issue:updated"]
+    TRIG["sync: resolved 진입<br/>→ void ingestResolved"]
+    DEDUP["ingest.mjs decideIngest + classifyIngest<br/>resolvedAt 멱등 · 실패 서명 dedup<br/>full / supersede / 포인터+재발 count"]
+    SUMM["classifier.mjs summarizeResolution<br/>LLM: symptom · cause · resolution"]
+    INGEST["ingest.mjs (SVP_INGEST_MODE 게이트)<br/>freeze raw(재해결 -rN) · case-log append<br/>index.md/log.md 재생성"]
+  end
+
+  subgraph VAULT["LLM-WIKI vault (SVP_WIKI_DIR, 기본 wiki-vault/)"]
+    MOD["modules/*.md<br/>known-failure · owner 맵"]
+    CASE["case-log.md — 해결 사례 원장<br/>(entry 단위 검색 대상)"]
+    IDX["index.md · log.md (자동 생성)"]
+    RJIRA["raw/jira/*.md + .ingest-state.json<br/>+ .signature-index.json"]
+    RCI["raw/ci/*.md"]
+    FB[".feedback.json<br/>노트별 일치/불일치 누적"]
+  end
+
+  JIRA -->|"REST search (JQL)"| POLL
+  POLL <-->|"복원/저장"| CACHE
+  POLL -->|"신규 티켓"| NORM
+  NORM --> JENK
+  JENK -.->|"api/json · consoleText"| RELAY
+  RELAY -.->|"CI TEST RESULT 링크"| SHARD
+  JENK --> FMT
+  FMT --> ROUTE
+  ROUTE --> PUSH
+  ROUTE -->|"bot 배정 new 티켓만"| WQ
+  ROUTE --> SEL
+  MOD -.->|"노트·owner"| WQ
+  CASE -.->|"entry 단위"| WQ
+  RJIRA -.->|"재발 count 가중"| WQ
+  FB -.->|"불일치 누적 감점"| WQ
+  MOD -.->|"카탈로그"| SEL
+  SEL -.-> LLMN
+  CLS -.-> LLMN
+  WQ -->|"키워드 매칭 상위 3"| CLS
+  SEL -->|"선택 노트 최대 3"| CLS
+  CLS --> ACT
+  ACT -->|"확신 → 배정·댓글·전이"| JWRITE
+  ACT -->|"불확신 → 후보"| CAND
+  CAND -.->|"headless claude + MCP"| GERRIT
+  JWRITE -->|"write (게이트 통과 시)"| JIRA
+  ACT --> PUSH
+  PUSH <-->|"issue push /<br/>issue:reassign · wiki:feedback"| CLIENT
+  CLIENT -.->|"피드백 누적"| FB
+
+  POLL -->|"resolved 전이"| TRIG
+  TRIG --> DEDUP
+  DEDUP -->|"full/supersede만"| SUMM
+  SUMM -.-> LLMN
+  DEDUP --> INGEST
+  SUMM --> INGEST
+  INGEST --> CASE
+  INGEST --> IDX
+  INGEST -->|"freeze"| RJIRA
+  INGEST -->|"freeze"| RCI
+  CASE -.->|"축적 → 다음 분류 정확도 상승 (compounding)"| WQ
 ```
 
-## 데이터 흐름 (이슈 하나의 사이클)
+## 데이터 흐름 ① — 인입 (신규 티켓)
 
-1. 사내 CI/CD 실패 → **Jira 티켓 자동 생성** (label: `ci-failure` — 기존 사내 인프라)
-2. 서버가 Jira를 폴링해 신규 티켓 감지 (기본 30초 주기, 처리 완료 키는 중복 방지 저장)
-3. **query** — 티켓의 summary/description/로그로 `wiki-vault/` 검색 (known-failure, 과거 case-log 포함).
-   키워드 스코어링 + LLM 드릴다운(로그 읽고 원인 가설 → 노트 카탈로그에서 최대 3개 선택, SVP-3)의 합집합
-4. **classify** — LLM이 티켓 내용 + 매치된 wiki 노트를 읽고 `{category, severity, confidence, summary}` 산출
-5. **route** — 신뢰도 **>80**: 해당 모듈 담당자 / **≤80**: 당번 (human-in-the-loop, 당번이 수동 재배정 가능)
-6. **Jira 댓글** — 서버가 티켓에 요약 댓글(분류·신뢰도·추정 원인·참고 wiki·배정 근거)을 달고 assignee를 지정
-7. **push** — 배정된 팀원의 클라이언트로 `issue:assigned` 전송 → 우하단 팝업. sheriff 세션에는 전체 이슈가 push된다
-8. 담당자 처리 → **Jira에서 해결 코멘트 + Done 전이** → 폴링으로 Done 확인.
-   **앱에는 해결 버튼이 없다** — 해결 코멘트 없는 Done(기록 근거 없는 해결)을 만들지 않기 위해 쓰기는 Jira 한 곳이다
-9. **ingest** — Done 확정 시 **LLM이 Jira 해결 코멘트를 근거로 `case-log.md` 항목을 작성** + `index.md`/`log.md` 갱신
-   → **다음 같은 유형 이슈의 신뢰도가 올라간다** (compounding)
-10. **feedback/lint** — Done 확정 시 서버가 담당자 앱에 "참조 노트의 원인이 실제 원인과 일치했나요?" toast를
-    push (일치/불일치 1클릭, 선택 입력). 불일치 누적 노트는 query 감점 + lint 정리 후보 (해결이 Jira로 이동해도
-    피드백 접점 유지)
+1. `poll()`이 `SVP_SERVER_POLL_MS`(기본 5000ms) 주기로 base JQL(`SVP_JIRA_JQL`) 전체를 조회하고
+   알려진 키를 스킵한다. `created >=` 경계를 쓰지 않는 이유: Jira **프로필 타임존**으로 해석되어
+   신규 티켓이 조용히 누락된다. 사이클은 single-flight (Jenkins fetch로 수 초를 넘어도 겹치지 않음).
+2. `normalize()` — description의 HTML을 걷어내고 ` : ` key-value 계약을 파싱한다
+   (`Step`→type, `CICD Project`→branch). `module`은 `'unknown'` 고정 — 모듈 판단은 LLM 분류가 한다.
+3. **Jenkins 로그 보강** — description에는 실패 로그가 없다. `extractBuildUrl` → `probeBuildUrl`
+   (죽은 링크에 fetch를 태우지 않음) → 1차 `fetchRawLogViaTool`(`python3 .tool/Jenkins/fetch_ci_test.py` —
+   사내 전용 자산, [INTERNAL-ASSETS.md](./INTERNAL-ASSETS.md) 참고) → 실패 시 `fetchFailureLog` 폴백
+   (중계빌드 api/json → `CI TEST RESULT` 샤드 링크 → `result !== 'SUCCESS'` 샤드 콘솔에서 해당 TC의
+   `[ENABLE]` 구간 추출, 못 찾으면 꼬리 `SVP_JENKINS_LOG_TAIL`) → 확보한 로그는 `formatLogViaSkill`
+   (headless `claude -p "/format-ci-log"`, `.claude/skills` — 사내 전용 자산)로 양식화하되 실패하면 raw 그대로.
+4. `routeByAssignee` — **Jira assignee 필드가 배정 원장이다.** bot(`SVP_JIRA_BOT`)·빈값 → 당번(admin) 큐
+   (placeholder confidence 50), 사람 → 그 사용자 세션 (placeholder 95). 저장된 LLM 분류가 있으면 placeholder를 덮는다.
+5. `issue:new` push 후, **bot 배정 + status new + 미분류** 티켓만 `classifyAndAct`:
+   - `queryWiki`(키워드/신호 스코어) ∪ `selectNotes`(LLM이 로그로 원인 가설을 세우고 카탈로그에서 노트 최대 3개 선택)
+     → `classify`(provider `SVP_LLM_PROVIDER`: `bedrock`/`bedrock-invoke`/`anthropic`, 실패·무자격 시
+     confidence 0 fallback) → 결과를 `issue:updated`로 push (≤80이어도 당번 화면에 근거가 보인다).
+   - confidence **> `SVP_LLM_CONFIDENCE_MIN`(80)** 이고 category ≠ `unknown`이고 노트 frontmatter
+     `owner:`로 담당자가 해석되면: `setAssignee` → 분석 댓글 → `In Progress` 전이.
+   - 그 외(불확신·담당자 미등록·분류 중 상태 이동)에도 **분석 댓글은 게시**하고, 불확신 케이스는
+     `buildCandidates`(Gerrit MCP로 TC 파일 마지막 커미터 + wiki module owner)를 이슈에 첨부해 당번의 수동 배정을 돕는다.
+6. **모든 서버발 Jira write는 `canWrite` 게이트를 거친다** — `SVP_JIRA_WRITE_MODE`:
+   `dry-run`(기본, 로그만) / `label`(`SVP_TEST_LABEL` 붙은 티켓만) / `live`.
+   분석 댓글 채널은 `SVP_COMMENT_CHANNEL`: `rest`(기본, Jira REST 직접) / `mcp`(headless claude가 MCP Jira 툴로 기입, 실패 시 REST 폴백).
+
+## 데이터 흐름 ② — 해결 (resolve → ingest)
+
+1. `poll()`의 sync 단계가 추적 키를 `key in (...)`로 재조회한다 — base JQL을 떠난 티켓(예: Resolved 제외
+   JQL)과 resolved 티켓(reopen 감지)도 계속 본다. status/assignee 변경은 `issue:updated`로 push (이전 담당자 포함).
+2. `resolved` 진입 시 `ingestResolved(issue, updated)`를 fire-and-forget으로 실행하고 issue-cache를 정리한다.
+   reopen(resolved→open)은 활성 큐로 복귀 + 캐시 복원.
+3. `decideIngest` — **해결 이벤트 단위 멱등성** (`raw/jira/.ingest-state.json`의 resolvedAt).
+   재시작·중복 폴링(같은 resolvedAt)은 스킵, reopen 후 더 늦은 resolvedAt은 재기록(n+1).
+4. `signatureOf`(TC명 우선, 없으면 제목 정규화) + `classifyIngest`로 기록 모드를 정한다:
+
+   | 모드 | 조건 | case-log 기록 |
+   |---|---|---|
+   | `full` | 신규 서명 / 시간창 만료 | 풀 엔트리 + 새 anchor |
+   | `anchor-reresolve` | anchor 티켓의 reopen 재해결 | supersede 표식 풀 엔트리, count 유지 |
+   | `member-reresolve` | 이미 dedup된 티켓의 재해결 | anchor 포인터, count 유지 (재anchor 금지) |
+   | `recurrence` | 같은 서명·같은 모듈·`SVP_DEDUP_WINDOW_DAYS`(14일) 내 새 티켓 | anchor 포인터 + count+1, LLM summarize 스킵 |
+
+5. `SVP_INGEST_MODE`가 `live`일 때만(기본 `dry-run`) 실제 기록: `raw/jira/<키>[-r<n>].md`·`raw/ci/` 동결
+   (raw는 재발이어도 티켓마다 보존) → full/anchor-reresolve는 `summarizeResolution`(LLM이 해결 코멘트에서
+   symptom/cause/resolution 추출, 무자격 시 symptom만) → `case-log.md` append → `index.md`/`log.md` 재생성.
+
+## Retrieval self-correction (`wiki-query.mjs` — 전부 단위 테스트 대상)
+
+- **case-log entry 단위 스코어링** — 포인터 엔트리(재발/재해결 → anchor)는 지식이 아니라 링크이므로 제외,
+  같은 티켓 id의 full 엔트리는 최신만 검색된다 (reopen 교정본이 이전 기록을 supersede).
+- **recurrenceBoost** — `.signature-index.json`의 재발 count가 높은 사례를 `min(count-1, SVP_RECUR_BOOST_CAP=4)` 가산.
+- **feedbackDemotion** — 담당자 피드백이 불일치 `SVP_FEEDBACK_DEMOTE`(3) 이상이고 불일치 > 일치인 노트는
+  점수 절반. `recordFeedback`이 `<vault>/.feedback.json`에 누적한다.
+- 기본 스코어: module 키워드 +3, 일반 키워드 +1, 노트 신호(태그·known-failure 원문 토큰)의 티켓 텍스트 매치 +2. 상위 3개 반환.
+
+## 영속화
+
+- `server/issue-cache.json` (`cache.mjs`) — 티켓별 초도분석 결과(Jenkins 보강 로그·url·LLM 분류·후보)를
+  재시작 간 보존한다. 복원 push는 `restored: true`로 재toast를 막는다. Jira가 진실이므로 이 파일을 잃어도
+  재분석 비용만 있을 뿐 정합성은 깨지지 않는다.
+- vault 쪽 상태: `raw/jira/.ingest-state.json`(멱등), `raw/jira/.signature-index.json`(dedup/재발), `.feedback.json`(피드백).
 
 ## 상태 관리 — Jira가 source of truth
 
-| 앱 상태 | Jira 상태 (statusCategory) | 전이 주체 |
+| 앱 상태 | Jira statusCategory | 전이 주체 |
 |---|---|---|
-| `new` | To Do (Open) | CI/CD가 티켓 생성 |
-| `acknowledged` | In Progress | 앱의 "티켓 확인" 클릭 (티켓이 열리며 동시에 ack) → 서버가 transition 호출 |
+| `new` | To Do | CI/CD가 티켓 생성 |
+| `acknowledged` | In Progress | 자동 배정 시 서버의 `transitionTo`, 또는 담당자가 Jira에서 직접 |
 | `resolved` | Done | 담당자가 **Jira에서 Done 처리** (유일 경로) → 폴링으로 확정 |
 
-- 담당자가 Jira에서 직접 상태를 바꿔도 서버가 폴링으로 감지해 앱에 반영한다 (양방향 동기화, Jira 우선).
-- ingest는 **Jira에서 Done이 확인된 각 시점**에 수행한다 — reopen 후 재해결도 재기록한다(버전 raw + case-log supersede 표식). 재시작·중복 폴링 등 **같은 해결 이벤트**(동일 resolvedAt)는 스킵해 중복을 막는다.
+- **앱은 이슈 상태를 쓰지 않는다** (해결·확인 버튼 없음). 서버도 로컬 상태를 직접 움직이지 않는다 —
+  Jira에 write하고 폴링 sync가 변경을 읽어 push하는 단방향 루프다. Jira에서 직접 바꾼 것도 같은 경로로 앱에 반영된다.
 
-## 가시성 규칙 & 뷰 모드
+## Push 계약 (Socket.IO) & 가시성
 
-- **서버 측 필터링**: member 세션에는 애초에 자기 이슈만 push된다. sheriff 세션에는 전체 이슈가 push된다.
-  role은 클라이언트가 주장하지 않고 **서버가 `client:hello`의 `clientId`로 팀 설정에서 판별**한다.
-- role = `member`: 컴팩트 창(420×640) — 배정 이슈만 표시/알림
-- role = `sheriff`: 전체 대시보드(1180×760) — 팀 전체 이슈 + WIKI 점검 + 수동 재배정.
-  UI는 role에 따른 뷰 전환일 뿐, 서버 접속 방식은 member와 동일하다.
-- 클라이언트 설정은 `SVP_SERVER_URL` 하나 — v2의 "role=sheriff면 서버 모드로 기동" 분기가 사라진다.
+- 로그인 = handshake auth `{username, password}`. 데모 인증(admin/admin = sheriff, 아이디=비밀번호 = member) —
+  SVP-5에서 실인증 교체 예정. 성공 시 서버가 `session { user, team }`을 내려주고 이 세션의 미해결 이슈를
+  `issue:new`로 replay한다.
+- 서버→클라: `session`, `issue:new`(restored 플래그), `issue:updated`. 클라→서버: `issue:reassign`(sheriff 전용),
+  `wiki:feedback`.
+- **서버 측 필터링**: 이슈는 assignee 본인 + 모든 sheriff 세션에만 push된다. role은 클라이언트가 주장하지 않고
+  서버 인증이 결정한다.
 
-## 모듈 맵 (목표)
+## 클라이언트 (Electron)
 
-```
-src/
-  server/                  headless Node 서버 (Linux) — Electron import 금지
-    index.ts               서버 엔트리: 아래 모듈 배선 (폴링→분류→배정→push)
-    modules/jira/          Jira 폴링·댓글·assignee·transition (F1·F5·F7)
-    modules/classifier/    LLM 분류 — Claude on Bedrock (구현됨: server/classifier.mjs, TS 이동 예정)
-    modules/wiki/          LLM-WIKI 4대 동작 (query/ingest/lint/feedback)
-    modules/assignment/    신뢰도 라우팅 + 당번 수동 재배정
-    modules/push/          Socket.IO push 서버 — 로그인 세션·role 필터링 (F6)
-  main/                    Electron 클라이언트 (Windows EXE)
-    modules/push/          서버 접속·로그인·push 수신 (Socket.IO)
-    modules/notifications/ toast
-  preload/ renderer/       클라이언트 UI — role별 뷰 (대시보드 / 컴팩트)
-  shared/                  타입 + WS 프로토콜 — 유일한 경계 횡단 import
-```
+- member: 420×640 컴팩트 창(`CompactView`) — 자기 배정 이슈만. sheriff: 1440×700 대시보드
+  (`Cockpit` + 상태 lane + `StatusBoard` + `DetailPanel`) — 전체 이슈 + 검색 + Ctrl+K 커맨드 팔레트.
+- toast 팝업(TTL 9초), tray 상주(닫기 = tray로 숨김) + 알림 음소거.
+- sheriff 전용: 수동 재배정(`issue:reassign` — 후보 버튼은 `buildCandidates` 결과), 위키 열기(`obsidian://`,
+  미등록 시 OS 기본), 위키 점검(lint — 클라이언트 로컬 vault 대상).
+- member: **resolved 이슈의 DetailPanel에서** 참조 노트의 "원인 일치/불일치" 피드백 → `wiki:feedback`으로
+  서버 vault에 누적 (query 감점 루프의 입력).
 
-- `server/`와 `main/`(클라이언트)은 서로의 내부를 import하지 않는다. 경계 횡단은 `src/shared/`로만 — 기존 규칙 유지.
-- 빌드 산출물 2개: `npm run dist`(Windows EXE — 클라이언트 전용), `npm run build:server`(Linux용 node 번들).
-- 프로토콜은 클라이언트↔서버 Socket.IO **하나**다. 별도 중간 계층은 두지 않는다.
+## vault 저장소와 리뷰 경계
 
-## wiki 4대 동작 (서버 전용)
-
-| 동작 | 트리거 | 하는 일 |
-|---|---|---|
-| query | 신규 티켓 감지 시 자동 | 관련 노트 검색, 불일치 누적 노트는 감점 |
-| ingest | Jira Done 확정마다 자동 (재해결 시 버전 기록) | **LLM이 Jira 해결 코멘트를 근거로 case-log 작성**, index/log 갱신 |
-| lint | 당번의 "WIKI 점검" 버튼 (hub 경유, sheriff 전용 메시지) | 고아 노트·불일치 누적 노트(사람 판정 + LLM 대조) 보고 |
-| feedback | Done 확정 시 담당자 toast (hub 경유) | "참조 노트의 원인 = 실제 원인?" **일치/불일치** 판정 저장 (불일치 3+ → query 감점) |
-
-- 질문은 "도움됐나요"가 아니라 **원인 일치/불일치**로 묻는다 — 담당자는 문서 품질을 평가할 수 없지만,
-  방금 해결한 이슈의 실제 원인과 노트가 맞았는지는 정확히 안다. 상시 👍/👎 버튼은 두지 않는다.
-- **LLM 대조 (보조 신호)**: ingest 때 LLM이 노트 내용과 해결 코멘트를 대조해 불일치를 감지하면
-  근거 인용을 포함한 structured output(`{ match, quotedNote, quotedResolution }`)으로 **lint 후보에만** 올린다.
-  query 감점 권한은 사람 판정에만 있고, 위키 수정·삭제는 어떤 경우에도 자동으로 하지 않는다 (사람 PR 전용).
-- Jira reopen 대응: 멱등성은 **해결 이벤트 단위**다 (`server/ingest.mjs` `decideIngest`, 상태는 `raw/jira/.ingest-state.json`의 resolvedAt). 재시작·중복 폴링(같은 resolvedAt)은 스킵해 중복 기록을 막고, **reopen 후 재해결(더 늦은 resolvedAt)은 재기록**한다 — raw는 덮어쓰지 않고 `raw/jira/<키>-r<n>.md`로 버전 동결, case-log 새 엔트리에 `이전 supersede` 표식을 단다. (틀린 첫 기록의 실제 제거는 lint/feedback 몫.)
-
-### vault 저장소와 리뷰 경계
-
-- **이 repo의 `wiki-vault/`는 시드·데모 데이터 전용.** 운영 vault에는 사내 CI 로그·이슈 내용·해결 코멘트가 쌓이므로
-  **사내 git 저장소에 별도로 두고, 이 repo(GitHub)로는 절대 push하지 않는다** (CLAUDE.md 절대 규칙 2·4).
-- v3에서 운영 vault는 **Linux 서버 호스트에 위치**한다 — 서버 프로세스가 유일한 읽기/쓰기 주체이고,
-  사내 git remote로 백업·리뷰한다. 클라이언트(당번 포함)는 vault 파일에 직접 접근하지 않는다.
-- 리뷰는 파일 두 계층으로 나눈다:
-  - **자동 생성 파일** (`case-log.md`, `index.md`, `log.md`, `raw/jira/*.md`·`raw/ci/*.md`(재해결은 `-r<n>` 버전), `raw/jira/.ingest-state.json`) — 서버가 기계 커밋(`chore(wiki): ingest <key>`), PR 없음.
-    해결 건마다 PR을 만드는 것은 비현실적.
-  - **사람이 관리하는 노트** (`modules/*.md`의 known-failure) — 수정·삭제는 PR 리뷰를 거친다.
-    lint가 지목한 노트의 diff를 리뷰하는 이 시점이 사람이 사실성을 검토하는 지점이다.
-
-## 현재 구현과의 차이
-
-| 영역 | 현재 (v2 — W1 완료 시점) | 목표 (v3 — 이 문서) |
-|---|---|---|
-| 서버 실행 위치 | 당번 Windows PC의 Electron 앱 안 (main 프로세스) | 별도 Linux 호스트의 headless Node (systemd) |
-| 당번 대시보드 데이터 경로 | 같은 프로세스 IPC (`webContents.send`) | 다른 팀원과 동일한 WS 클라이언트 (sheriff 세션 = 전체 push) |
-| 당번 전용 동작 (재배정·lint) | IPC 핸들러 | hub의 sheriff 전용 WS 메시지 ([API.md §1](./API.md)) |
-| 비밀정보 (Jira PAT 등) | 당번 PC의 `.env` | Linux 서버의 `.env`에만 — 클라이언트 무자격증명 |
-| 코드 구조 | `src/main/modules/` 아래 서버·클라이언트 혼재 | `src/server/` · `src/main/`(클라이언트) · `src/shared/` |
-| 분류 | stub (wiki 매치 점수 기반 가짜 신뢰도) | Claude API 실호출 (W2 — v3와 무관하게 진행) |
-| Obsidian으로 vault 열기 | 당번 로컬 파일 직접 열기 | **미정** — vault가 서버로 가면 성립 안 함 (아래 결정 필요 항목) |
-
-기존 `mock/ci-server.mjs`와 `modules/websocket/`은 mock Jira 서버·`hub-client/`로 대체될 때까지 개발용으로 유지한다.
-
-## v2 → v3 이행 계획
-
-각 단계는 독립 PR이고, 단계마다 앱은 동작 상태를 유지한다 (되돌아갈 지점 확보 — 리뷰 프로세스 규칙).
-
-1. **hub 프로토콜 보강** — sheriff 세션에 전체 이슈 push + `issue:reassign`·`wiki:lint` 메시지 추가.
-   당번 대시보드가 IPC와 WS 어느 쪽으로도 동작하는 상태를 거친다. (W2의 F4 재배정 작업과 겹치므로 함께 설계)
-2. **`src/server/` 엔트리 추출** — 모듈 이동 없이 배선만 분리한 headless 엔트리 + `npm run build:server`.
-   Electron API 의존 제거 (`app.getPath` → `SVP_DATA_DIR` env). 기존 겸용 모드는 이행기 동안 유지.
-3. **모듈 이동** — `jira/ classifier/ wiki/ assignment/ hub/`를 `src/server/modules/`로. **파일 이동 단독 PR**
-   (구조 변경과 기능 변경을 섞지 않는다 — CLAUDE.md).
-4. **배포 전환** — Linux 호스트에 systemd 서비스 + `.env` 구성, 클라이언트 EXE에서 서버 코드 제외,
-   `SVP_SERVER_URL` 기본값을 서버 호스트로. v2 겸용 모드 제거.
-
-## 결정 기록 (2026-07-15 회의 — 위 "합의 사항"의 근거 항목)
-
-- **Linux 호스트 확보**: 김병재 담당으로 확보 진행. 확보 전까지 서버 프로세스는 임의 PC에서 실행.
-- **Obsidian 열기 기능**: 서버 vault 폴더를 당번 PC에서 열 수 있게 연결(공유 폴더 등)하는 단순안 채택.
-- **인증 우선순위**: 상향 — 서버 분리로 데모 인증(아이디=비밀번호)의 실인증 교체(SVP-5)가 선행 조건이 됨.
-- **이행 계획 조정**: 전송 계층이 Socket.IO로 확정되면서 이행 1단계(hub 프로토콜 보강)는 **폐기** —
-  프로토타입(`mock/svp-server.mjs`)이 그 자리를 대신한다. 다음은 2·3단계(`src/server/` 승격·모듈 이동)부터
-  진행하고, 주차 배분은 PLAN.md 갱신 시 확정한다. hub 기반으로 만들었던 상태 동기화 실험 브랜치와
-  v2 폴러의 시간대 경계 버그(PR #5 코멘트)는 v2 폴러 소멸과 함께 폐기.
+- **이 repo의 `wiki-vault/`는 시드·데모 데이터 전용.** 운영 vault에는 사내 CI 로그·이슈 내용·해결 코멘트가
+  쌓이므로 서버 호스트에 두고(`SVP_WIKI_DIR`), 사내 git으로 백업·리뷰한다 — 이 repo로는 절대 push하지
+  않는다 (CLAUDE.md 절대 규칙 2·4). 클라이언트는 운영 vault 파일에 직접 접근하지 않는다.
+- 리뷰 두 계층: **자동 생성 파일**(`case-log.md`, `index.md`, `log.md`, `raw/**`, 상태 json) — 서버가 기록,
+  PR 없음. **사람이 관리하는 노트**(`modules/*.md` known-failure) — 수정·삭제는 PR 리뷰를 거친다.
+  lint·피드백 감점이 지목한 노트를 사람이 검토하는 지점이 여기다.

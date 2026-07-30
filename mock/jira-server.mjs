@@ -1,5 +1,5 @@
-// Mock Jira server — the minimal subset of Jira REST v2 that modules/jira/ uses
-// (API.md §4), plus demo triggers. Replaces mock/ci-server.mjs as the issue source.
+// Mock Jira server — the minimal subset of Jira REST v2 that server/index.mjs uses
+// (API.md §5), plus demo triggers. Replaces mock/ci-server.mjs as the issue source.
 // Usage: npm run mock:jira  (port 8792)
 import { createServer } from 'node:http'
 
