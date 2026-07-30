@@ -112,7 +112,6 @@ mock/                            mock Jira(8792)·Jenkins(8794) 서버
 - **main 브랜치 직접 push 금지.** 브랜치(`feat/<scope>-<desc>`, `fix/<scope>-<desc>`)에서 작업 → PR → 다른 1인 리뷰 승인 후 merge.
 - Claude가 생성한 커밋은 `Co-Authored-By: Claude <noreply@anthropic.com>` trailer를 유지한다.
 - 커밋 전 `npm run typecheck`가 통과해야 한다.
-- 커밋 메시지·수정 이력은 사내 도구가 검토/평가할 수 있다고 가정하고 작성한다. 관련 세부 기준은 팀 내부에서 별도 공유한다 (repo에는 두지 않음).
 
 ## 리뷰 프로세스 & 코드 위생
 
