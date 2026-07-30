@@ -53,3 +53,35 @@ test('feedbackDemotion: 불일치 threshold 이상+일치보다 많으면 반감
   assert.equal(feedbackDemotion(9, { up: 0, down: 3 }, 3), 4) // floor(9/2)
   assert.equal(feedbackDemotion(8, { up: 5, down: 3 }, 3), 8) // 일치가 더 많음 → 유지
 })
+
+// ── parseFrontmatter — 블록 리스트 지원 (사내 다중 담당 vault 형태) ──
+import { parseFrontmatter, listOf, primaryOf } from './wiki-query.mjs'
+
+test('parseFrontmatter: key: value 한 줄 형태 (기존 계약 유지)', () => {
+  const fm = parseFrontmatter('---\ntype: module\nmodule: auth\nowner: alice\n---\n# auth')
+  assert.equal(fm.owner, 'alice')
+  assert.equal(fm.module, 'auth')
+})
+
+test('parseFrontmatter: YAML 블록 리스트 owner를 배열로 읽는다', () => {
+  const fm = parseFrontmatter(
+    '---\ntype: module\nmodule: audio\nowner:\n  - alice\n  - bob\ntags: [audio, alsa]\n---\n# audio'
+  )
+  assert.deepEqual(fm.owner, ['alice', 'bob'])
+  assert.equal(fm.tags, '[audio, alsa]') // 인라인 형태는 기존대로 문자열
+})
+
+test('parseFrontmatter: 항목 없는 빈 블록 리스트는 빈 배열', () => {
+  const fm = parseFrontmatter('---\nowner:\nmodule: x\n---\n')
+  assert.deepEqual(fm.owner, [])
+  assert.equal(fm.module, 'x')
+})
+
+test('listOf/primaryOf: 스칼라·배열·빈 값 정규화', () => {
+  assert.deepEqual(listOf('alice'), ['alice'])
+  assert.deepEqual(listOf(['a', 'b']), ['a', 'b'])
+  assert.deepEqual(listOf(undefined), [])
+  assert.equal(primaryOf(['a', 'b']), 'a')
+  assert.equal(primaryOf('alice'), 'alice')
+  assert.equal(primaryOf(undefined), null)
+})

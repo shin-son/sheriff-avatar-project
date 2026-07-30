@@ -69,17 +69,49 @@ export function listMarkdownFiles(dir) {
   return out
 }
 
-/** Minimal frontmatter reader: `key: value` lines between the two --- fences. */
+/**
+ * Minimal frontmatter reader between the two --- fences. Supports `key: value`
+ * lines AND YAML block lists (`owner:` followed by `- name` items → array) —
+ * 사내 vault는 다중 담당자를 블록 리스트로 적는다. Not a full YAML parser on
+ * purpose; these two shapes are the vault schema's whole surface.
+ */
 export function parseFrontmatter(content) {
   const fields = {}
   const lines = content.split('\n')
   if (lines[0]?.trim() !== '---') return fields
+  let listKey = null
   for (let i = 1; i < lines.length; i += 1) {
-    if (lines[i].trim() === '---') break
+    const t = lines[i].trim()
+    if (t === '---') break
+    const item = t.match(/^-\s+(.+)$/)
+    if (item && listKey) {
+      fields[listKey].push(item[1].trim())
+      continue
+    }
     const sep = lines[i].indexOf(': ')
-    if (sep > 0) fields[lines[i].slice(0, sep).trim()] = lines[i].slice(sep + 2).trim()
+    if (sep > 0) {
+      fields[lines[i].slice(0, sep).trim()] = lines[i].slice(sep + 2).trim()
+      listKey = null
+    } else if (t.endsWith(':') && !t.startsWith('-') && !t.startsWith('#')) {
+      // bare `key:` opens a block list — items collected above
+      listKey = t.slice(0, -1).trim()
+      fields[listKey] = []
+    } else {
+      listKey = null
+    }
   }
   return fields
+}
+
+/** List form of a frontmatter field: block list → as-is, scalar → [scalar], 빈 값 → []. */
+export function listOf(v) {
+  if (v === undefined || v === null || v === '') return []
+  return Array.isArray(v) ? v : [v]
+}
+
+/** 대표값 — 리스트면 첫 항목(주 담당), 스칼라면 그대로. */
+export function primaryOf(v) {
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null)
 }
 
 export function toTitle(file, content) {
@@ -87,7 +119,11 @@ export function toTitle(file, content) {
   return heading ? heading.slice(2).trim() : basename(file, '.md')
 }
 
-/** All module notes: [{module, owner, file}] — source of the category enum and owner map. */
+/**
+ * All module notes: [{module, owner, owners, file}] — source of the category
+ * enum and owner map. `owner` is the primary (첫 항목 = 주 담당, 자동 배정
+ * 대상), `owners` carries every listed owner for roster/피커 credit.
+ */
 export function listModules() {
   const modulesDir = join(VAULT_DIR, 'modules')
   const out = []
@@ -95,7 +131,9 @@ export function listModules() {
     for (const name of readdirSync(modulesDir)) {
       if (!name.endsWith('.md')) continue
       const fm = parseFrontmatter(readFileSync(join(modulesDir, name), 'utf-8'))
-      if (fm.module && fm.owner) out.push({ module: fm.module, owner: fm.owner, file: `modules/${name}` })
+      const owners = listOf(fm.owner)
+      if (fm.module && owners.length > 0)
+        out.push({ module: fm.module, owner: owners[0], owners, file: `modules/${name}` })
     }
   } catch {
     // no vault / no modules dir: classifier will run with an empty enum → unknown only
@@ -127,7 +165,7 @@ export function listCatalog() {
       file: relative(VAULT_DIR, file).replaceAll('\\', '/'),
       title: toTitle(file, content),
       module: fm.module ?? null,
-      tags: (fm.tags ?? '').replace(/[[\]]/g, '')
+      tags: Array.isArray(fm.tags) ? fm.tags.join(', ') : (fm.tags ?? '').replace(/[[\]]/g, '')
     }
   })
 }
@@ -145,7 +183,7 @@ export function readNotes(files) {
         score: 0, // LLM-picked, not keyword-scored
         body: content,
         module: fm.module ?? null,
-        owner: fm.owner ?? null
+        owner: primaryOf(fm.owner)
       })
     } catch {
       // stale/invalid path from the selection step — skip
@@ -162,7 +200,10 @@ export function readNotes(files) {
  */
 function noteSignals(content, fm) {
   const signals = new Set()
-  for (const tag of (fm.tags ?? '').replace(/[[\]]/g, '').split(',')) {
+  const tags = Array.isArray(fm.tags)
+    ? fm.tags
+    : (fm.tags ?? '').replace(/[[\]]/g, '').split(',')
+  for (const tag of tags) {
     const t = tag.trim().toLowerCase()
     if (t.length > 1) signals.add(t)
   }
@@ -284,7 +325,7 @@ export function queryWiki(event) {
         score: feedbackDemotion(score, feedback[title]), // ③ 불일치 누적 노트 감점
         body: content,
         module: fm.module ?? null,
-        owner: fm.owner ?? null
+        owner: primaryOf(fm.owner)
       })
     }
   }
@@ -375,14 +416,17 @@ export async function buildCandidates(event, category = null) {
         ? event.module
         : null
   if (cat) {
-    const owner = resolveOwner(cat)
-    if (owner && !candidates.some((c) => c.id === owner)) {
-      candidates.push({
-        id: owner,
-        name: owner,
-        source: 'wiki',
-        reason: `LLM-WIKI ${cat} 모듈 담당자`
-      })
+    // 다중 담당 모듈(owner 블록 리스트)은 전원이 후보 — 주 담당이 먼저 온다.
+    const owners = listModules().find((m) => m.module === cat)?.owners ?? []
+    for (const owner of owners) {
+      if (!candidates.some((c) => c.id === owner)) {
+        candidates.push({
+          id: owner,
+          name: owner,
+          source: 'wiki',
+          reason: `LLM-WIKI ${cat} 모듈 담당자`
+        })
+      }
     }
   }
 

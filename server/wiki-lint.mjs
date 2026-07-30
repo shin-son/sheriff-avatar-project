@@ -50,7 +50,11 @@ export function schemaIssues(notes) {
   for (const n of notes) {
     if (!/^modules\/[^/]+\.md$/.test(n.file)) continue
     const fm = parseFrontmatter(n.body)
-    const missing = REQUIRED_FRONTMATTER.filter((k) => !fm[k])
+    // 블록 리스트 필드(owner: - a - b)는 배열로 온다 — 빈 배열만 누락으로 취급.
+    const missing = REQUIRED_FRONTMATTER.filter((k) => {
+      const v = fm[k]
+      return v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
+    })
     if (missing.length) {
       issues.push({
         severity: 'critical',

@@ -123,3 +123,17 @@ test('lintVault: 피드백이 threshold 미만이거나 일치가 더 많으면 
   assert.deepEqual(r.unhelpfulNotes, [])
   assert.equal(r.healthScore, 100)
 })
+
+test('schemaIssues: 블록 리스트 owner는 누락이 아니다 (audio.md 오탐 재현)', () => {
+  const body =
+    '---\ntype: module\nmodule: audio\nowner:\n  - alice\n  - bob\ntags: [audio]\nupdated: 2026-07-30\n---\n# audio 모듈'
+  const issues = schemaIssues([note('modules/audio.md', body)])
+  assert.deepEqual(issues, [])
+})
+
+test('schemaIssues: 항목 없는 빈 owner 블록 리스트는 누락으로 잡는다', () => {
+  const body = '---\ntype: module\nmodule: audio\nowner:\ntags: [audio]\nupdated: 2026-07-30\n---\n# audio'
+  const issues = schemaIssues([note('modules/audio.md', body)])
+  assert.equal(issues.length, 1)
+  assert.ok(issues[0].message.includes('owner'))
+})
