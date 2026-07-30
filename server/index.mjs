@@ -25,6 +25,7 @@ import { fetchRawLogViaTool, formatLogViaSkill } from './ci-test-fetch.mjs'
 import { INGEST_MODE, ingestResolved } from './ingest.mjs'
 import { commentChannel, postAnalysisComment } from './comment-channel.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
+import { normalize } from './ticket.mjs'
 import { buildCandidates, listCatalog, listModules, queryWiki, readNotes, recordFeedback, resolveOwner } from './wiki-query.mjs'
 import { lintWiki } from './wiki-lint.mjs'
 
@@ -80,54 +81,6 @@ function canWrite(key) {
 /** userIds ever seen (logins + assignees) — for the roster sent on login. */
 const knownMembers = new Set()
 
-// 실티켓 description은 HTML로 온다 (사내 실측: <h2>헤드라인</h2><ul><li>key : value</li>...).
-// 블록 태그를 줄바꿈으로 바꾸고 태그를 걷어내 줄 단위 계약 파싱이 동작하게 한다.
-// plain text에는 매칭될 태그가 없어 그대로 통과 — 두 형식 모두 처리된다.
-function htmlToText(s) {
-  return s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(h\d|li|ul|ol|p|div|tr)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#39;|&quot;/g, "'")
-}
-
-// Real corporate description contract (SVP-6) — ` : `-separated key-value lines:
-//   [DEV_CICD][<project>][T<seq>] : <TC명> Failed   ← first line (= summary)
-//   CICD Project : ... / Step : TEST / Category : ... / TC name or file : ...
-//   Link / CICD : <대시보드 URL> / TEST : <Jenkins 빌드 URL> / IMAGE·DUMP DIR : ...
-// description에 실패 로그는 없다 — 로그는 poll()의 Jenkins consoleText 보강이 맡는다.
-const STEP_TO_TYPE = {
-  TEST: 'test_failed',
-  BUILD: 'build_failed',
-  DEPLOY: 'deploy_failed',
-  LINT: 'lint_failed'
-}
-
-function normalize(t) {
-  const text = htmlToText(t.fields.description ?? '')
-  const fields = {}
-  for (const line of text.split('\n')) {
-    const sep = line.indexOf(' : ')
-    if (sep > 0) fields[line.slice(0, sep).trim()] = line.slice(sep + 3).trim()
-  }
-  return {
-    id: t.key,
-    type: STEP_TO_TYPE[(fields['Step'] ?? '').toUpperCase()] ?? 'test_failed',
-    title: t.fields.summary,
-    module: 'unknown', // description에 모듈 정보 없음 — LLM 분류가 결정
-    branch: fields['CICD Project'] ?? '',
-    log: text,
-    url: fields['CICD'] ?? `${JIRA}/browse/${t.key}`,
-    timestamp: t.fields.created,
-    source: 'jira',
-    jira: { key: t.key, url: `${JIRA}/browse/${t.key}`, status: t.fields.status.statusCategory.key }
-  }
-}
-
 function assigneeOf(t) {
   return t.fields.assignee?.name ?? t.fields.assignee?.key ?? null
 }
@@ -138,7 +91,7 @@ function assigneeOf(t) {
 // sync loop would overwrite the real confidence/summary with the placeholder.
 function routeByAssignee(event, assignee, key) {
   const human = assignee && assignee !== BOT
-  if (human) knownMembers.add(assignee)
+  if (human) addMember(assignee)
   const llm = llmResults.get(key)
   return {
     classification: llm ?? {
@@ -297,6 +250,15 @@ function roster() {
   ]
 }
 
+// 새 팀원이 나타나면(로그인·신규 assignee) 접속 중인 모든 세션에 roster를
+// 다시 내려준다 — 없으면 당번의 배정 후보 목록이 로그인 시점 스냅샷에
+// 갇힌다 (F4: 팀원이 나중에 로그인하면 피커에 안 보이는 문제).
+function addMember(id) {
+  if (!id || knownMembers.has(id)) return
+  knownMembers.add(id)
+  for (const [, s] of sessions) s.socket.emit('session', { user: s.socket.data.user, team: roster() })
+}
+
 function recipientsOf(issue, extra = []) {
   const ids = new Set(extra)
   ids.add(issue.assignment.assigneeId)
@@ -312,7 +274,7 @@ function emitIssue(type, issue, extra = []) {
 
 io.on('connection', (socket) => {
   const user = socket.data.user
-  if (user.role === 'member') knownMembers.add(user.userId)
+  if (user.role === 'member') addMember(user.userId)
   sessions.get(user.userId)?.socket.disconnect(true)
   sessions.set(user.userId, { socket, role: user.role })
 
@@ -410,7 +372,7 @@ async function poll() {
     for (const t of await search(`(${BASE_JQL}) ORDER BY created ASC`)) {
       ticketLabels.set(t.key, t.fields.labels ?? [])
       if (issues.has(t.key)) continue
-      const event = normalize(t)
+      const event = normalize(t, JIRA)
       const cached = issueCache.get(t.key)
       if (cached) {
         // 초도분석이 이미 끝난 티켓(재시작 복원) — Jenkins 재수집 없이 캐시의
