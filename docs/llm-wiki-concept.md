@@ -3,7 +3,7 @@
 > 출처: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 >
 > SVP의 `wiki-vault/` 설계 근거가 되는 개념 문서. 아래는 원문 전문이며 **수정하지 않는다** (이 repo에서 이 파일은 raw source 취급).
-> SVP 적용 방식: raw sources = CI 로그/이슈 이벤트, wiki = `wiki-vault/`, schema = `CLAUDE.md`의 LLM-WIKI 규칙 섹션.
+> SVP 적용 방식: raw sources = CI 로그/이슈 이벤트, wiki = `wiki-vault/`, schema = [wiki-vault/README.md](../wiki-vault/README.md) (+ `CLAUDE.md`의 LLM-WIKI 규칙 요약).
 
 ---
 

@@ -183,7 +183,7 @@ export function caseLogEntries(text) {
   for (const body of text.split(/\n(?=## )/)) {
     if (!body.trim().startsWith('## ')) continue
     const heading = body.split('\n', 1)[0]
-    if (/\((?:재발 추정|재해결)\s*→/.test(heading)) continue // ① 포인터 제외
+    if (/\((?:재발\s*\(?추정\)?|재해결)\s*→/.test(heading)) continue // ① 포인터 제외 — ingest는 '재발(추정)', 구형은 '재발 추정'
     const id = heading.match(/^##\s+(\S+)\s+—/)?.[1] ?? heading
     byId.set(id, {
       id,
