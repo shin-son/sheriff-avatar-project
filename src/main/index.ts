@@ -228,6 +228,15 @@ function connectAndLogin(username: string, password: string): Promise<PushSessio
   })
 }
 
+// 설치형(EXE)에서만 단일 인스턴스 강제 — 이중 실행 시 두 번째 로그인이 첫
+// 창의 서버 세션을 끊어버린다(트레이 아이콘·토스트도 중복). dev는 당번+팀원
+// 동시 확인을 위해 인스턴스 2개가 필요하므로(SETUP.md) 제외한다.
+if (app.isPackaged && !app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showMainWindow())
+}
+
 app.whenReady().then(() => {
   notificationsMuted = loadNotificationsMuted()
   createMainWindow()
