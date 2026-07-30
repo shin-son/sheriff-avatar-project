@@ -13,6 +13,7 @@ interface Props {
   issues: SheriffIssue[]
   onSelectIssue: (id: string) => void
   onOpenWiki: () => void
+  onLintWiki: () => void
   onClose: () => void
 }
 
@@ -21,7 +22,13 @@ interface Props {
  * action. Level 5 floating glass; physical key caps for the shortcut hints
  * (DESIGN.md §4). Realizes Principle 1 — "keyboard is the interface".
  */
-export default function CommandPalette({ issues, onSelectIssue, onOpenWiki, onClose }: Props) {
+export default function CommandPalette({
+  issues,
+  onSelectIssue,
+  onOpenWiki,
+  onLintWiki,
+  onClose
+}: Props) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -32,10 +39,12 @@ export default function CommandPalette({ issues, onSelectIssue, onOpenWiki, onCl
 
   const q = query.trim().toLowerCase()
 
-  // 위키 점검은 StatusBoard 상시 표시로 이동 — 팔레트 액션은 열기만 남는다.
   const actions = useMemo<QuickAction[]>(
-    () => [{ id: 'act-wiki', label: '위키 열기', hint: 'Obsidian', run: onOpenWiki }],
-    [onOpenWiki]
+    () => [
+      { id: 'act-wiki', label: '위키 열기', hint: 'Obsidian', run: onOpenWiki },
+      { id: 'act-lint', label: '위키 점검', hint: '고아 · 부정 노트', run: onLintWiki }
+    ],
+    [onOpenWiki, onLintWiki]
   )
 
   const matchedActions = useMemo(

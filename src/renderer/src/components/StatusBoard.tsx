@@ -1,23 +1,14 @@
 import { useState } from 'react'
-import type { WikiLintReport } from '@shared/types'
 import type { DashboardStats } from '../stats'
 
 interface Props {
   stats: DashboardStats
-  /** 서버 lint 결과 — 로그인 시 자동 실행, null이면 아직 점검 중이거나 실패. */
-  lint: WikiLintReport | null
-  lintFailed: boolean
-  onLintRefresh: () => void
 }
 
 const OPEN_KEY = 'svp.dashboard.open'
 
-function healthTone(score: number): string {
-  return score >= 80 ? 'good' : score >= 50 ? 'warn' : 'crit'
-}
-
-/** 당번 전용 상세 현황 — 모듈별 상태 · 추정 중복 · 위키 헬스. 요약 수치는 Cockpit 데크가 담당한다. */
-export default function StatusBoard({ stats: s, lint, lintFailed, onLintRefresh }: Props) {
+/** 당번 전용 상세 현황 — 모듈별 상태 · 추정 중복. 요약 수치는 Cockpit 데크가 담당한다. */
+export default function StatusBoard({ stats: s }: Props) {
   const maxTotal = Math.max(1, ...s.modules.map((m) => m.total))
   // 접힘 상태는 localStorage에 저장 — 당번이 한번 접으면 유지된다. 기본 펼침.
   const [open, setOpen] = useState(() => {
@@ -50,16 +41,8 @@ export default function StatusBoard({ stats: s, lint, lintFailed, onLintRefresh 
           <span className={`sb-chev${open ? ' open' : ''}`} aria-hidden="true">
             ▾
           </span>
-          <span className="sb-head-title">전체 현황</span>
+          <span className="sb-head-title">모듈 · 중복 현황</span>
         </button>
-        {lint?.healthScore !== undefined && (
-          <span
-            className={`sb-health ${healthTone(lint.healthScore)}`}
-            title={`위키 헬스 스코어 — 노트 ${lint.noteCount}개 기준 (스키마·고아·부정 신호 종합)`}
-          >
-            위키 {lint.healthScore}/100
-          </span>
-        )}
         {!open && (
           <span className="sb-head-summary">
             모듈 {s.modules.length}개
@@ -135,36 +118,6 @@ export default function StatusBoard({ stats: s, lint, lintFailed, onLintRefresh 
               </p>
             </div>
           )}
-
-          <div className="sb-block">
-            <div className="sb-modhead">
-              <span className="sb-sub">
-                위키 점검{lint ? ` — 노트 ${lint.noteCount}개` : ''}
-              </span>
-              <button className="sb-refresh" onClick={onLintRefresh} title="서버 vault 재점검">
-                ↻
-              </button>
-            </div>
-            {lintFailed ? (
-              <p className="sb-note">서버 응답 없음 — 연결 상태 확인 후 ↻로 재시도</p>
-            ) : !lint ? (
-              <p className="sb-note">점검 중…</p>
-            ) : (lint.issues ?? []).length === 0 ? (
-              <p className="sb-note">정리할 노트 없음</p>
-            ) : (
-              <ul className="lint-list">
-                {(lint.issues ?? []).map((it, idx) => (
-                  <li key={`${it.note}-${idx}`}>
-                    <span className={`lint-sev lint-sev-${it.severity}`}>{it.severity}</span>{' '}
-                    <button className="lint-note" onClick={() => window.svp.openWiki(it.note)}>
-                      {it.note}
-                    </button>{' '}
-                    — {it.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </>
       )}
     </section>

@@ -1250,7 +1250,40 @@ select:focus-visible {
   font-weight: 600;
 }
 
-/* ── Wiki lint findings (StatusBoard 위키 점검 블록에서 사용) ─── */
+/* ── Wiki lint report (full-bleed strip) ─── */
+.lint-card {
+  background: var(--glass-raised);
+  border-bottom: 1px solid var(--hair-faint);
+  padding: 14px 24px;
+}
+
+.lint-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.lint-head .toast-close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--dust);
+  cursor: pointer;
+}
+
+.lint-count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--dust);
+}
+
+.lint-ok {
+  font-size: 12px;
+  color: var(--turquoise);
+  margin-top: 8px;
+}
+
 .lint-list {
   margin: 10px 0 0 18px;
   font-size: 12px;
@@ -1871,46 +1904,6 @@ body.frameless .workspace {
   font-size: 12px;
   color: var(--dust);
   font-variant-numeric: tabular-nums;
-}
-
-/* 위키 헬스 칩 — 접혀 있어도 헤더에서 항상 보이는 상시 지표 */
-.sb-health {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--hair-faint);
-  background: var(--glass-raised);
-  font-variant-numeric: tabular-nums;
-}
-
-.sb-health.good {
-  color: #6fcf7f;
-}
-
-.sb-health.warn {
-  color: #f5b23a;
-}
-
-.sb-health.crit {
-  color: var(--vermilion);
-}
-
-.sb-refresh {
-  border: none;
-  background: transparent;
-  color: var(--dust);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 150ms;
-}
-
-.sb-refresh:hover {
-  opacity: 1;
-  color: var(--lamplight);
 }
 @media (prefers-reduced-motion: reduce) {
   .sb-chev {
