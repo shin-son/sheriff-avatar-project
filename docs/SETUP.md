@@ -44,7 +44,7 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `SVP_RECUR_BOOST_CAP` | `4` | query 시 재발 가중 상한 — 재발 count가 n인 anchor 엔트리는 점수 `+min(n-1, cap)` |
 | `SVP_FEEDBACK_DEMOTE` | `3` | 👎(원인 불일치) 누적이 이 값 이상이고 👍보다 많은 노트는 query 점수 반감 (F8) |
 | `SVP_COMMENT_CHANNEL` | `rest` | 분석 코멘트 전송 채널: `rest`=Jira REST 직접 / `mcp`=headless claude가 MCP 서버의 Jira 툴로 기입 (서버 호스트에 claude CLI + MCP 설정 json 필요). 이름 미설정·호출 실패 시 REST 폴백. write 게이트를 따른다 |
-| `SVP_COMMENT_MCP_NAME` | (없음) | claude MCP 설정(json)에 등록된 MCP 서버 이름 — `mcp` 채널이 `--allowedTools mcp__<이름>`으로 호출 |
+| `SVP_COMMENT_MCP_NAME` | (없음) | claude MCP 설정(json)에 등록된 MCP 서버 이름 — `mcp` 채널이 `--allowedTools Read,mcp__<이름>`으로 호출 |
 | `SVP_TEST_LABEL` | `svp-test` | `label` 모드에서 write를 허용하는 Jira 라벨 |
 | `SVP_WIKI_DIR` | `<repo>/wiki-vault` | 서버가 분류 근거로 읽는 vault 경로. **앱도 인식** (선택) — 설정 시 "위키 열기/점검"이 이 경로(공유 vault)를 사용. 미설정 시 EXE는 설치 시점의 번들 스냅샷을 열므로 서버 vault와 어긋난다. **Obsidian 사용 시 머신당 최초 1회** 해당 폴더를 "Open folder as vault"로 등록해야 한다 — 미등록이면 `obsidian://` 열기가 "Unable to find a vault" 에러를 띄운다 (URI는 등록된 vault만 연다) |
 | `SVP_DEBUG_DUMP_DIR` | (없음 — 꺼짐) | 설정 시 신규 티켓의 수집 로그(description + Jenkins 구간)를 `<dir>/<티켓키>.log`로 저장 — ingest 전 수집 데이터 검증용 |
@@ -183,7 +183,8 @@ journalctl -u svp-server -f       # 로그 확인
      매칭 티켓 전부가 LLM 분류 대상이 된다 (write는 안 나가지만 호출 비용·로그 홍수)
    - summary: `SvpSelftest.test_auto_assign 실패 (ERROR_SVP_SELFTEST_MARKER)`
      — wiki 검색은 **제목 단어 기준**이라 노트 symptom의 원문 단어가 제목에 있어야 매칭된다
-   - description (선택 — module +3점 매칭용):
+   - description (선택 — 노트 매칭은 제목 키워드·노트 신호 기반이다. Jira 유입 티켓의 module은
+     normalize가 `unknown`으로 고정하므로 module +3점 매칭은 발동하지 않는다):
 
      ```
      type: test_failed

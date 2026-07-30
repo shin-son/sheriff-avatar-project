@@ -316,7 +316,8 @@ feedback→lint가 "쓸데없는 정보가 wiki를 오염시키지 않게 하는
 
 - **vault에는 wiki 구성 요소만 둔다.** 사람용 절차·가이드 문서는 `docs/`로.
 - 자동 파일(index/log/case-log/raw)은 사람이 편집하지 않는다. 그 외 모든 노트 변경은 코드와 동일하게 PR 리뷰를 거친다.
-- **`raw/`는 query·index·lint 대상이 아니다** — 증거 보존과 드릴다운(분류 근거 검증) 용도.
+- **`raw/`는 서버의 query·index 대상이 아니다** — 증거 보존과 드릴다운(분류 근거 검증) 용도.
+  (한계: 앱의 lint/index 재생성은 `raw/` 제외가 없어, raw가 쌓인 vault를 앱에서 점검하면 raw가 함께 잡힌다.)
   압축된 검색 신호는 case-log와 모듈 노트가 담당한다 (서버 query·index 코드가 `raw/`와
   `.` 시작 파일·폴더를 제외한다).
 - 운영 vault의 raw에는 사내 티켓·CI 로그·Gerrit 소스 diff 원문이 그대로 담긴다 —

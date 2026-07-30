@@ -21,7 +21,8 @@ envelope 없음 — 모든 이벤트 payload는 bare 객체다. 재접속은 soc
 | C→S | `wiki:feedback` | `{ note: string, helpful: boolean }` | 참조 노트 일치/불일치 피드백. **키 이름은 `note`**(값은 노트 제목) — 서버 vault에 누적, 👎 누적 노트는 query 감점 |
 
 `SheriffIssue`는 `candidates?: CandidateAssignee[]`를 포함한다 — confidence ≤ 80일 때 서버가 빌드한
-human-in-the-loop 배정 후보(gerrit/wiki/case-log 출처).
+human-in-the-loop 배정 후보. 출처는 `gerrit`(TC 파일 마지막 커미터)·`wiki`(모듈 노트 owner) 2종
+(`case-log`는 타입에 예약만 되어 있고 현재 생성 코드 없음).
 
 ## 2. 서버 ↔ Jira (REST v2)
 
@@ -97,11 +98,13 @@ human-in-the-loop 배정 후보(gerrit/wiki/case-log 출처).
 
 ## 6. 환경변수
 
-코드가 실제 `process.env`로 읽는 것 전부. 클라이언트 앱에 필요한 것은 `SVP_PUSH_URL` 하나뿐이다.
+코드가 실제 `process.env`로 읽는 것 전부. 클라이언트 앱의 필수 설정은 `SVP_PUSH_URL` 하나다
+(선택: 표시 모드 `SVP_GLASS`, 로컬 lint 대상 `SVP_WIKI_DIR`).
 
 | 변수 | 기본값 | 읽는 곳 |
 |---|---|---|
 | `SVP_PUSH_URL` | `http://localhost:8793` | 앱(`src/main/index.ts`) — 서버 Socket.IO 주소 |
+| `SVP_GLASS` | (없음 — Win11 acrylic, 미만 solid) | 앱 — 배경 모드 `acrylic`/`solid`/`frameless` |
 | `SVP_SERVER_PORT` / `SVP_SERVER_POLL_MS` | `8793` / `5000` | server — 리슨 포트 / 폴링 주기 |
 | `SVP_JIRA_BASE_URL` / `SVP_JIRA_PAT` | `http://localhost:8792` / (없음) | server — Jira 주소 / Bearer PAT |
 | `SVP_JIRA_JQL` / `SVP_JIRA_BOT` | `project = CIOPS AND labels = ci-failure` / `cicd_ap` | server — base JQL / bot 계정(= 사람 배정 전) |

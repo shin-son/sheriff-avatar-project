@@ -70,7 +70,7 @@ npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 src/main/                        Electron 메인 프로세스 (v3: 순수 클라이언트 — 로그인·push 수신·UI)
   modules/push/                  중앙 서버 Socket.IO 접속 — 로그인·이슈 push 수신, 재배정·피드백 송신
   modules/notifications/         하단 팝업(toast) 알림 창 관리
-  modules/wiki/                  LLM-WIKI 어댑터 — query/ingest는 서버로 이동 완료, 앱에는 lint(위키 점검)만 잔류
+  modules/wiki/                  LLM-WIKI 어댑터 — query/ingest는 서버로 이동 완료, 앱에는 lint(위키 점검)·로컬 피드백 기록·vault 경로 해석만 잔류
   modules/jira|websocket|hub|hub-client|classifier|assignment/
                                  v2 잔재 — 앱에서 기동하지 않는 dead code. 금요일 정리 PR에서 삭제 예정
 server/                          v3 서버 (headless Node, plain .mjs) — Linux systemd 운영

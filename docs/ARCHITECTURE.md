@@ -13,7 +13,7 @@
   로그인 → push 수신 → UI 렌더링만 한다. 역할 구분은 서버 측 필터링 하나로 끝난다:
   member 세션에는 자기 배정분만, sheriff 세션에는 전체 이슈를 push.
 - **비밀정보는 서버에만 존재한다.** Jira PAT·Jenkins token·LLM 자격증명은 서버 호스트의 `.env`에만.
-  클라이언트 설정은 `SVP_PUSH_URL` 하나 (기본 `http://localhost:8793`).
+  클라이언트 필수 설정은 `SVP_PUSH_URL` 하나 (기본 `http://localhost:8793`; 선택 옵션은 API.md §6).
 - 이슈 유입은 **Jira 티켓 폴링**이다. 사내 CI/CD가 실패 시 Jira 티켓을 자동 생성하고(기존 사내 인프라),
   서버가 Jira REST를 주기 폴링해 감지한다. 클라이언트는 Jira·WIKI·LLM에 직접 접근하지 않는다.
 
@@ -193,8 +193,8 @@ flowchart TB
 - toast 팝업(TTL 9초), tray 상주(닫기 = tray로 숨김) + 알림 음소거.
 - sheriff 전용: 수동 재배정(`issue:reassign` — 후보 버튼은 `buildCandidates` 결과), 위키 열기(`obsidian://`,
   미등록 시 OS 기본), 위키 점검(lint — 클라이언트 로컬 vault 대상).
-- member: **resolved 이슈의 DetailPanel에서** 참조 노트의 "원인 일치/불일치" 피드백 → `wiki:feedback`으로
-  서버 vault에 누적 (query 감점 루프의 입력).
+- 피드백: **resolved 이슈에서** 참조 노트의 "원인 일치/불일치" 판정 (member는 CompactView,
+  sheriff는 DetailPanel) → `wiki:feedback`으로 서버 vault에 누적 (query 감점 루프의 입력).
 
 ## vault 저장소와 리뷰 경계
 

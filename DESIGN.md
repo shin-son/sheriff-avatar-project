@@ -51,7 +51,7 @@ Signal Red (`--vermilion`) punctuates — critical severity and disconnects only
 
 ### StatusBoard (당번 전용 현황판)
 - warn `#f5b23a` · info `--sky` · good `#6fcf7f` — module status segments/counts
-- source badges: gerrit `#ffa500`, wiki `--sky`, case-log `#78dc78`
+- source badges: gerrit `#ffa500`, wiki `--sky`, case-log `#78dc78` (case-log는 타입 예약값 — 현재 런타임 미발생)
 
 ## 3. Typography
 
@@ -90,7 +90,7 @@ labels, ws-status, key caps. UI strings are Korean; identifiers/comments English
 
 **Buttons (`.btn`)** — glass pill: radius 999px, `--glass-raised` bg, hair border,
 inset top highlight `rgba(255,255,255,0.1) 0 1px 0 inset`. Hover = opacity 0.6 (no
-color swap). `.btn-primary` (배정 확인, 해결 완료): `rgba(255,255,255,0.815)` bg,
+color swap). `.btn-primary` (로그인, "티켓 확인 ↗"): `rgba(255,255,255,0.815)` bg,
 `--ink-deep` text, hover to full white.
 
 **Search (`.search`)** — quiet glass pill; focus blooms the signature blue:
