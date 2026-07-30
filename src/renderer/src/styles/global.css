@@ -1308,6 +1308,27 @@ select:focus-visible {
   text-decoration: underline;
 }
 
+/* Severity badge on server lint findings */
+.lint-sev {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--glass-raised);
+  color: var(--dust);
+}
+
+.lint-sev-critical {
+  color: var(--vermilion);
+  background: rgba(255, 99, 99, 0.14);
+}
+
+.lint-sev-warn {
+  color: var(--brass);
+  background: var(--brass-dim);
+}
+
 /* ── Compact member view ─────────────────── */
 .compact {
   flex: 1;
