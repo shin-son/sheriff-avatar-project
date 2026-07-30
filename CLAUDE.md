@@ -8,8 +8,8 @@
 
 LLM-WIKI 기반 Sheriff Agent Windows 데스크톱 앱 (Electron + React + TypeScript).
 
-- 사내 CI/CD에서 이슈(TEST FAILED 등)가 발생하면 **WebSocket**으로 앱에 수신된다.
-- LLM이 **LLM-WIKI**(`wiki-vault/`, Obsidian 호환 마크다운)를 참조해 이슈를 분류하고 **신뢰도 점수(0~100)** 를 매긴다.
+- 사내 CI/CD에서 이슈(TEST FAILED 등)가 발생하면 Jira에 티켓이 생기고, **서버(`server/`)가 REST 폴링**으로 수집해 앱에는 **Socket.IO push**로 전달된다.
+- 서버의 LLM이 **LLM-WIKI**(`wiki-vault/`, Obsidian 호환 마크다운)를 참조해 이슈를 분류하고 **신뢰도 점수(0~100)** 를 매긴다.
 - **신뢰도 > 80점** → 해당 FEATURE(ip) 담당자에게 배정. **80점 이하** → Sheriff(당번)에게 배정 (human-in-the-loop).
 - 팀원 전원이 EXE로 앱을 설치한다. 일반 팀원은 **자기에게 배정된 이슈만**, 당번은 **모든 이슈**를 본다.
 - 이슈 처리 결과는 다시 LLM-WIKI에 기록되어 다음 분류의 근거가 된다.
@@ -55,34 +55,40 @@ npm run mock:jira    # mock Jira 서버 (별도 터미널, 포트 8792)
 npm run mock:jenkins # mock Jenkins 서버 (별도 터미널, 포트 8794) — 콘솔 로그 소스
 npm run server       # v3 서버 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로. 운영은 Linux systemd
 npm run typecheck    # 타입 체크
+npm test             # 서버 순수 함수 테스트 (node --test, server/**/*.test.mjs)
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
 
 로컬 개발은 `mock:jira` → `mock:jenkins` → `server`를 띄우고 `dev`를 실행한다 (`mock:ci`/`mock:push`는
-구세대 — 정리 예정). 설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
+구세대 — 정리 예정. 특히 `mock:push`는 8793 포트라 `server`와 동시 실행 금지).
+설정(.env)·사내 테스트·트러블슈팅은 [docs/SETUP.md](./docs/SETUP.md).
 
 ## 모듈 맵
 
 ```
 src/main/                        Electron 메인 프로세스 (v3: 순수 클라이언트 — 로그인·push 수신·UI)
-  modules/push/                  중앙 서버 Socket.IO 접속 — 로그인·이슈 push 수신·ack (임시 계약)
+  modules/push/                  중앙 서버 Socket.IO 접속 — 로그인·이슈 push 수신, 재배정·피드백 송신
   modules/notifications/         하단 팝업(toast) 알림 창 관리
-  modules/wiki/                  LLM-WIKI 어댑터 — query는 server/wiki-query.mjs로 포팅됨, ingest/lint는 서버 이동 예정
+  modules/wiki/                  LLM-WIKI 어댑터 — query/ingest는 서버로 이동 완료, 앱에는 lint(위키 점검)만 잔류
   modules/jira|websocket|hub|hub-client|classifier|assignment/
-                                 v2 잔재 — 앱에서 더 이상 기동하지 않음. 서버(src/server/) 승격 시
-                                 이동/정리 (docs/ARCHITECTURE.md 이행 계획)
+                                 v2 잔재 — 앱에서 기동하지 않는 dead code. 금요일 정리 PR에서 삭제 예정
 server/                          v3 서버 (headless Node, plain .mjs) — Linux systemd 운영
-  index.mjs                      폴링 → 라우팅 → Socket.IO push + SVP_JIRA_WRITE_MODE 게이트
-  classifier.mjs                 F3 — Claude 분류 (bedrock/bedrock-invoke/anthropic, 실패 시 fallback)
-  wiki-query.mjs                 vault 검색 + 노트 frontmatter owner 해석 (담당자 매핑)
+  index.mjs                      폴링 → 라우팅 → 분류 게이트 → Socket.IO push + SVP_JIRA_WRITE_MODE 게이트
+  classifier.mjs                 Claude 분류·노트 선택·해결 요약 (bedrock/bedrock-invoke/anthropic, 실패 시 fallback)
+  wiki-query.mjs                 vault 검색(+re-occurrence boost·supersede·feedback 감점) + owner 해석 + 담당자 후보(Gerrit)
+  ingest.mjs                     해결 티켓 → raw 동결·case-log 기록·index/log 재생성 + 중복 제거(signature)
   jira.mjs                       Jira write 3종 (assignee·댓글 템플릿·전이)
-  jenkins.mjs                    티켓 링크의 Jenkins 빌드 콘솔 로그(consoleText 꼬리) 수집 — 분류·ingest 로그 보강
+  jenkins.mjs                    Jenkins 중계 빌드 → 실패 샤드 → 해당 TC 실행 구간 로그 추출 (폴백 경로)
+  ci-test-fetch.mjs              사내 python tool 기반 1차 로그 수집 + format-ci-log 스킬 연동
+  cache.mjs                      issue-cache.json 영속화 (재시작 시 재수집·재분류 방지)
+  comment-channel.mjs            Jira 댓글 전송 채널 (rest/mcp)
+  *.test.mjs                     순수 함수 단위 테스트 22종 (npm test)
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정
 wiki-vault/                      LLM-WIKI (Obsidian 호환 마크다운)
-mock/                            mock CI/CD 서버
+mock/                            mock Jira(8792)·Jenkins(8794) 서버
 ```
 
 - 모듈 간 통신은 `src/shared/types.ts`의 타입으로만 한다. 모듈이 다른 모듈 내부 파일을 직접 import하지 않는다.
@@ -119,17 +125,17 @@ mock/                            mock CI/CD 서버
 
 ## 일정
 
-구현 완료 기한 **2026-08-01**. 주차별 모듈 분배와 마일스톤은 [docs/PLAN.md](./docs/PLAN.md).
+구현 완료 — **2026-07-30 코드 프리즈**, 이후 fix/docs 커밋만. 개발 기록은 [docs/PLAN.md](./docs/PLAN.md).
 
 ## LLM-WIKI 규칙 (`wiki-vault/`)
 
 - Karpathy의 llm-wiki 컨셉을 따른다 (원문: [docs/llm-wiki-concept.md](./docs/llm-wiki-concept.md)): **1차 독자는 사람이 아니라 LLM이다.** 애매한 표현 대신 명시적 사실·조건·담당자를 쓴다.
 - 3계층 매핑 — raw sources: CI 로그/이슈 이벤트(불변, 해결 확정 시 `wiki-vault/raw/`에 원문 사본 동결), wiki: `wiki-vault/`(LLM이 작성·유지), schema: 이 섹션 + [wiki-vault/README.md](./wiki-vault/README.md)(상세 스키마: 구조·노트 템플릿·역할).
 - 노트 하나 = 주제 하나 (모듈별 known-failure, case-log). 사람용 절차 문서는 vault가 아니라 `docs/`에 둔다.
-- 핵심 동작 4가지 (`src/main/modules/wiki/`):
-  - **query** — 분류 시 관련 노트 검색 (`index.md`를 카탈로그로 사용)
-  - **ingest** — 해결된 이슈를 case-log에 기록 + `index.md`/`log.md` 자동 갱신
-  - **lint** — 고아 노트·부정 피드백 누적 노트 점검 (당번이 주기 실행)
-  - **feedback** — 담당자의 노트 유용성 👍/👎. 부정 누적(👎3+) 노트는 query 감점 → lint 정리 후보. **쓸데없는 정보는 이 루프로 제거한다.**
-- `index.md`/`log.md`는 앱이 자동 갱신 — 수동 편집 금지.
+- 핵심 동작 4가지:
+  - **query** (`server/wiki-query.mjs`) — 분류 시 관련 노트 검색. 재발 가중(recurrence boost)·reopen 시 최신 결론 우선(supersede)·피드백 감점 반영
+  - **ingest** (`server/ingest.mjs`) — 해결된 이슈를 raw 동결 + case-log 기록 + `index.md`/`log.md` 자동 갱신. 동일 signature 재발은 포인터로 축약
+  - **lint** (`src/main/modules/wiki/`) — 고아 노트·부정 피드백 누적 노트 점검 (당번이 앱에서 실행)
+  - **feedback** — 담당자가 참조 노트의 원인 일치/불일치 판정 → 서버가 `<vault>/.feedback.json`에 집계. 불일치 누적(기본 3+) 노트는 query 감점 → lint 정리 후보. **쓸데없는 정보는 이 루프로 제거한다.**
+- `index.md`/`log.md`는 서버가 자동 갱신 — 수동 편집 금지.
 - wiki 내용 변경도 코드와 동일하게 PR 리뷰를 거친다.
