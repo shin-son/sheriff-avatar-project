@@ -2,14 +2,16 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { appendFile, readFile, readdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
-import type { CIEvent, SheriffIssue, WikiLintReport, WikiMatch } from '@shared/types'
+import type { CIEvent, SheriffIssue, WikiMatch } from '@shared/types'
 
 /**
  * LLM-WIKI adapter. Implements the four core operations of the llm-wiki
  * pattern (docs/llm-wiki-concept.md):
  *   query    — find notes relevant to a CI event (used by the classifier)
  *   ingest   — file a resolved issue back into the wiki (case-log + log + index)
- *   lint     — health-check: orphan notes, negative-feedback notes
+ *   lint     — moved to the server (server/wiki-lint.mjs) — the live vault is
+ *              what needs checking, and the old local check was self-defeating
+ *              (its own rebuildIndex() made every note referenced)
  *   feedback — 👍/👎 votes on note usefulness; the loop that keeps junk out
  */
 
@@ -139,46 +141,6 @@ export async function ingestResolvedIssue(issue: SheriffIssue): Promise<void> {
     await rebuildIndex()
   } catch (err) {
     console.error('[svp:wiki] ingest failed', err)
-  }
-}
-
-/* ── lint ─────────────────────────────────────────────────────────────── */
-
-export async function lintWiki(): Promise<WikiLintReport> {
-  const root = vaultDir()
-  const files = await listMarkdownFiles(root)
-  const contents = new Map<string, string>()
-  for (const file of files) {
-    contents.set(toTitle(file, root), await readFile(file, 'utf-8'))
-  }
-  const notes = [...contents.keys()].filter((t) => !INFRA_FILES.has(t))
-  const fb = loadFeedback()
-
-  // Orphan: no other file (including README/index) mentions this note.
-  const orphanNotes = notes.filter((title) => {
-    const name = title.split('/').pop() as string
-    return ![...contents.entries()].some(([other, body]) => other !== title && body.includes(name))
-  })
-  const unhelpfulNotes = notes.filter((t) => isUnhelpful(t, fb))
-
-  const suggestions = [
-    ...orphanNotes.map((t) => `『${t}』를 참조하는 노트가 없음 — 관련 노트에서 링크하거나 통합을 검토할 것`),
-    ...unhelpfulNotes.map((t) => `『${t}』에 부정 피드백 누적 — 내용을 재검토하고 수정 또는 삭제할 것`)
-  ]
-
-  try {
-    await appendLog('lint', `notes=${notes.length} orphans=${orphanNotes.length} unhelpful=${unhelpfulNotes.length}`)
-    await rebuildIndex()
-  } catch (err) {
-    console.error('[svp:wiki] lint bookkeeping failed', err)
-  }
-
-  return {
-    generatedAt: new Date().toISOString(),
-    noteCount: notes.length,
-    orphanNotes,
-    unhelpfulNotes,
-    suggestions
   }
 }
 
