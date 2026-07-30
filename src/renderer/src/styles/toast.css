@@ -23,10 +23,11 @@
 }
 
 :root {
-  --ink-deep: #110d0a;
-  --leather-2: #2b2219;
-  --lamplight: #f0e8d8;
-  --dust: #a8987f;
+  /* global.css :root와 동기화 — 토스트도 같은 cold 캔버스 팔레트를 쓴다
+     (brass = 유일한 웜 요소). 값이 어긋나면 global.css가 정답. */
+  --ink-deep: #18191a;
+  --lamplight: #f9f9f9;
+  --dust: #9c9c9d;
   --brass: #d9a441;
   --font-body: 'Pretendard Variable', 'Segoe UI', 'Malgun Gothic', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Malgun Gothic', monospace;
@@ -67,7 +68,7 @@ body.toast-body {
   border-radius: 22px;
   /* The toast window is transparent (no acrylic), so fake the glass with a
      high-alpha tint + highlight border to match the main window's panels. */
-  background: rgba(30, 30, 34, 0.92);
+  background: rgba(10, 11, 14, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-left: 3px solid var(--brass);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
@@ -109,7 +110,7 @@ body.toast-body {
 }
 
 .star-badge.low {
-  background: var(--leather-2);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .star-badge.low .star-num {

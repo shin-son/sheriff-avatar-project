@@ -7,7 +7,7 @@ import DetailPanel from './components/DetailPanel'
 import IssueCard from './components/IssueCard'
 import LoginView from './components/LoginView'
 import StatusBoard from './components/StatusBoard'
-import { deriveStats } from './stats'
+import { deriveStats, moduleOf } from './stats'
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
@@ -157,7 +157,7 @@ export default function App() {
         [
           i.event.jira?.key ?? '',
           i.event.title,
-          i.event.module,
+          moduleOf(i),
           i.event.branch,
           i.assignment.assigneeName
         ].some((s) => s.toLowerCase().includes(q))
@@ -301,6 +301,7 @@ export default function App() {
                 issues={triage}
                 selectedId={selectedId}
                 focusId={focusId}
+                confidenceMin={state.confidenceMin}
                 onSelect={setSelectedId}
               />
               <Lane
@@ -309,6 +310,7 @@ export default function App() {
                 issues={stream}
                 selectedId={selectedId}
                 focusId={focusId}
+                confidenceMin={state.confidenceMin}
                 onSelect={setSelectedId}
               />
               <Lane
@@ -318,6 +320,7 @@ export default function App() {
                 issues={done}
                 selectedId={selectedId}
                 focusId={focusId}
+                confidenceMin={state.confidenceMin}
                 onSelect={setSelectedId}
               />
             </div>
@@ -329,6 +332,7 @@ export default function App() {
           key={selected.event.id}
           issue={selected}
           team={state.team}
+          confidenceMin={state.confidenceMin}
           onClose={() => setSelectedId(null)}
           onReassign={(id, assigneeId) => window.svp.reassignIssue(id, assigneeId)}
         />
@@ -359,6 +363,7 @@ function Lane({
   issues,
   selectedId,
   focusId,
+  confidenceMin,
   onSelect
 }: {
   title: string
@@ -367,6 +372,7 @@ function Lane({
   issues: SheriffIssue[]
   selectedId: string | null
   focusId: string | null
+  confidenceMin: number
   onSelect: (id: string) => void
 }) {
   return (
@@ -386,6 +392,7 @@ function Lane({
               index={idx}
               selected={issue.event.id === selectedId}
               highlighted={focusId === issue.event.id}
+              confidenceMin={confidenceMin}
               onSelect={onSelect}
             />
           ))

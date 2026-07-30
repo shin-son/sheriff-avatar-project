@@ -59,14 +59,27 @@ export default function CompactView({
           </div>
         )}
         {issues.map((issue) => (
-          <CompactItem key={issue.event.id} issue={issue} highlighted={focusId === issue.event.id} />
+          <CompactItem
+            key={issue.event.id}
+            issue={issue}
+            highlighted={focusId === issue.event.id}
+            confidenceMin={state.confidenceMin}
+          />
         ))}
       </div>
     </div>
   )
 }
 
-function CompactItem({ issue, highlighted }: { issue: SheriffIssue; highlighted: boolean }) {
+function CompactItem({
+  issue,
+  highlighted,
+  confidenceMin
+}: {
+  issue: SheriffIssue
+  highlighted: boolean
+  confidenceMin: number
+}) {
   const { event, classification, assignment, status } = issue
   // 해결한 담당자가 근거 노트를 평가한다 — 실제로 고친 사람이 노트의 유효성을
   // 가장 잘 안다 (feedback loop, CLAUDE.md wiki 규칙). 해결 확정 후에만 노출.
@@ -99,7 +112,7 @@ function CompactItem({ issue, highlighted }: { issue: SheriffIssue; highlighted:
       <div className="citem-title">{event.title}</div>
       <div className="citem-meta">
         <span
-          className={`star-badge star-sm ${classification.confidence > 80 ? 'high' : 'low'}`}
+          className={`star-badge star-sm ${classification.confidence > confidenceMin ? 'high' : 'low'}`}
           title={`신뢰도 ${classification.confidence}`}
         >
           <span className="star-num">{classification.confidence}</span>

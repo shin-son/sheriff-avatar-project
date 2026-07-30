@@ -1,19 +1,22 @@
 import { useState } from 'react'
 import type { CandidateAssignee, SheriffIssue, TeamMember } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
+import { moduleOf } from '../stats'
 
 interface Props {
   issue: SheriffIssue
   team: TeamMember[]
+  /** 자동 배정 게이트(서버 설정) — 스타 표기·후보 합성 기준. */
+  confidenceMin: number
   onClose: () => void
   /** 수동 배정 (F4) — 서버가 Jira assignee를 갱신, 반영은 issue:updated로 돌아온다. */
   onReassign: (id: string, assigneeId: string) => void
 }
 
 /** Floating glass panel with the selected issue's detail (reference: detached side card). */
-export default function DetailPanel({ issue, team, onClose, onReassign }: Props) {
+export default function DetailPanel({ issue, team, confidenceMin, onClose, onReassign }: Props) {
   const { event, classification, assignment, status } = issue
-  const confClass = classification.confidence > 80 ? 'high' : 'low'
+  const confClass = classification.confidence > confidenceMin ? 'high' : 'low'
   const [pick, setPick] = useState('')
   // Feedback loop (CLAUDE.md wiki 규칙): 담당자의 노트 유용성 투표. 한 이슈에서
   // 노트당 1회 — 저장은 main의 feedback store, lint가 부정 누적을 읽는다.
@@ -24,22 +27,19 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
   }
 
   // Module owners first in the picker (wiki frontmatter → TeamMember.ownedModules).
-  // The classifier's category is the trusted module; CI's own module field is the fallback.
-  const module =
-    classification.category && classification.category !== 'unknown'
-      ? classification.category
-      : event.module
+  // moduleOf: 분류 category 우선, CI module은 fallback (표시·검색·현황 공통 규칙).
+  const module = moduleOf(issue)
   const isOwner = (m: TeamMember) => m.ownedModules.includes(module)
   const teamCandidates = team
     .filter((m) => m.role === 'member')
     .sort((a, b) => Number(isOwner(b)) - Number(isOwner(a)))
 
   // 서버가 내려준 candidates(Gerrit 커미터 등 더 강한 신호)를 우선 사용한다.
-  // 없고 confidence ≤ 80(당번 큐)이면 wiki 담당자 신호로 합성해, 서버 데이터와
-  // 무관하게 항상 클릭 가능한 후보 버튼을 보여준다.
+  // 없고 confidence가 게이트 이하(당번 큐)면 wiki 담당자 신호로 합성해, 서버
+  // 데이터와 무관하게 항상 클릭 가능한 후보 버튼을 보여준다.
   const smartCandidates: CandidateAssignee[] = issue.candidates?.length
     ? issue.candidates
-    : classification.confidence <= 80
+    : classification.confidence <= confidenceMin
       ? teamCandidates.filter(isOwner).map((m) => ({
           id: m.id,
           name: m.name,
@@ -201,7 +201,7 @@ export default function DetailPanel({ issue, team, onClose, onReassign }: Props)
         )}
 
         <div className="detail-section detail-meta">
-          {event.module} · {event.branch} · {formatIssueTime(event.timestamp)}
+          {module} · {event.branch} · {formatIssueTime(event.timestamp)}
         </div>
       </div>
     </aside>

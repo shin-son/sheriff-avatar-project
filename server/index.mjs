@@ -257,7 +257,8 @@ function roster() {
 function addMember(id) {
   if (!id || knownMembers.has(id)) return
   knownMembers.add(id)
-  for (const [, s] of sessions) s.socket.emit('session', { user: s.socket.data.user, team: roster() })
+  for (const [, s] of sessions)
+    s.socket.emit('session', { user: s.socket.data.user, team: roster(), confidenceMin: CONFIDENCE_MIN })
 }
 
 function recipientsOf(issue, extra = []) {
@@ -279,7 +280,8 @@ io.on('connection', (socket) => {
   sessions.get(user.userId)?.socket.disconnect(true)
   sessions.set(user.userId, { socket, role: user.role })
 
-  socket.emit('session', { user, team: roster() })
+  // confidenceMin: 앱의 브래스 스타 표기가 서버 게이트와 같은 기준을 쓰게 한다.
+  socket.emit('session', { user, team: roster(), confidenceMin: CONFIDENCE_MIN })
   // Replay this session's visible unresolved issues (login/reconnect restore).
   const visible = [...issues.values()].filter(
     (i) => i.status !== 'resolved' && (user.role === 'sheriff' || i.assignment.assigneeId === user.userId)

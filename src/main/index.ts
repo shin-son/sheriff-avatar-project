@@ -29,6 +29,9 @@ let authed = false
 // Placeholder until login — the login window uses the compact (member) size.
 let userConfig: UserConfig = { userId: '', role: 'member' }
 let team: TeamMember[] = []
+// 자동 배정 게이트 (서버 SVP_LLM_CONFIDENCE_MIN) — 세션이 내려준다. 브래스 스타
+// 뱃지가 이 값 기준으로 찍혀야 레인 배치와 시각 표기가 일치한다.
+let confidenceMin = 80
 let pushListener: PushListener | null = null
 let sessionStartedAt = 0
 
@@ -173,7 +176,7 @@ function applyPushedIssue(issue: SheriffIssue): void {
   mainWindow?.webContents.send(idx === -1 ? 'issue:new' : 'issue:updated', issue)
   const replaying = Date.now() - sessionStartedAt < 3000
   if (!notificationsMuted && !replaying && !issue.restored && isRelevantTo(issue, userConfig))
-    toasts.show(issue)
+    toasts.show(issue, confidenceMin)
 }
 
 // Login = opening the push session. The server authenticates the credentials,
@@ -205,6 +208,7 @@ function connectAndLogin(username: string, password: string): Promise<PushSessio
           // 로그인 후에도 서버가 roster 갱신을 내려준다 (새 팀원 로그인/assignee
           // 등장) — F4 배정 후보 목록이 로그인 시점 스냅샷에 갇히지 않게 반영.
           team = session.team
+          confidenceMin = session.confidenceMin ?? confidenceMin
           mainWindow?.webContents.send('state:refresh')
           return
         }
@@ -224,6 +228,15 @@ function connectAndLogin(username: string, password: string): Promise<PushSessio
   })
 }
 
+// 설치형(EXE)에서만 단일 인스턴스 강제 — 이중 실행 시 두 번째 로그인이 첫
+// 창의 서버 세션을 끊어버린다(트레이 아이콘·토스트도 중복). dev는 당번+팀원
+// 동시 확인을 위해 인스턴스 2개가 필요하므로(SETUP.md) 제외한다.
+if (app.isPackaged && !app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showMainWindow())
+}
+
 app.whenReady().then(() => {
   notificationsMuted = loadNotificationsMuted()
   createMainWindow()
@@ -231,7 +244,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     'state:get',
-    (): AppState => ({ issues, team, user: userConfig, wsStatus, notificationsMuted, authed })
+    (): AppState => ({ issues, team, user: userConfig, wsStatus, notificationsMuted, authed, confidenceMin })
   )
 
   ipcMain.handle('auth:login', async (_e, username: string, password: string) => {
@@ -239,6 +252,7 @@ app.whenReady().then(() => {
       const session = await connectAndLogin(String(username ?? '').trim(), String(password ?? ''))
       userConfig = session.user
       team = session.team
+      confidenceMin = session.confidenceMin ?? 80
       authed = true
       issues.splice(0, issues.length) // fresh session — the server replays what we should see
       applyWindowMode(userConfig.role)

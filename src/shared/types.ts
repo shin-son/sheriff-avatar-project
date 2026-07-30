@@ -100,38 +100,6 @@ export interface UserConfig {
 
 export type WsStatus = 'connected' | 'disconnected' | 'connecting'
 
-// Client ↔ hub server WebSocket protocol (docs/API.md §1).
-// Every frame is one JSON envelope; unknown `type` must be ignored (forward compat).
-export const HUB_PROTOCOL_VERSION = 1
-
-export interface HubMessage {
-  v: number
-  type: string
-  ts: string
-  payload: unknown
-}
-
-export interface HubHelloPayload {
-  clientId: string
-  appVersion: string
-}
-
-export interface HubWelcomePayload {
-  user: UserConfig
-  team: TeamMember[]
-  /** Unresolved issues assigned to this client (state restore on reconnect). */
-  issues: SheriffIssue[]
-}
-
-export interface HubIssuePayload {
-  issue: SheriffIssue
-}
-
-export interface HubErrorPayload {
-  code: string
-  message: string
-}
-
 export type LintSeverity = 'critical' | 'warn' | 'info'
 
 /** One graded finding in a lint report (server lint, 제안 4 Phase 1). */
@@ -165,4 +133,6 @@ export interface AppState {
   notificationsMuted: boolean
   /** False until the server accepts a login — the renderer shows the login view. */
   authed: boolean
+  /** 자동 배정 게이트(서버 SVP_LLM_CONFIDENCE_MIN) — 브래스 스타 표기 기준. */
+  confidenceMin: number
 }

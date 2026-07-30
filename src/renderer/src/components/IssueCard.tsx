@@ -1,20 +1,30 @@
 import type { CSSProperties } from 'react'
 import type { SheriffIssue } from '@shared/types'
 import { TYPE_LABEL, formatIssueTime } from '../format'
+import { moduleOf } from '../stats'
 
 interface Props {
   issue: SheriffIssue
   selected: boolean
   highlighted: boolean
+  /** 자동 배정 게이트(서버 설정) — 브래스 스타는 이 기준을 넘어야 찍힌다. */
+  confidenceMin: number
   onSelect: (id: string) => void
   /** Position within its lane — drives the stagger reveal delay (global.css). */
   index?: number
 }
 
 /** One issue card inside a triage lane; click to open it in the floating detail panel. */
-export default function IssueCard({ issue, selected, highlighted, onSelect, index = 0 }: Props) {
+export default function IssueCard({
+  issue,
+  selected,
+  highlighted,
+  confidenceMin,
+  onSelect,
+  index = 0
+}: Props) {
   const { event, classification, assignment, status } = issue
-  const confClass = classification.confidence > 80 ? 'high' : 'low'
+  const confClass = classification.confidence > confidenceMin ? 'high' : 'low'
 
   return (
     <article
@@ -34,7 +44,7 @@ export default function IssueCard({ issue, selected, highlighted, onSelect, inde
         <div className="card-top">
           <span
             className={`star-badge star-sm ${confClass}`}
-            title={`신뢰도 ${classification.confidence} — 80 초과 시 자동 배정`}
+            title={`신뢰도 ${classification.confidence} — ${confidenceMin} 초과 시 자동 배정`}
           >
             <span className="star-num">{classification.confidence}</span>
           </span>
@@ -44,7 +54,7 @@ export default function IssueCard({ issue, selected, highlighted, onSelect, inde
         </div>
         <div className="row-title">{event.title}</div>
         <div className="row-meta">
-          {event.module} · {event.branch}
+          {moduleOf(issue)} · {event.branch}
         </div>
         <div className="row-assignee">{assignment.assigneeName}</div>
       </button>
