@@ -25,7 +25,7 @@ import { fetchRawLogViaTool, formatLogViaSkill } from './ci-test-fetch.mjs'
 import { INGEST_MODE, ingestResolved } from './ingest.mjs'
 import { commentChannel, postAnalysisComment } from './comment-channel.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
-import { buildCandidates, listCatalog, listModules, queryWiki, readNotes, resolveOwner } from './wiki-query.mjs'
+import { buildCandidates, listCatalog, listModules, queryWiki, readNotes, recordFeedback, resolveOwner } from './wiki-query.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -351,6 +351,14 @@ io.on('connection', (socket) => {
       console.error(`[svp-server] reassign comment failed for ${key}: ${err.message}`) // 배정은 성공 — 계속
     }
     void poll() // sync가 assignee 변경을 읽어 기존/신규 담당자에게 issue:updated push
+  })
+
+  // C→S: 담당자의 노트 원인 일치/불일치 피드백 → 서버 vault에 누적 (queryWiki 감점, F8).
+  socket.on('wiki:feedback', (payload) => {
+    const note = String(payload?.note ?? '')
+    if (!note) return
+    const e = recordFeedback(note, Boolean(payload?.helpful))
+    console.log(`[svp-server] feedback from ${user.userId}: 『${note}』 ${payload?.helpful ? '일치' : '불일치'} (up=${e.up} down=${e.down})`)
   })
 
   socket.on('disconnect', () => {

@@ -12,6 +12,7 @@ const EVENT_SESSION = 'session'
 const EVENT_ISSUE_NEW = 'issue:new'
 const EVENT_ISSUE_UPDATED = 'issue:updated'
 const EVENT_ISSUE_REASSIGN = 'issue:reassign'
+const EVENT_WIKI_FEEDBACK = 'wiki:feedback'
 const AUTH_FAILED = 'AUTH_FAILED'
 
 /** Socket.IO push listener. Reconnection/backoff is handled by socket.io-client. */
@@ -59,6 +60,10 @@ export class SocketIoPushListener implements PushListener {
 
   reassignIssue(issueId: string, assigneeId: string): void {
     this.socket?.emit(EVENT_ISSUE_REASSIGN, { issueId, assigneeId })
+  }
+
+  sendFeedback(noteTitle: string, helpful: boolean): void {
+    this.socket?.emit(EVENT_WIKI_FEEDBACK, { note: noteTitle, helpful })
   }
 
   private dispatch(payload: unknown, handler: (issue: SheriffIssue) => void): void {

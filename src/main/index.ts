@@ -270,6 +270,8 @@ app.whenReady().then(() => {
   })
 
   ipcMain.on('wiki:feedback', (_e, noteTitle: string, helpful: boolean) => {
+    // 서버 vault로 전달 → queryWiki 감점(F8). 클라이언트 로컬 기록은 당번 위키 점검용으로 유지(v2 잔재).
+    pushListener?.sendFeedback(noteTitle, helpful)
     recordFeedback(noteTitle, helpful)
   })
 

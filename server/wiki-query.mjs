@@ -3,7 +3,7 @@
 // resolves owners from module-note frontmatter (wiki-vault/README.md schema):
 // the `owner:` field is the error→module→담당자 mapping the classifier acts on.
 // TODO(SVP-8): apply feedback-based demotion once server-side feedback lands.
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
@@ -18,6 +18,36 @@ const INFRA_FILES = new Set(['README.md', 'index.md', 'log.md'])
 const CASE_LOG = 'case-log.md'
 const SIG_INDEX_FILE = join(VAULT_DIR, 'raw', 'jira', '.signature-index.json')
 const RECUR_BOOST_CAP = Number(process.env.SVP_RECUR_BOOST_CAP ?? 4)
+// ③ 피드백 감점 (F8) — 담당자의 '원인 불일치' 누적 노트를 query에서 감점한다.
+// 서버 vault의 숨김 파일에 { <노트 제목>: { up, down } }로 누적 (listMarkdownFiles가 `.` 제외).
+const FEEDBACK_FILE = join(VAULT_DIR, '.feedback.json')
+const FEEDBACK_DEMOTE = Number(process.env.SVP_FEEDBACK_DEMOTE ?? 3)
+
+function loadFeedback() {
+  try {
+    return JSON.parse(readFileSync(FEEDBACK_FILE, 'utf-8'))
+  } catch {
+    return {}
+  }
+}
+
+/** 담당자 피드백 1건 누적 (helpful=원인 일치 → up, false=불일치 → down). 서버 소켓 핸들러가 호출. */
+export function recordFeedback(noteTitle, helpful) {
+  if (!noteTitle) return null
+  const fb = loadFeedback()
+  const e = fb[noteTitle] ?? { up: 0, down: 0 }
+  if (helpful) e.up += 1
+  else e.down += 1
+  fb[noteTitle] = e
+  writeFileSync(FEEDBACK_FILE, JSON.stringify(fb, null, 2), 'utf-8')
+  return e
+}
+
+/** ③ 불일치 누적(👎 threshold 이상, 그리고 일치보다 많음) 노트는 점수 반감. 순수 함수. */
+export function feedbackDemotion(score, entry, threshold = FEEDBACK_DEMOTE) {
+  if (entry && entry.down >= threshold && entry.down > (entry.up ?? 0)) return Math.floor(score / 2)
+  return score
+}
 
 function listMarkdownFiles(dir) {
   const out = []
@@ -220,6 +250,7 @@ export function queryWiki(event) {
     return []
   }
   const recCounts = loadRecurrenceCounts()
+  const feedback = loadFeedback()
   for (const file of files) {
     const content = readFileSync(file, 'utf-8')
     if (basename(file) === CASE_LOG) {
@@ -227,10 +258,11 @@ export function queryWiki(event) {
       for (const entry of caseLogEntries(content)) {
         const base = scoreText(entry.body, keywords, event, ticketText)
         if (base <= 0) continue
+        const score = base + recurrenceBoost(recCounts[entry.id])
         matches.push({
           file: `${CASE_LOG}#${entry.id}`,
           title: entry.title,
-          score: base + recurrenceBoost(recCounts[entry.id]),
+          score: feedbackDemotion(score, feedback[entry.title]), // ③
           body: entry.body,
           module: entry.module,
           owner: null
@@ -241,10 +273,11 @@ export function queryWiki(event) {
     const fm = parseFrontmatter(content)
     const score = scoreText(content, keywords, event, ticketText)
     if (score > 0) {
+      const title = toTitle(file, content)
       matches.push({
         file: relative(VAULT_DIR, file).replaceAll('\\', '/'),
-        title: toTitle(file, content),
-        score,
+        title,
+        score: feedbackDemotion(score, feedback[title]), // ③ 불일치 누적 노트 감점
         body: content,
         module: fm.module ?? null,
         owner: fm.owner ?? null

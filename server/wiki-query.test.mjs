@@ -1,7 +1,7 @@
 // retrieval 자기교정 Phase 1 — case-log 엔트리 파싱(①) + 재발 가중(②) 순수 함수 테스트.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { caseLogEntries, recurrenceBoost } from './wiki-query.mjs'
+import { caseLogEntries, recurrenceBoost, feedbackDemotion } from './wiki-query.mjs'
 
 test('caseLogEntries: 포인터(재발 추정/재해결 →) 엔트리는 제외한다 (①)', () => {
   const log = [
@@ -41,4 +41,12 @@ test('recurrenceBoost: count 1 이하는 0, 이상은 count-1 (상한 cap)', () 
   assert.equal(recurrenceBoost(undefined), 0)
   assert.equal(recurrenceBoost(3), 2)
   assert.equal(recurrenceBoost(10, 4), 4) // 상한
+})
+
+test('feedbackDemotion: 불일치 threshold 이상+일치보다 많으면 반감, 아니면 유지 (③)', () => {
+  assert.equal(feedbackDemotion(8, undefined), 8) // 피드백 없음
+  assert.equal(feedbackDemotion(8, { up: 0, down: 2 }, 3), 8) // threshold 미만
+  assert.equal(feedbackDemotion(8, { up: 0, down: 3 }, 3), 4) // 반감
+  assert.equal(feedbackDemotion(9, { up: 0, down: 3 }, 3), 4) // floor(9/2)
+  assert.equal(feedbackDemotion(8, { up: 5, down: 3 }, 3), 8) // 일치가 더 많음 → 유지
 })

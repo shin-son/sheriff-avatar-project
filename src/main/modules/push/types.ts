@@ -36,4 +36,6 @@ export interface PushListener {
   dispose(): void
   /** C→S (sheriff only): manual assignment — the server updates the Jira assignee (F4). */
   reassignIssue(issueId: string, assigneeId: string): void
+  /** C→S: 담당자의 노트 원인 일치/불일치 피드백 → 서버 vault에 누적 (query 감점, F8). */
+  sendFeedback(noteTitle: string, helpful: boolean): void
 }
