@@ -56,10 +56,16 @@ export function schemaIssues(notes) {
       return v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
     })
     if (missing.length) {
+      // 누락 필드별 실제 영향만 정확히 표기 — owner 없는 노트에만 라우팅 경고.
+      const impact = missing.includes('owner')
+        ? ', 담당자 라우팅 불가 가능'
+        : missing.includes('tags')
+          ? ', 검색 신호 약화'
+          : ''
       issues.push({
         severity: 'critical',
         note: n.file,
-        message: `필수 frontmatter 누락: ${missing.join(', ')} — 스키마(wiki-vault/README.md) 위반, 담당자 라우팅 불가 가능`
+        message: `필수 frontmatter 누락: ${missing.join(', ')} — 스키마(wiki-vault/README.md) 위반${impact}`
       })
     }
     const stem = basename(n.file, '.md')
