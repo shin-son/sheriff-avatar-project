@@ -70,7 +70,7 @@ export function listMarkdownFiles(dir) {
 }
 
 /** Minimal frontmatter reader: `key: value` lines between the two --- fences. */
-function parseFrontmatter(content) {
+export function parseFrontmatter(content) {
   const fields = {}
   const lines = content.split('\n')
   if (lines[0]?.trim() !== '---') return fields
