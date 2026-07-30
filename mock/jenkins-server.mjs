@@ -113,7 +113,7 @@ const server = createServer((req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/json') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    return res.end(JSON.stringify({ jobs: Object.keys(TAILS).map((m) => ({ name: `ci-${m}` })) }))
+    return res.end(JSON.stringify({ jobs: Object.keys(TC_FAILS).map((m) => ({ name: `ci-${m}` })) }))
   }
 
   if (req.method === 'GET' && build) {

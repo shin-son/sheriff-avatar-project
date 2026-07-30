@@ -2,12 +2,10 @@ import { io, type Socket } from 'socket.io-client'
 import type { SheriffIssue, WikiLintReport } from '@shared/types'
 import type { PushCredentials, PushListener, PushListenerHandlers, PushSession } from './types'
 
-// TEMPORARY contract — the real server is not implemented yet. Assumed shape
-// (implemented by mock/svp-server.mjs): login via handshake auth, then the
-// server emits `session` once and fully processed SheriffIssue objects on
-// issue:new / issue:updated. Replace this file (and createPushListener in
-// ./index.ts) when the server contract lands; nothing outside modules/push/
-// depends on Socket.IO.
+// Socket.IO contract with the v3 server (server/index.mjs, docs/API.md §1):
+// login via handshake auth, then the server emits `session` (roster updates
+// re-emit it) and fully processed SheriffIssue objects on issue:new /
+// issue:updated. Nothing outside modules/push/ depends on Socket.IO.
 const EVENT_SESSION = 'session'
 const EVENT_ISSUE_NEW = 'issue:new'
 const EVENT_ISSUE_UPDATED = 'issue:updated'

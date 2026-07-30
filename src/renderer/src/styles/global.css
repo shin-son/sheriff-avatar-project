@@ -65,7 +65,7 @@ body {
   color: var(--lamplight);
   /* Positive tracking on dark — airy, readable (DESIGN.md §3) */
   letter-spacing: 0.2px;
-  /* Inter OpenType features enabled globally (DESIGN.md §3/§12 Principle 2) */
+  /* OpenType features enabled globally on the bundled Pretendard (DESIGN.md §3) */
   font-feature-settings: 'calt', 'kern', 'liga', 'ss03';
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
