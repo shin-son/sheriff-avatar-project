@@ -9,15 +9,18 @@ test('caseLogEntries: 포인터(재발 추정/재해결 →) 엔트리는 제외
     '- module: auth',
     '- symptom: 토큰 401',
     '',
-    '## CIOPS-2 — auth.token.sh Failed (재발 추정 → CIOPS-1, 누적 2건)',
+    '## CIOPS-2 — auth.token.sh Failed (재발(추정) → CIOPS-1, 누적 2건)', // ingest 실제 표기
     '- module: auth',
     '- ref: 해결 근거는 CIOPS-1 참조',
     '',
     '## CIOPS-3 — auth.token.sh Failed (재해결 → CIOPS-1, 누적 3건)',
+    '- module: auth',
+    '',
+    '## CIOPS-4 — auth.token.sh Failed (재발 추정 → CIOPS-1, 누적 4건)', // 구형 표기
     '- module: auth'
   ].join('\n')
   const e = caseLogEntries(log)
-  assert.deepEqual(e.map((x) => x.id), ['CIOPS-1']) // 포인터 2개 제외, anchor만
+  assert.deepEqual(e.map((x) => x.id), ['CIOPS-1']) // 포인터 3개 제외, anchor만
   assert.equal(e[0].module, 'auth')
 })
 
