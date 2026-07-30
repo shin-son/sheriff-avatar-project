@@ -7,7 +7,7 @@ import DetailPanel from './components/DetailPanel'
 import IssueCard from './components/IssueCard'
 import LoginView from './components/LoginView'
 import StatusBoard from './components/StatusBoard'
-import { deriveStats } from './stats'
+import { deriveStats, moduleOf } from './stats'
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
@@ -157,7 +157,7 @@ export default function App() {
         [
           i.event.jira?.key ?? '',
           i.event.title,
-          i.event.module,
+          moduleOf(i),
           i.event.branch,
           i.assignment.assigneeName
         ].some((s) => s.toLowerCase().includes(q))
