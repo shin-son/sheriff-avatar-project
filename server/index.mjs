@@ -366,7 +366,13 @@ io.on('connection', (socket) => {
   socket.on('wiki:lint', (ack) => {
     if (user.role !== 'sheriff' || typeof ack !== 'function') return
     try {
-      const report = lintWiki()
+      // 공백 탐지 입력: 현재 서버가 아는 티켓들의 모듈/분류 (inverse lint).
+      const tickets = [...issues.values()].map((i) => ({
+        key: i.event.jira?.key ?? i.event.id,
+        module: i.event.module,
+        category: i.classification.category
+      }))
+      const report = lintWiki(tickets)
       console.log(
         `[svp-server] lint by ${user.userId}: notes=${report.noteCount} orphans=${report.orphanNotes.length} unhelpful=${report.unhelpfulNotes.length} health=${report.healthScore}`
       )
