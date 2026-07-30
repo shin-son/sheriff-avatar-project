@@ -15,7 +15,15 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [lintReport, setLintReport] = useState<WikiLintReport | null>(null)
+  const [lintFailed, setLintFailed] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+
+  // 서버 vault 점검 — null이면 미접속/타임아웃 안내 카드를 띄운다.
+  const runLint = () =>
+    void window.svp.wikiLint().then((report) => {
+      setLintReport(report)
+      setLintFailed(report === null)
+    })
   const paletteOpenRef = useRef(paletteOpen)
   paletteOpenRef.current = paletteOpen
 
@@ -216,40 +224,48 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => void window.svp.wikiLint().then(setLintReport)}
-              title="wiki 상태 점검 (고아 노트, 부정 신호 누적 노트)"
+              onClick={runLint}
+              title="서버 vault 점검 (스키마·공백·고아·부정 신호 누적)"
             >
               위키 점검
             </button>
           </div>
+
+          {lintFailed && (
+            <div className="lint-card">
+              <div className="lint-head">
+                <strong>위키 점검 실패</strong>
+                <button className="toast-close" onClick={() => setLintFailed(false)}>
+                  ✕
+                </button>
+              </div>
+              <p className="lint-ok">서버 응답 없음 — 연결 상태를 확인하고 다시 시도하세요</p>
+            </div>
+          )}
 
           {lintReport && (
             <div className="lint-card">
               <div className="lint-head">
                 <strong>위키 점검 결과</strong>
                 <span className="lint-count">노트 {lintReport.noteCount}개</span>
+                {lintReport.healthScore !== undefined && (
+                  <span className="lint-count">헬스 {lintReport.healthScore}/100</span>
+                )}
                 <button className="toast-close" onClick={() => setLintReport(null)}>
                   ✕
                 </button>
               </div>
-              {lintReport.orphanNotes.length === 0 && lintReport.unhelpfulNotes.length === 0 ? (
+              {(lintReport.issues ?? []).length === 0 ? (
                 <p className="lint-ok">정리할 노트 없음 — 노트를 클릭해 열람하려면 위의 위키 열기를 사용하세요</p>
               ) : (
                 <ul className="lint-list">
-                  {lintReport.orphanNotes.map((t) => (
-                    <li key={`orphan-${t}`}>
-                      <button className="lint-note" onClick={() => window.svp.openWiki(t)}>
-                        {t}
+                  {(lintReport.issues ?? []).map((it, idx) => (
+                    <li key={`${it.note}-${idx}`}>
+                      <span className={`lint-sev lint-sev-${it.severity}`}>{it.severity}</span>{' '}
+                      <button className="lint-note" onClick={() => window.svp.openWiki(it.note)}>
+                        {it.note}
                       </button>{' '}
-                      — 참조하는 노트가 없음, 링크하거나 통합 검토
-                    </li>
-                  ))}
-                  {lintReport.unhelpfulNotes.map((t) => (
-                    <li key={`unhelpful-${t}`}>
-                      <button className="lint-note" onClick={() => window.svp.openWiki(t)}>
-                        {t}
-                      </button>{' '}
-                      — 부정 신호 누적, 내용 수정 또는 삭제 검토
+                      — {it.message}
                     </li>
                   ))}
                 </ul>
@@ -327,7 +343,7 @@ export default function App() {
               ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
           }}
           onOpenWiki={() => window.svp.openWiki()}
-          onLintWiki={() => void window.svp.wikiLint().then(setLintReport)}
+          onLintWiki={runLint}
           onClose={() => setPaletteOpen(false)}
         />
       )}

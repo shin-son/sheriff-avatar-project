@@ -16,7 +16,8 @@ declare global {
       onWsStatus(cb: (status: WsStatus) => void): () => void
       onIssueFocus(cb: (issueId: string) => void): () => void
       onToastData(cb: (issue: SheriffIssue) => void): () => void
-      wikiLint(): Promise<WikiLintReport>
+      /** 서버 vault 점검 (sheriff 전용) — 미접속·타임아웃이면 null. */
+      wikiLint(): Promise<WikiLintReport | null>
       openWiki(noteTitle?: string): void
       wikiFeedback(noteTitle: string, helpful: boolean): void
       toastClick(issueId: string): void

@@ -236,7 +236,8 @@ io.use((socket, next) => {
 // module-note frontmatter so the client can rank module owners first (F4).
 function roster() {
   const modules = listModules()
-  const ids = new Set([...knownMembers, ...modules.map((m) => m.owner)])
+  // 다중 담당 모듈(owners 블록 리스트)은 전원이 배정 가능해야 한다.
+  const ids = new Set([...knownMembers, ...modules.flatMap((m) => m.owners)])
   ids.delete('admin')
   ids.delete(BOT)
   return [
@@ -245,7 +246,7 @@ function roster() {
       id,
       name: id,
       role: 'member',
-      ownedModules: modules.filter((m) => m.owner === id).map((m) => m.module)
+      ownedModules: modules.filter((m) => m.owners.includes(id)).map((m) => m.module)
     }))
   ]
 }
@@ -328,7 +329,13 @@ io.on('connection', (socket) => {
   socket.on('wiki:lint', (ack) => {
     if (user.role !== 'sheriff' || typeof ack !== 'function') return
     try {
-      const report = lintWiki()
+      // 공백 탐지 입력: 현재 서버가 아는 티켓들의 모듈/분류 (inverse lint).
+      const tickets = [...issues.values()].map((i) => ({
+        key: i.event.jira?.key ?? i.event.id,
+        module: i.event.module,
+        category: i.classification.category
+      }))
+      const report = lintWiki(tickets)
       console.log(
         `[svp-server] lint by ${user.userId}: notes=${report.noteCount} orphans=${report.orphanNotes.length} unhelpful=${report.unhelpfulNotes.length} health=${report.healthScore}`
       )
