@@ -216,7 +216,7 @@ journalctl -u svp-server -f       # 로그 확인
 |---|---|---|
 | `jira=http://localhost:8792` (사내인데 mock 주소) | env 미전달 — `.env` 없음 또는 루트 밖에서 실행 | 프로젝트 루트에서 `.env` 확인 후 재실행 |
 | 앱 로그인 실패 "서버에 연결할 수 없습니다" | 서버(8793) 미실행 또는 `SVP_PUSH_URL` 오설정 | `npm run server`(원격이면 systemd 상태) 확인 |
-| 앱에 `[svp:push] connect error: xhr poll error` 반복 | 8793에 서버 없음 (또는 포트 충돌 — `mock:push`와 동시 실행 금지) | 서버 실행/포트 확인 |
+| 앱에 `[svp:push] connect error: xhr poll error` 반복 | 8793에 서버 없음 | 서버 실행/포트 확인 |
 | `poll failed ...: fetch failed (cause: ...)` | 네트워크/TLS — cause 코드로 판별: `UNABLE_TO_VERIFY...`/`SELF_SIGNED...` = CA 미신뢰, `ECONNREFUSED` = 주소, `ENOTFOUND` = DNS | TLS면 **서버 터미널** 셸에서 `NODE_EXTRA_CA_CERTS=<사내CA.pem>` 설정 (경로 오타 시 시작 로그에 `Warning: ... load failed`) |
 | `poll failed ...: search returned 401` | PAT 누락/오류 | `.env`의 `SVP_JIRA_PAT` 확인 |
 | `poll failed ...: search returned 400` | JQL 문법·상태명 오류 | curl로 같은 JQL 실행해 `errorMessages` 확인 |
