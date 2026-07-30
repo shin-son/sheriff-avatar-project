@@ -10,6 +10,8 @@ export interface PushCredentials {
 export interface PushSession {
   user: UserConfig
   team: TeamMember[]
+  /** 서버의 자동 배정 게이트(SVP_LLM_CONFIDENCE_MIN) — 구서버는 미포함(then 80). */
+  confidenceMin?: number
 }
 
 /** Handlers the app wires into whichever push transport is active. */
