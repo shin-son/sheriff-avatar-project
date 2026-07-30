@@ -26,6 +26,7 @@ import { INGEST_MODE, ingestResolved } from './ingest.mjs'
 import { commentChannel, postAnalysisComment } from './comment-channel.mjs'
 import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs'
 import { buildCandidates, listCatalog, listModules, queryWiki, readNotes, recordFeedback, resolveOwner } from './wiki-query.mjs'
+import { lintWiki } from './wiki-lint.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -359,6 +360,21 @@ io.on('connection', (socket) => {
     if (!note) return
     const e = recordFeedback(note, Boolean(payload?.helpful))
     console.log(`[svp-server] feedback from ${user.userId}: 『${note}』 ${payload?.helpful ? '일치' : '불일치'} (up=${e.up} down=${e.down})`)
+  })
+
+  // C→S: 당번의 수동 lint 트리거 (제안 4 Phase 1) — 서버 vault 점검 결과를 ack로 반환.
+  socket.on('wiki:lint', (ack) => {
+    if (user.role !== 'sheriff' || typeof ack !== 'function') return
+    try {
+      const report = lintWiki()
+      console.log(
+        `[svp-server] lint by ${user.userId}: notes=${report.noteCount} orphans=${report.orphanNotes.length} unhelpful=${report.unhelpfulNotes.length} health=${report.healthScore}`
+      )
+      ack(report)
+    } catch (err) {
+      console.error(`[svp-server] lint failed: ${err.message}`)
+      ack(null)
+    }
   })
 
   socket.on('disconnect', () => {
