@@ -216,7 +216,7 @@ async function classifyAndAct(key) {
   } catch (err) {
     console.error(`[svp-server] transition failed for ${key}: ${err.message}`)
   }
-  void poll() // sync 루프가 assignee/status 변경을 읽어 담당자에게 push한다
+  void syncTracked() // sync가 assignee/status 변경을 읽어 담당자에게 push한다 (수집과 독립)
 }
 
 // ---- Socket.IO: login-authenticated sessions, server-side filtering ----
@@ -366,13 +366,15 @@ async function search(jql) {
   return (await res.json()).issues ?? []
 }
 
-// Jenkins fetch가 끼면서 poll 한 사이클이 수 초를 넘을 수 있다 — setInterval
-// 겹침으로 같은 티켓이 두 번 ingest되는 것을 막는다 (single-flight).
-let polling = false
+// Jenkins fetch가 끼면서 신규 수집 한 사이클이 수 초를 넘을 수 있다 — setInterval
+// 겹침으로 같은 티켓이 두 번 수집되는 것을 막는다 (single-flight). 수집과 sync는
+// 가드를 분리 — 초도 수집(캐시 삭제 후 다건)이 오래 걸려도 sync는 그동안 계속
+// 돌아 자동 배정 결과가 수집 완료를 기다리지 않고 UI에 반영된다.
+let collecting = false
 
-async function poll() {
-  if (polling) return
-  polling = true
+async function collectNew() {
+  if (collecting) return
+  collecting = true
   try {
     // 1) New tickets: fetch the full base JQL and skip known keys. A `created >=`
     //    bound would be interpreted in the JIRA PROFILE timezone (not this PC's),
@@ -458,7 +460,28 @@ async function poll() {
         void classifyAndAct(t.key)
       }
     }
+  } catch (err) {
+    // undici hides the real reason (TLS/DNS/refused) in err.cause — surface it.
+    const cause = err.cause ? ` (cause: ${err.cause.code ?? err.cause.message ?? err.cause})` : ''
+    console.error(`[svp-server] collect failed: ${err.message}${cause}`)
+  } finally {
+    collecting = false
+  }
+}
 
+// sync 겹침은 같은 티켓의 이중 ingest로 이어질 수 있어 single-flight는 유지하되,
+// 진행 중에 들어온 호출(classifyAndAct의 배정 직후 재읽기)은 버리지 않고 사이클
+// 종료 후 한 번 더 돈다 — 배정 결과 push가 다음 tick까지 밀리지 않게.
+let syncing = false
+let syncAgain = false
+
+async function syncTracked() {
+  if (syncing) {
+    syncAgain = true
+    return
+  }
+  syncing = true
+  try {
     // 2) Tracked tickets: status/assignee sync by key — independent of the base
     //    JQL, so tickets that left it (e.g. `status != Resolved`) are still seen.
     // resolved 티켓도 포함 — reopen(resolved→open) 전이를 감지하려면 계속 재조회해야 한다.
@@ -504,10 +527,19 @@ async function poll() {
   } catch (err) {
     // undici hides the real reason (TLS/DNS/refused) in err.cause — surface it.
     const cause = err.cause ? ` (cause: ${err.cause.code ?? err.cause.message ?? err.cause})` : ''
-    console.error(`[svp-server] poll failed: ${err.message}${cause}`)
+    console.error(`[svp-server] sync failed: ${err.message}${cause}`)
   } finally {
-    polling = false
+    syncing = false
+    if (syncAgain) {
+      syncAgain = false
+      void syncTracked()
+    }
   }
+}
+
+function poll() {
+  void collectNew()
+  void syncTracked()
 }
 
 console.log(`[svp-server] v3 server listening on :${PORT}`)
@@ -530,5 +562,5 @@ console.log(`[svp-server] comment-channel: ${commentChannel()} — 분류 완료
 console.log(
   `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}${DUMP_DIR ? `\n[svp-server] debug-dump: ${DUMP_DIR} — 신규 티켓 수집 로그 저장` : ''}`
 )
-void poll()
-setInterval(() => void poll(), POLL_MS)
+poll()
+setInterval(poll, POLL_MS)
