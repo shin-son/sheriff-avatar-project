@@ -368,10 +368,16 @@ async function search(jql) {
 
 // Jenkins fetch가 끼면서 poll 한 사이클이 수 초를 넘을 수 있다 — setInterval
 // 겹침으로 같은 티켓이 두 번 ingest되는 것을 막는다 (single-flight).
+// 진행 중에 들어온 호출(classifyAndAct의 배정 직후 재읽기)은 버리지 않고
+// 사이클 종료 후 한 번 더 돈다 — 배정 결과 push가 다음 tick까지 밀리지 않게.
 let polling = false
+let pollAgain = false
 
 async function poll() {
-  if (polling) return
+  if (polling) {
+    pollAgain = true
+    return
+  }
   polling = true
   try {
     // 1) New tickets: fetch the full base JQL and skip known keys. A `created >=`
@@ -507,6 +513,10 @@ async function poll() {
     console.error(`[svp-server] poll failed: ${err.message}${cause}`)
   } finally {
     polling = false
+    if (pollAgain) {
+      pollAgain = false
+      void poll()
+    }
   }
 }
 
