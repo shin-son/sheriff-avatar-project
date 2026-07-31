@@ -213,6 +213,10 @@ function connectAndLogin(username: string, password: string): Promise<PushSessio
           return
         }
         sessionStartedAt = Date.now()
+        // Clear here - not after 'await' below - so the server's issue:new replay
+        // burst (emitted right after 'session') isn't wiped by a later splice.
+        // The replay handlers run after this callback, so they repopulate cleanly.
+        issues.splice(0, issues.length)
         settle(() => resolve(session))
       },
       onAuthError: () => {
@@ -254,7 +258,6 @@ app.whenReady().then(() => {
       team = session.team
       confidenceMin = session.confidenceMin ?? 80
       authed = true
-      issues.splice(0, issues.length) // fresh session — the server replays what we should see
       applyWindowMode(userConfig.role)
       mainWindow?.webContents.send('state:refresh')
       console.log(`[svp] logged in as ${userConfig.userId} (${userConfig.role})`)
