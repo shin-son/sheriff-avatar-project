@@ -35,8 +35,18 @@ export async function getIssueRaw(key) {
   }
 }
 
-export function setAssignee(key, name) {
-  return request(`/rest/api/2/issue/${key}/assignee`, { method: 'PUT', body: JSON.stringify({ name }) })
+export async function setAssignee(key, name) {
+  // 전용 assignee 엔드포인트가 표준이지만 (mock·구형 jira) 사내 jira는 표시명
+  // ('홍길동 // 00팀')을 여기서 거부(400). 그 경우 일반 편집 엔드포인트로 폴백
+  // — fields.assignee.name 경로는 같은 값을 받아준다 (실측 확인).
+  try {
+    await request(`/rest/api/2/issue/${key}/assignee`, { method: 'PUT', body: JSON.stringify({ name }) })
+  } catch {
+    await request(`/rest/api/2/issue/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify({ fields: { assignee: { name } } })
+    })
+  }
 }
 
 /** Transition by name — the mock/jira-server.mjs contract.
