@@ -45,6 +45,9 @@ const TEST_LABEL = process.env.SVP_TEST_LABEL ?? 'svp-test'
 // 설정 시 신규 티켓의 수집 로그(event.log: description + Jenkins 구간)를
 // <dir>/<티켓키>.log로 저장 — ingest 전 수집 데이터 검증용. 기본 꺼짐.
 const DUMP_DIR = process.env.SVP_DEBUG_DUMP_DIR
+// 테스트용 auto-assign 대상 고정 — 설정 시 wiki owner 대신 이 사용자로 배정
+// (confidence 게이트는 그대로). 미설정/빈 값이면 정상 동작. 운영에서는 비워둔다.
+const FORCE_ASSIGNEE = process.env.SVP_FORCE_ASSIGNEE || null
 
 // Demo auth until SVP-5: admin/admin → sheriff; any username with
 // password === username → member (e.g. shin.son / shin.son).
@@ -152,7 +155,7 @@ async function classifyAndAct(key) {
   // State may have moved during the LLM call (ack, manual assignment) — don't auto-assign over it.
   const eligible = issue.assignment.routedTo === 'sheriff' && issue.status === 'new'
   const confident = llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown'
-  const owner = eligible && confident ? resolveOwner(llm.category) : null
+  const owner = eligible && confident ? (FORCE_ASSIGNEE ?? resolveOwner(llm.category)) : null
   if (!owner) {
     // confidence ≤ 80 또는 담당자 미등록 → 후보 리스트를 빌드해 당번 화면에 노출.
     if (eligible && !confident) {
@@ -228,7 +231,7 @@ async function reassignFromCache(key) {
   const llm = llmResults.get(key)
   if (!issue || !llm) return
   if (!(llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown')) return
-  const owner = resolveOwner(llm.category)
+  const owner = FORCE_ASSIGNEE ?? resolveOwner(llm.category)
   if (!owner) return
   if (!canWrite(key)) {
     console.log(
@@ -582,6 +585,8 @@ console.log(
         : ' — 전면 허용'
   }`
 )
+if (FORCE_ASSIGNEE)
+  console.log(`[svp-server] ⚠ FORCE_ASSIGNEE=${FORCE_ASSIGNEE} — 모든 auto-assign이 이 사용자로 고정 (테스트용, 운영에서는 해제)`)
 console.log(`[svp-server] comment-channel: ${commentChannel()} — 분류 완료 시 분석 코멘트 (write 게이트 적용)`)
 console.log(
   `[svp-server] ingest-mode: ${INGEST_MODE}${INGEST_MODE === 'live' ? ' — 해결 시 vault 동결' : ' — vault 변경 없음 (로그로만 관찰)'}${DUMP_DIR ? `\n[svp-server] debug-dump: ${DUMP_DIR} — 신규 티켓 수집 로그 저장` : ''}`
