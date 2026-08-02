@@ -219,6 +219,33 @@ async function classifyAndAct(key) {
   void syncTracked() // sync가 assignee/status 변경을 읽어 담당자에게 push한다 (수집과 독립)
 }
 
+// Restored ticket whose cached classification is confident but that is still
+// with the sheriff (dry-run at classify time, setAssignee failure, or the
+// assignee was reverted in Jira). The score is already final — redo only the
+// assignment step: setAssignee, no re-classify, no second comment/transition.
+async function reassignFromCache(key) {
+  const issue = issues.get(key)
+  const llm = llmResults.get(key)
+  if (!issue || !llm) return
+  if (!(llm.confidence > CONFIDENCE_MIN && llm.category !== 'unknown')) return
+  const owner = resolveOwner(llm.category)
+  if (!owner) return
+  if (!canWrite(key)) {
+    console.log(
+      `[svp-server] [${WRITE_MODE}] ${key}: would re-assign → ${owner} (cached ${llm.category}/${llm.confidence}) — Jira 변경 안 함`
+    )
+    return
+  }
+  try {
+    await setAssignee(key, owner)
+  } catch (err) {
+    console.error(`[svp-server] re-assign failed for ${key}: ${err.message}`)
+    return
+  }
+  console.log(`[svp-server] re-assigned ${key} from cache: ${llm.category}/${llm.confidence} → assignee=${owner}`)
+  void syncTracked() // sync가 assignee 변경을 읽어 담당자에게 push한다
+}
+
 // ---- Socket.IO: login-authenticated sessions, server-side filtering ----
 const io = new Server(PORT)
 const sessions = new Map() // userId → { socket, role }
@@ -451,13 +478,10 @@ async function collectNew() {
       // Classify only bot-assigned open tickets. Human-assigned tickets skip it,
       // which also makes restarts idempotent: an already-auto-assigned ticket
       // re-ingests with its human assignee and never gets a second comment.
-      if (
-        classifierEnabled() &&
-        issue.assignment.routedTo === 'sheriff' &&
-        issue.status === 'new' &&
-        !llmResults.has(t.key)
-      ) {
-        void classifyAndAct(t.key)
+      // Already-classified tickets still with the sheriff redo the assignment
+      // step only (reassignFromCache) — the cached score stays authoritative.
+      if (classifierEnabled() && issue.assignment.routedTo === 'sheriff' && issue.status === 'new') {
+        void (llmResults.has(t.key) ? reassignFromCache(t.key) : classifyAndAct(t.key))
       }
     }
   } catch (err) {
