@@ -21,7 +21,7 @@ Andrej Karpathy의 llm-wiki 컨셉([원문 전문](../docs/llm-wiki-concept.md))
 wiki-vault/
   README.md                스키마 (이 문서)
   index.md                 콘텐츠 카탈로그 — 서버가 재생성
-  log.md                   시간순 작업 기록 — 서버(ingest)·앱(lint) append
+  log.md                   시간순 작업 기록 — 서버(ingest) append
   case-log.md              해결 사례 원장 — 서버가 append
   modules/<module>.md      모듈별 known-failure 지식 노트
   raw/jira/<티켓키>.md       Jira 티켓 원문 사본 — 서버 생성, 불변 (재해결은 <키>-r<n>.md)
@@ -43,8 +43,8 @@ frontmatter로 상호 링크한다 (아래 "raw correlation key"). ingest는 현
 | `raw/jira/<티켓키>.md` | **원자료 사본.** 해결(Done) 확정 시점의 티켓 원문(설명·해결 코멘트)을 증거로 동결. Jira 보존 정책·티켓 삭제와 무관하게 역참조를 보장 | 서버(`server/ingest.mjs`)가 해결 확정 시 생성 — 이후 수정 금지(불변). reopen 후 재해결은 `<키>-r<n>.md`로 버전 추가 |
 | `raw/ci/<티켓키>.md` | **실패 신호 원문.** 이슈를 유발한 CI 실패의 테스트 이름·로그 발췌. 티켓 설명보다 정확한 1차 증상. 파일 키는 빌드 ID 부재로 Jira 키를 쓴다 (P0a) | 서버가 해결 확정 시 생성 — 이후 수정 금지(불변). 재해결은 `-r<n>` 버전 |
 | `raw/gerrit/<Change-Id>.md` | **해결 증거 원문.** 이슈를 고친 Gerrit 패치(제목·변경 파일·diff 발췌). `resolution`을 채우는 가장 강한 근거 — 코멘트 텍스트보다 실제 변경이 낫다 | (미구현 — 계획) 현재 생성하는 코드 없음. 구현 시 불변 원칙 동일 |
-| `index.md` | **카탈로그.** 노트당 한 줄(링크 + 요약). 사람·Obsidian용 진입점 — LLM 드릴다운은 파일에서 직접 만든 카탈로그를 쓴다 | 서버(ingest)·앱(lint)이 재생성 — 수동 편집 금지 |
-| `log.md` | **연대기.** ingest/lint 작업의 append-only 기록 | 서버(ingest)·앱(lint) append — 수동 편집 금지 |
+| `index.md` | **카탈로그.** 노트당 한 줄(링크 + 요약). 사람·Obsidian용 진입점 — LLM 드릴다운은 파일에서 직접 만든 카탈로그를 쓴다 | 서버(ingest)가 재생성 — 수동 편집 금지 |
+| `log.md` | **연대기.** ingest 작업의 append-only 기록 | 서버(ingest) append — 수동 편집 금지 |
 | `README.md` | **스키마.** 구조·역할·규칙의 명세. query 대상 아님 | 팀 PR |
 
 새 디렉터리·노트 타입은 이 스키마에 먼저 정의한 뒤 만든다.
@@ -267,7 +267,7 @@ query·index 대상이 아닌 숨김 JSON — vault 순회 코드가 `.` 시작 
 
 - `index.md` — 노트당 한 줄 카탈로그. 서버가 ingest 시 재생성한다. LLM 드릴다운(SVP-3)은
   index.md 대신 파일에서 직접 만든 카탈로그를 쓰므로, index는 사람·Obsidian용 진입점이다.
-- `log.md` — `## [YYYY-MM-DD] op | detail` 형식 append-only (op: ingest | lint). `grep "^## \[" log.md`로 파싱.
+- `log.md` — `## [YYYY-MM-DD] op | detail` 형식 append-only (op: ingest — lint는 읽기 전용이라 기록하지 않는다). `grep "^## \[" log.md`로 파싱.
 
 ## wiki 4대 동작
 
@@ -290,8 +290,8 @@ query·index 대상이 아닌 숨김 JSON — vault 순회 코드가 `.` 시작 
 2. **feedback** — 담당자가 참조 노트에 👍/👎. 앱이 `wiki:feedback` 소켓으로 서버에 전달하고,
    서버가 `<vault>/.feedback.json`에 집계한다 (`server/wiki-query.mjs` `recordFeedback` — 구현됨).
    👎가 `SVP_FEEDBACK_DEMOTE`회(기본 3) 이상이면서 👎>👍인 노트는 query 점수 반감
-   (`feedbackDemotion`). 앱도 로컬 사본(userData)에 같은 집계를 유지하지만 이는 당번 위키
-   점검(lint)용 — 서버 집계와 동기화되지 않는 별도 사본이라는 한계가 있다.
+   (`feedbackDemotion`). lint의 👎 누적 노트 점검도 같은 서버 집계를 읽는다
+   (앱의 로컬 사본(userData) 기록은 잔류하지만 판정 기준이 아니다).
 3. **ingest — append가 아니라 통합이다.** 이슈 해결(resolved 전이) 시 서버(`server/ingest.mjs`)가
    수행한다 (`SVP_INGEST_MODE=live`일 때만 실제 기록, 기본 dry-run):
    - 구현됨: raw 동결(`raw/jira/` + `raw/ci/`, 티켓마다 — 재발이어도 raw는 보존),
@@ -303,11 +303,13 @@ query·index 대상이 아닌 숨김 JSON — vault 순회 코드가 `.` 시작 
      모순을 명시하는 수정 초안.
    - **known-failure 승격을 사람 수작업에만 맡기지 않는다** (미구현 — 계획). LLM이 초안을 쓰고
      사람은 리뷰한다 — 이 통합 단계가 없으면 wiki는 축적되지 않는다 (카파시 컨셉의 핵심).
-4. **lint** — 당번이 앱에서 실행하는 위생 점검 (`src/main/modules/wiki/`). 두 단계:
-   - 기계 점검 (현재 구현, 클라이언트): 고아 노트(어디서도 참조 안 됨), 👎 누적 노트 —
-     단, 앱 로컬 피드백 사본 기준이라 서버 집계(`.feedback.json`)와 다를 수 있다.
-   - LLM 점검 (미구현 — F8): 노트 간 모순, case-log와 어긋나는 낡은 fix 절차, case-log에 반복되는데
-     known-failure로 승격 안 된 패턴, 이슈는 오는데 노트가 없는 모듈. 정리·보완 후보로 보고.
+4. **lint** — 위생 점검. 서버가 수행하고(`server/wiki-lint.mjs`), 당번이 앱에서 `wiki:lint`
+   소켓 이벤트로 요청한다. 읽기 전용 — vault에는 아무것도 쓰지 않고, 수정·삭제는 사람 PR 전용. 두 단계:
+   - 기계 점검 (현재 구현): 고아 노트(어디서도 참조 안 됨, `findOrphans`), 👎 누적 노트(서버 집계
+     `.feedback.json` 기준), frontmatter 스키마 위반(`schemaIssues`), 이슈는 오는데 노트가 없는
+     모듈(`gapIssues`) — severity와 health score(`healthScore`)로 보고.
+   - LLM 점검 (미구현): 노트 간 모순, case-log와 어긋나는 낡은 fix 절차, case-log에 반복되는데
+     known-failure로 승격 안 된 패턴. 정리·보완 후보로 보고.
 
 feedback→lint가 "쓸데없는 정보가 wiki를 오염시키지 않게 하는 루프"다.
 좋은 노트는 살아남고, 안 쓰이는 노트는 감점→정리된다.
@@ -317,8 +319,7 @@ feedback→lint가 "쓸데없는 정보가 wiki를 오염시키지 않게 하는
 - **vault에는 wiki 구성 요소만 둔다.** 사람용 절차·가이드 문서는 `docs/`로.
 - 자동 파일(index/log/case-log/raw)은 사람이 편집하지 않는다. 그 외 모든 노트 변경은 코드와 동일하게 PR 리뷰를 거친다.
 - **`raw/`는 서버의 query·index 대상이 아니다** — 증거 보존과 드릴다운(분류 근거 검증) 용도.
-  (한계: 앱의 lint/index 재생성은 `raw/` 제외가 없어, raw가 쌓인 vault를 앱에서 점검하면 raw가 함께 잡힌다.)
-  압축된 검색 신호는 case-log와 모듈 노트가 담당한다 (서버 query·index 코드가 `raw/`와
+  압축된 검색 신호는 case-log와 모듈 노트가 담당한다 (서버의 query·index·lint 코드가 `raw/`와
   `.` 시작 파일·폴더를 제외한다).
 - 운영 vault의 raw에는 사내 티켓·CI 로그·Gerrit 소스 diff 원문이 그대로 담긴다 —
   내부 호스트명·경로·소스코드가 노출되므로, 운영 vault는 사내 저장소에만 두고
