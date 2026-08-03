@@ -7,7 +7,7 @@
 
 ## 요구사항
 
-- Node.js 20+ / git
+- Node.js 22+ 권장 / git — 서버·앱 실행은 20+로 충분하나, `npm test`의 glob 패턴 인자는 Node 21+가 필요하다
 - 사내 테스트: Jira Personal Access Token (Jira 프로필 → Personal Access Tokens에서 발급)
 - 사내 PC에서는 repo를 **pull만** 한다 — 코드 수정·push는 사외에서만 (CLAUDE.md 절대 규칙 2)
 - (선택 — 사내 전용) `python3` + `.tool/Jenkins/fetch_ci_test.py`(1차 CI 로그 수집),
@@ -38,7 +38,8 @@ cp .env.example .env    # Windows: copy .env.example .env
 | `AWS_REGION` | (없음) | Bedrock 리전. **미설정이면 분류기 비활성** — 티켓은 당번 큐에 유지되고 서버는 정상 동작 |
 | `SVP_ANTHROPIC_API_KEY` | (없음) | `SVP_LLM_PROVIDER=anthropic`일 때만 |
 | `SVP_LLM_CONFIDENCE_MIN` | `80` | 이 점수 **초과**여야 자동 배정 (assignee+댓글+In Progress) |
-| `SVP_JIRA_WRITE_MODE` | **`dry-run`** | 서버발 Jira write 전부(자동 배정 + ack 전이)의 게이트: `dry-run`=로그만 / `label`=`SVP_TEST_LABEL` 티켓만 / `live`=전면 |
+| `SVP_FORCE_ASSIGNEE` | (없음 — 정상 동작) | auto-assign 대상을 wiki owner 대신 이 사용자로 고정하는 **테스트 오버라이드** (confidence 게이트는 유지). 설정 시 기동 로그에 `⚠ FORCE_ASSIGNEE=...` 경고 — 운영에서는 비워둔다 |
+| `SVP_JIRA_WRITE_MODE` | **`dry-run`** | 서버발 Jira write 전부의 게이트: `dry-run`=로그만 / `label`=`SVP_TEST_LABEL` 티켓만 / `live`=전면. 게이트 대상: 자동 배정 3종(assignee·댓글·전이) + 수동 reassign + 캐시 기반 재배정(재시작 복원 시 — [API.md §2](./API.md)) + 분석 댓글. `SVP_FORCE_ASSIGNEE`가 남아 있으면 자동 배정(캐시 재배정 포함) 대상이 전부 그 사용자로 고정되므로 `live` 전환 전 반드시 해제를 확인한다 |
 | `SVP_INGEST_MODE` | **`dry-run`** | 해결된 티켓의 vault 반영(F7: raw 동결 + case-log 기록) 게이트: `dry-run`=로그만(vault 안 건드림) / `live`=실제 기록. 데모의 case-log 실시간 갱신 컷은 `live` 필요 |
 | `SVP_DEDUP_WINDOW_DAYS` | `14` | ingest dedup 시간창(일): 같은 실패 서명·같은 모듈의 새 티켓이 이 기간 내에 해결되면 case-log에 풀 엔트리 대신 anchor 포인터(재발 추정, 누적 카운트)로 기록 |
 | `SVP_RECUR_BOOST_CAP` | `4` | query 시 재발 가중 상한 — 재발 count가 n인 anchor 엔트리는 점수 `+min(n-1, cap)` |
@@ -75,8 +76,9 @@ npm run dev              # 터미널 4 — 앱 (로그인: admin/admin = 당번,
 ## 검증 명령
 
 ```bash
-npm run typecheck    # 타입 체크 — 커밋 전 필수
-npm test             # node --test — server 순수 함수 22개 테스트 (ingest dedup·재발 가중·피드백 감점·스킬 출력 판정)
+npm run typecheck         # 타입 체크 — 커밋 전 필수
+npm test                  # node --test — server 순수 함수 49개 테스트 (ingest dedup·wiki lint·재발 가중·피드백 감점·Jenkins 구간 추출·티켓 정규화·스킬 출력 판정)
+npm run test:coverage     # node --test --experimental-test-coverage — 커버리지 리포트 (파일별 표는 docs/BACKEND.md 검증 절 참고)
 ```
 
 ## 사내 실연동 테스트
@@ -140,7 +142,9 @@ journalctl -u svp-server -f       # 로그 확인
   ② 테스트 티켓에 `svp-test` 라벨을 붙이고 `label` 모드로 전체 루프(배정·댓글·전이·push) 검증 →
   ③ 팀 합의 후 `live`.
 - **업데이트 배포**: `git pull && npm ci --omit=dev && sudo systemctl restart svp-server`
-- 서버는 이슈를 메모리로 추적하므로 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다 — 별도 백업 불필요.
+- 서버는 이슈를 메모리로 추적하므로 재시작하면 Jira를 다시 읽어 현재 상태로 복원된다. `server/issue-cache.json`까지
+  유실되면 미해결 티켓의 재수집·재분류(LLM 재호출) 비용이 발생하나, status/assignee의 진실은 Jira라 정합성은
+  깨지지 않는다 (이미 사람에게 배정된 티켓은 재분류 자체를 건너뛰므로 중복 write 없음).
 - 클라이언트(전원 Windows 앱)는 `.env`의 `SVP_PUSH_URL=http://<서버호스트>:8793` 한 줄만 바꾸면 된다.
 
 ## 사내 검증 시나리오 — 가짜 티켓으로 자동 배정+댓글 확인
@@ -222,7 +226,12 @@ journalctl -u svp-server -f       # 로그 확인
 | `poll failed ...: search returned 400` | JQL 문법·상태명 오류 | curl로 같은 JQL 실행해 `errorMessages` 확인 |
 | `jenkins api/json failed ...: 500 <!DOCTYPE HTML>...` (차단 페이지) | `NODE_USE_ENV_PROXY=1`(Bedrock용)로 인해 fetch가 사내 프록시를 타고, 프록시가 내부 Jenkins IP를 차단 | 서버 코드가 Jenkins만 `node:http` 직통으로 호출하므로 최신 코드면 발생하지 않음. 단발 `node -e "fetch(...)"` 진단은 플래그 유무에 따라 결과가 달라지니 주의 |
 | 배정했는데 팀원 앱에 안 옴 | 로그인 아이디 ≠ Jira assignee name | 서버 로그의 `sync ...: assignee=<값>`과 로그인 아이디 대조 |
+| 기동 로그에 `⚠ FORCE_ASSIGNEE=...` | `.env`에 테스트 오버라이드 `SVP_FORCE_ASSIGNEE` 잔존 — 모든 auto-assign이 그 사용자로 고정됨 | `.env`에서 해당 줄 제거 후 재시작 |
+| `auto-assign failed ...: 400` | 사내 Jira가 assignee 전용 엔드포인트에서 표시명을 400으로 거부 — 코드는 issue-edit(`PUT /rest/api/2/issue/{key}`)로 자동 폴백한다 | 폴백까지 실패하면 vault 노트의 `owner:` 값이 표시명이 아닌 Jira **계정명(name)** 인지 확인 |
+| `would re-assign → ... (cached ...)` 반복 로그 | dry-run 상태에서 고신뢰 분류 캐시가 남아 복원 때마다 재배정을 시도(로그만) | 의도된 동작 — write 모드를 올리면 실제 배정된다. 원치 않으면 `server/issue-cache.json` 삭제 |
+| `npm test`가 테스트 파일을 못 찾음 | Node 20 이하 — `node --test`의 glob 패턴 인자는 Node 21+ | Node 22+로 실행 (요구사항 절) |
 
 v3 서버는 티켓 상태를 Jira에서 재조회해 복원하고, 초도분석 결과(Jenkins 보강 로그·LLM 분류)는
 `server/issue-cache.json`에 캐시된다 — mock Jira를 재기동해 티켓 키가 재사용될 때는 이 파일을
 지워야 새 티켓이 다시 분석된다.
+

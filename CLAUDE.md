@@ -56,6 +56,7 @@ npm run mock:jenkins # mock Jenkins 서버 (별도 터미널, 포트 8794) — �
 npm run server       # v3 서버 (별도 터미널, 포트 8793) — 폴링·배정·push의 메인 경로. 운영은 Linux systemd
 npm run typecheck    # 타입 체크
 npm test             # 서버 순수 함수 테스트 (node --test, server/**/*.test.mjs)
+npm run test:coverage # 위 테스트 + 커버리지 리포트 (--experimental-test-coverage)
 npm run build        # 프로덕션 빌드 (out/)
 npm run dist         # Windows EXE 인스톨러 생성 (dist/)
 ```
@@ -74,13 +75,15 @@ server/                          v3 서버 (headless Node, plain .mjs) — Linux
   index.mjs                      폴링 → 라우팅 → 분류 게이트 → Socket.IO push + SVP_JIRA_WRITE_MODE 게이트
   classifier.mjs                 Claude 분류·노트 선택·해결 요약 (bedrock/bedrock-invoke/anthropic, 실패 시 fallback)
   wiki-query.mjs                 vault 검색(+re-occurrence boost·supersede·feedback 감점) + owner 해석 + 담당자 후보(Gerrit)
+  wiki-lint.mjs                  vault 점검 — 고아/스키마/공백(gap) lint + healthScore (당번의 wiki:lint 요청 처리)
   ingest.mjs                     해결 티켓 → raw 동결·case-log 기록·index/log 재생성 + 중복 제거(signature)
   jira.mjs                       Jira write 3종 (assignee·댓글 템플릿·전이)
   jenkins.mjs                    Jenkins 중계 빌드 → 실패 샤드 → 해당 TC 실행 구간 로그 추출 (폴백 경로)
   ci-test-fetch.mjs              사내 python tool 기반 1차 로그 수집 + format-ci-log 스킬 연동
   cache.mjs                      issue-cache.json 영속화 (재시작 시 재수집·재분류 방지)
   comment-channel.mjs            Jira 댓글 전송 채널 (rest/mcp)
-  *.test.mjs                     순수 함수 단위 테스트 22종 (npm test)
+  ticket.mjs                     티켓 정규화 — htmlToText·' : ' key-value 파싱 (normalize)
+  *.test.mjs                     순수 함수 단위 테스트 49종 (npm test)
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정
@@ -131,7 +134,7 @@ mock/                            mock Jira(8792)·Jenkins(8794) 서버
 - 핵심 동작 4가지:
   - **query** (`server/wiki-query.mjs`) — 분류 시 관련 노트 검색. 재발 가중(recurrence boost)·reopen 시 최신 결론 우선(supersede)·피드백 감점 반영
   - **ingest** (`server/ingest.mjs`) — 해결된 이슈를 raw 동결 + case-log 기록 + `index.md`/`log.md` 자동 갱신. 동일 signature 재발은 포인터로 축약
-  - **lint** (`src/main/modules/wiki/`) — 고아 노트·부정 피드백 누적 노트 점검 (당번이 앱에서 실행)
+  - **lint** (`server/wiki-lint.mjs`) — 고아 노트·frontmatter 스키마 위반·노트 공백·부정 피드백 누적 노트 점검 (당번이 앱에서 요청, 서버 vault 대상)
   - **feedback** — 담당자가 참조 노트의 원인 일치/불일치 판정 → 서버가 `<vault>/.feedback.json`에 집계. 불일치 누적(기본 3+) 노트는 query 감점 → lint 정리 후보. **쓸데없는 정보는 이 루프로 제거한다.**
 - `index.md`/`log.md`는 서버가 자동 갱신 — 수동 편집 금지.
 - wiki 내용 변경도 코드와 동일하게 PR 리뷰를 거친다.

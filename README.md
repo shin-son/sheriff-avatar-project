@@ -15,12 +15,12 @@ flowchart LR
     JIRA["사내 Jira<br/>(CI 실패 티켓)"] -- "REST 폴링" --> SRV["SVP 서버 (headless Node)<br/>정규화 + Jenkins 실패 로그 추출"]
     WIKI[("LLM-WIKI<br/>wiki-vault/")] -- "query" --> CLS
     SRV --> CLS["LLM 분류기<br/>(신뢰도 0~100)"]
-    CLS -- "신뢰도 > 80<br/>Jira 자동 배정 (assignee·근거 댓글·전이)" --> OWNER["담당자 앱<br/>(컴팩트 창 + 팝업)"]
-    CLS -- "신뢰도 ≤ 80<br/>당번 큐 + 담당자 후보 추천" --> SHERIFF["당번 앱 🤠<br/>(대시보드 + 팝업)"]
+    CLS -- "신뢰도 > 임계(기본 80)<br/>Jira 자동 배정 (assignee·근거 댓글·전이)" --> OWNER["담당자 앱<br/>(컴팩트 창 + 팝업)"]
+    CLS -- "신뢰도 ≤ 임계(기본 80)<br/>당번 큐 + 담당자 후보 추천" --> SHERIFF["당번 앱 🤠<br/>(대시보드 + 팝업)"]
     OWNER -- "해결(Jira Done) → ingest" --> WIKI
     SHERIFF -- "해결(Jira Done) → ingest" --> WIKI
     OWNER -- "노트 일치/불일치 피드백" --> WIKI
-    SHERIFF -- "lint (점검)" --> WIKI
+    SHERIFF -- "lint 요청 (서버 vault 점검)" --> WIKI
 ```
 
 앱(Electron)은 순수 클라이언트다 — 로그인하면 서버가 Socket.IO로 본인 몫의 이슈를 push하고,
@@ -39,7 +39,8 @@ flowchart LR
 8. **ingest**: 원문을 `raw/`에 동결하고 LLM이 증상·원인·해결을 요약해 `case-log.md`에 기록,
    `index.md`/`log.md` 자동 갱신 → 다음번 같은 유형 이슈의 신뢰도가 올라감
 9. **feedback**: 담당자가 "참조 노트의 원인이 실제와 일치했나?"를 앱에서 판정 — 불일치 누적 노트는 검색 감점
-10. **lint**: 당번이 주기적으로 "위키 점검" — 고아 노트·저품질 노트를 정리 후보로 보고
+10. **lint**: 당번이 "위키 점검"을 누르면 서버가 vault를 점검 — 고아 노트, frontmatter 스키마 위반,
+    노트 공백(티켓은 오는데 노트가 없는 카테고리), 피드백 불일치 누적 노트를 헬스 스코어와 함께 보고
 
 이 루프가 반복되며 wiki가 축적되고, 자동 배정 비율(신뢰도 >80)이 점점 올라가는 것이 목표다.
 
@@ -59,6 +60,9 @@ CI 실패 티켓 triage 자체는 새 문제가 아니다. 기존 접근들과�
 설계 원칙은 Karpathy의 [llm-wiki 컨셉](./docs/llm-wiki-concept.md)이다: **wiki의 1차 독자는 사람이 아니라 LLM**이고,
 raw(불변 증거) → wiki(압축 지식) → schema(규칙)의 3계층을 유지한다. LLM이 지어내지 못하게 하는 규칙
 (근거 없는 원인은 "추정:" 접두사, 모르면 "(불명)")까지 분류·기록 프롬프트에 명시되어 있다 (`server/classifier.mjs`).
+신뢰도 자체도 프롬프트에서 wiki 증거 강도 기준 4구간(85–95 직접 매치 / 65–80 모듈은 맞지만 패턴 미기록 /
+51–64 약한 근거 / 50 이하 무근거)으로 캘리브레이션되고, "직접 매치는 반드시 80을 넘긴다"가 명문화되어 있다 —
+자동 배정 임계값(기본 80)이 이 밴드 경계에 근거한다.
 
 파이프라인은 mock 환경뿐 아니라 사내 Jira/Jenkins 대상 dry-run으로도 검증했다 — 실티켓에 링크된
 Jenkins 중계 빌드를 따라가 실패 샤드 콘솔(수 MB)에서 해당 TC 구간만 추출하는 경로 포함
@@ -73,11 +77,11 @@ Jenkins 중계 빌드를 따라가 실패 샤드 콘솔(수 MB)에서 해당 TC 
 | 실시간 push | Socket.IO 4 |
 | LLM | Claude (Bedrock / Anthropic API, provider 전환 가능 + 실패 시 fallback) |
 | 지식 저장소 | `wiki-vault/` — Obsidian 호환 마크다운 (DB 없음, git으로 리뷰 가능) |
-| 테스트 | `node --test` — 서버 순수 함수 22 테스트 |
+| 테스트 | `node --test` — 서버 순수 함수 49 테스트 |
 
 ## 시작하기
 
-요구 사항: Node.js 20+ / Windows 10/11 (서버는 Linux 가능).
+요구 사항: Node.js 22+ 권장(`npm test`의 glob 패턴은 Node 21+ 필요) / Windows 10/11 (서버는 Linux 가능).
 로컬은 mock Jira/Jenkins로 전체 파이프라인을 띄운다.
 
 ```bash
@@ -107,10 +111,11 @@ npm run dev
 ## 검증
 
 ```bash
-npm run typecheck    # TS strict 타입 체크
-npm test             # 서버 순수 함수 22 테스트 (ingest 중복 제거·retrieval self-correction·로그 정형화 판정)
-npm run build        # 프로덕션 빌드
-npm run dist         # Windows EXE 인스톨러 → dist/Sheriff Avatar Setup 0.1.0.exe
+npm run typecheck        # TS strict 타입 체크
+npm test                 # 서버 순수 함수 49 테스트 (ingest 중복 제거·retrieval self-correction·로그 정형화 판정)
+npm run test:coverage    # 위 테스트 + 커버리지 리포트 (node --test --experimental-test-coverage)
+npm run build            # 프로덕션 빌드
+npm run dist             # Windows EXE 인스톨러 → dist/Sheriff Avatar Setup 0.1.0.exe
 ```
 
 스모크 테스트 (mock 4프로세스 + admin/admin 로그인, 약 1분):
@@ -130,10 +135,12 @@ npm run dist         # Windows EXE 인스톨러 → dist/Sheriff Avatar Setup 0.
 ## 문서
 
 - [CLAUDE.md](./CLAUDE.md) — 개발 규칙, 커밋 규칙, 모듈 맵
+- [docs/PRD.md](./docs/PRD.md) — 제품 요구사항 (문제 정의·목표·비목표·품질/안전 요구·알려진 한계)
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 현행 아키텍처 (서버·클라이언트 + Jira 중심)와 파이프라인 상세
 - [docs/API.md](./docs/API.md) — 클라이언트↔서버 Socket.IO·Jira REST·LLM·Jenkins 계약
 - [docs/BACKEND.md](./docs/BACKEND.md) — 기능 명세와 완료 기준·검증 방법
 - [docs/DEMO-SCENARIO.md](./docs/DEMO-SCENARIO.md) — 데모 시나리오 (3~5분, 4장면)
+- [docs/demo/opening-problem-slide.html](./docs/demo/opening-problem-slide.html) — 데모 영상용 오프닝(문제 정의) 슬라이드
 - [docs/ROI.md](./docs/ROI.md) — 도입 효과 추정 (사내 실측 기반: 일 294건 × triage 20~30분 vs 당번 3~4시간)
 - [docs/SETUP.md](./docs/SETUP.md) — 설정·배포·트러블슈팅
 - [docs/deck/](./docs/deck/) — 발표 슬라이드 (단일 HTML, 의존성 없음)
