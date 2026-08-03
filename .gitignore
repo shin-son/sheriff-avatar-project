@@ -7,5 +7,7 @@ dist/
 .env
 .env.local
 server/issue-cache.json
+# replay 실측 데이터 — 사내 티켓 원문·실명(truth) 포함, 절대 커밋 금지
+server/replay-data/
 .claude/*
 .tool/*
