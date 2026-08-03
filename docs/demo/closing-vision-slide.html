@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>SVP 데모 장표 — 클로징 비전</title>
+<style>
+  /* 데모 영상 outro_01_vision 컷용 클릭 진행 장표.
+     사용법: 브라우저로 열고 F11 전체화면 → 클릭(또는 Space/→)으로 단계 진행.
+     단계: ①~④ 사이클 4단계 점등 (분류→분석 코멘트→자동 배정→위키 업데이트)
+           ⑤ "선택된다면" — 미래 로드맵(빌드 자동화→패치 생성→테스트 검증, 점선) 등장
+           ⑥ "진짜 아바타" — 골드 별 배지 점등 (클라이맥스).
+     ←로 뒤로, R로 리셋. 커서는 녹화에 안 잡히게 숨김. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #060606; overflow: hidden; cursor: none; }
+  body {
+    font-family: "Pretendard", "Segoe UI", "Malgun Gothic", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stage {
+    width: 100vw; height: 100vh;
+    background: radial-gradient(ellipse 70% 55% at 40% 50%, #16120a 0%, #060606 70%);
+    display: flex; align-items: center; justify-content: center; gap: 4.5vw;
+  }
+
+  /* ---- 사이클 (왼쪽) ---- */
+  .cycle { position: relative; width: 42vw; height: 74vh; flex: none; }
+  .node {
+    position: absolute; width: 16.5vw; padding: 2.2vh 1.2vw;
+    background: #0d0c08; border: 1px solid #3a301f;
+    border-radius: 12px; text-align: center;
+    opacity: .22; transition: all .5s ease;
+  }
+  .node .num { color: #6e5c3d; font-size: 1.9vh; letter-spacing: .2em; }
+  .node .txt { color: #b3a685; font-size: 2.6vh; font-weight: 600; margin-top: .6vh; }
+  .node.lit {
+    opacity: 1; background: #141008; border-color: #c9a45c;
+    box-shadow: 0 0 34px rgba(201,164,92,.22);
+  }
+  .node.lit .num { color: #c9a45c; }
+  .node.lit .txt { color: #ecdfbd; }
+  .n1 { top: 0; left: 50%; transform: translateX(-50%); }
+  .n2 { top: 50%; right: 0; transform: translateY(-50%); }
+  .n3 { bottom: 0; left: 50%; transform: translateX(-50%); }
+  .n4 { top: 50%; left: 0; transform: translateY(-50%); }
+  .ring {
+    position: absolute; inset: 9vh 5vw;
+    border: 2px dashed #3a301f; border-radius: 50%;
+    transition: border-color .6s ease;
+  }
+  .stage.cycled .ring { border-color: #c9a45c88; }
+  .cycle .caption {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    color: #8d795a; font-size: 2.5vh; letter-spacing: .28em; text-align: center;
+    transition: color .6s ease;
+  }
+  .stage.cycled .caption { color: #c9a45c; }
+
+  /* ---- 미래 로드맵 (오른쪽) ---- */
+  .future {
+    display: flex; align-items: center; gap: 1.4vw;
+    opacity: 0; transform: translateX(30px); transition: opacity .8s ease, transform .8s ease;
+  }
+  .stage.step5 .future { opacity: 1; transform: translateX(0); }
+  .future .bigarrow svg { width: 5.5vw; height: auto; display: block; }
+  .chain { display: flex; flex-direction: column; gap: 1.8vh; align-items: center; }
+  .fnode {
+    width: 15vw; padding: 1.9vh 1.2vw; text-align: center;
+    border: 2px dashed #8d795a; border-radius: 12px; background: transparent;
+  }
+  .fnode .txt { color: #cbb68a; font-size: 2.4vh; font-weight: 600; }
+  .fnode .sub { color: #6e5c3d; font-size: 1.7vh; margin-top: .4vh; letter-spacing: .1em; }
+  .chain .down { text-align: center; color: #8d795a; font-size: 2.6vh; line-height: 1; }
+
+  /* ---- ⑥ 진짜 아바타 (클라이맥스) ---- */
+  .final {
+    display: flex; flex-direction: column; align-items: center; gap: .8vh;
+    margin-top: .6vh;
+    opacity: 0; transform: scale(.6); transition: opacity .5s ease, transform .5s cubic-bezier(.2, 1.6, .4, 1);
+  }
+  .stage.step6 .final { opacity: 1; transform: scale(1); }
+  .final svg { width: 8.5vw; height: auto; filter: drop-shadow(0 0 26px rgba(201,164,92,.55)); }
+  .final .label {
+    color: #ecdfbd; font-size: 3.1vh; font-weight: 800; letter-spacing: .14em;
+    text-shadow: 0 0 22px rgba(201,164,92,.5);
+  }
+  .stage.step6 .fnode { border-color: #c9a45c; }
+  .stage.step6 .fnode .txt { color: #ecdfbd; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="cycle">
+    <div class="ring"></div>
+    <div class="caption">SHERIFF AVATAR<br>MVP CYCLE</div>
+    <div class="node n1" id="c1"><div class="num">01</div><div class="txt">위키 기반 분류</div></div>
+    <div class="node n2" id="c2"><div class="num">02</div><div class="txt">티켓 분석 코멘트</div></div>
+    <div class="node n3" id="c3"><div class="num">03</div><div class="txt">담당자 자동 배정</div></div>
+    <div class="node n4" id="c4"><div class="num">04</div><div class="txt">해결 시 위키 업데이트</div></div>
+  </div>
+  <div class="future" id="future">
+    <div class="bigarrow">
+      <svg viewBox="0 0 120 40" fill="none">
+        <path d="M4 20 H96" stroke="#8d795a" stroke-width="5" stroke-linecap="round" stroke-dasharray="12 9"/>
+        <path d="M92 6 L114 20 L92 34 Z" fill="#8d795a"/>
+      </svg>
+    </div>
+    <div class="chain">
+      <div class="fnode"><div class="txt">빌드 자동화</div><div class="sub">NEXT</div></div>
+      <div class="down">↓</div>
+      <div class="fnode"><div class="txt">아바타가 패치 생성</div><div class="sub">NEXT</div></div>
+      <div class="down">↓</div>
+      <div class="fnode"><div class="txt">테스트 결과 검증</div><div class="sub">NEXT</div></div>
+      <div class="final">
+        <svg viewBox="0 0 100 100" fill="none">
+          <path d="M50 6 L59 34 L88 34 L64 51 L73 80 L50 62 L27 80 L36 51 L12 34 L41 34 Z"
+                fill="#141008" stroke="#c9a45c" stroke-width="4" stroke-linejoin="round"/>
+          <circle cx="50" cy="47" r="9" fill="#c9a45c"/>
+        </svg>
+        <div class="label">진짜 AVATAR</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const stage = document.getElementById('stage');
+  const nodes = ['c1', 'c2', 'c3', 'c4'].map((id) => document.getElementById(id));
+  let cur = 0; // 0: 전부 어두움, 1~4: 사이클 점등, 5: 미래 로드맵, 6: 진짜 아바타
+  function render() {
+    nodes.forEach((el, i) => el.classList.toggle('lit', cur >= i + 1));
+    stage.classList.toggle('cycled', cur >= 4);
+    stage.classList.toggle('step5', cur >= 5);
+    stage.classList.toggle('step6', cur >= 6);
+  }
+  function advance(d) { cur = Math.max(0, Math.min(6, cur + d)); render(); }
+  addEventListener('click', () => advance(1));
+  addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'ArrowRight') advance(1);
+    else if (e.key === 'ArrowLeft') advance(-1);
+    else if (e.key === 'r' || e.key === 'R') { cur = 0; render(); }
+  });
+</script>
+</body>
+</html>
