@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>SVP 데모 장표 — 문제 제기</title>
+<style>
+  /* 데모 영상 opening_02_problem 컷용 클릭 진행 장표.
+     사용법: 브라우저로 열고 F11 전체화면 → 클릭(또는 Space/→)으로 단계 진행.
+     단계: ① 티켓 스택 ② 화살표 ③ 담당자 ❓ ④ 보안관 배지가 ❓를 대체 (④는 선택).
+     ←로 뒤로, R로 리셋. 커서는 녹화에 안 잡히게 숨김. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #060606; overflow: hidden; cursor: none; }
+  body {
+    font-family: "Pretendard", "Segoe UI", "Malgun Gothic", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stage {
+    width: 100vw; height: 100vh;
+    background: radial-gradient(ellipse 70% 55% at 50% 58%, #16120a 0%, #060606 70%);
+    display: flex; align-items: center; justify-content: center; gap: 6vw;
+  }
+  .step { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+  .step.on { opacity: 1; transform: translateY(0); }
+
+  /* ① 티켓 스택 */
+  .tickets { display: flex; flex-direction: column; gap: 1.6vh; }
+  .ticket {
+    width: 24vw; padding: 2.2vh 1.6vw;
+    background: #111009; border: 1px solid #4a3c22; border-left: 4px solid #c9a45c;
+    border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.6);
+    opacity: 0; transform: translateX(-40px);
+    transition: opacity .5s ease, transform .5s ease;
+  }
+  .tickets.on .ticket { opacity: 1; transform: translateX(0); }
+  .tickets.on .ticket:nth-child(2) { transition-delay: .25s; }
+  .tickets.on .ticket:nth-child(3) { transition-delay: .5s; }
+  .ticket .key { color: #8d795a; font-size: 1.7vh; letter-spacing: .08em; }
+  .ticket .title { color: #e8d9b8; font-size: 2.5vh; font-weight: 600; margin-top: .6vh; }
+  .ticket .badge {
+    display: inline-block; margin-top: 1vh; padding: .4vh .8vw;
+    background: #2a1313; color: #e08a8a; border: 1px solid #5c2c2c;
+    border-radius: 999px; font-size: 1.6vh; letter-spacing: .06em;
+  }
+
+  /* ② 화살표 */
+  .arrow svg { width: 11vw; height: auto; display: block; }
+
+  /* ③ 담당자 ❓ / ④ 배지 */
+  .who { position: relative; width: 17vw; text-align: center; }
+  .person { font-size: 16vh; line-height: 1; filter: grayscale(.2); }
+  .qmark {
+    position: absolute; top: -7vh; right: 1.5vw;
+    font-size: 11vh; font-weight: 800; color: #c9a45c;
+    text-shadow: 0 0 34px rgba(201,164,92,.45);
+    animation: bob 1.6s ease-in-out infinite;
+    transition: opacity .4s ease;
+  }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.6vh); } }
+  .who .label { margin-top: 2.4vh; color: #8d795a; font-size: 2.4vh; letter-spacing: .3em; }
+
+  .star {
+    position: absolute; top: -9vh; right: .2vw; width: 9vw;
+    opacity: 0; transform: scale(2.2) rotate(-18deg);
+    transition: opacity .45s ease, transform .45s cubic-bezier(.2, 1.6, .4, 1);
+  }
+  .stage.step4 .star { opacity: 1; transform: scale(1) rotate(0deg); }
+  .stage.step4 .qmark { opacity: 0; animation: none; }
+  .stage.step4 .who .label { color: #c9a45c; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="step tickets" id="s1">
+    <div class="ticket"><div class="key">CIOPS-1041</div><div class="title">auth token refresh 실패</div><span class="badge">CI TEST FAILED</span></div>
+    <div class="ticket"><div class="key">CIOPS-1042</div><div class="title">payment 빌드 깨짐</div><span class="badge">BUILD FAILED</span></div>
+    <div class="ticket"><div class="key">CIOPS-1043</div><div class="title">ui snapshot diff 발생</div><span class="badge">CI TEST FAILED</span></div>
+  </div>
+  <div class="step arrow" id="s2">
+    <svg viewBox="0 0 120 40" fill="none">
+      <path d="M4 20 H96" stroke="#c9a45c" stroke-width="5" stroke-linecap="round"/>
+      <path d="M92 6 L114 20 L92 34 Z" fill="#c9a45c"/>
+    </svg>
+  </div>
+  <div class="step who" id="s3">
+    <div class="person">👤</div>
+    <div class="qmark">?</div>
+    <svg class="star" viewBox="0 0 100 100" fill="none">
+      <path d="M50 6 L59 34 L88 34 L64 51 L73 80 L50 62 L27 80 L36 51 L12 34 L41 34 Z"
+            fill="#0d0b06" stroke="#c9a45c" stroke-width="4" stroke-linejoin="round"/>
+      <circle cx="50" cy="47" r="9" fill="#c9a45c"/>
+    </svg>
+    <div class="label">담당자?</div>
+  </div>
+</div>
+<script>
+  const stage = document.getElementById('stage');
+  const steps = [document.getElementById('s1'), document.getElementById('s2'), document.getElementById('s3')];
+  let cur = 0; // 0: 빈 화면, 1: 티켓, 2: 화살표, 3: 담당자?, 4: 배지
+  function render() {
+    steps.forEach((el, i) => el.classList.toggle('on', cur >= i + 1));
+    stage.classList.toggle('step4', cur >= 4);
+  }
+  function advance(d) { cur = Math.max(0, Math.min(4, cur + d)); render(); }
+  addEventListener('click', () => advance(1));
+  addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'ArrowRight') advance(1);
+    else if (e.key === 'ArrowLeft') advance(-1);
+    else if (e.key === 'r' || e.key === 'R') { cur = 0; render(); }
+  });
+</script>
+</body>
+</html>
