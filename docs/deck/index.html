@@ -299,16 +299,16 @@
       <li><span class="n">①</span><span class="t">아는 이슈가 유입되면 <strong>수 초 내 담당자에게 자동 배정</strong> + 근거 댓글.</span></li>
       <li><span class="n">②</span><span class="t">담당자가 <strong>Jira에서 Done</strong> 처리 → 앱이 감지하고 case-log에 실시간 기록.<em>사람은 늘 하던 대로 Jira만 쓴다 — 앱에 해결 버튼이 없다.</em></span></li>
       <li><span class="n">③</span><span class="t">모르는 이슈는 <strong>당번에게</strong> (자동화가 아는 척하지 않는다).</span></li>
-      <li><span class="n">④</span><span class="t">같은 이슈가 재발하자 <strong>이번엔 자동 배정</strong> — 쓸수록 배정률이 오른다.<em>이게 이 도구의 존재 이유 (핵심 컷)</em></span></li>
+      <li><span class="n">④</span><span class="t">같은 이슈가 재발하자 <strong>방금 쌓인 case-log가 근거로 소환</strong> — 당번은 한 클릭으로 배정. 위키가 쌓이면 자동 배정 게이트를 넘는 구조.<em>이게 이 도구의 존재 이유 (핵심 컷)</em></span></li>
     </ul>
   </section>
 
   <!-- 8. ROI -->
   <section class="slide">
-    <div class="eyebrow"><span class="num">07</span> 효과</div>
+    <div class="eyebrow"><span class="num">07</span> 효과 — 도입 효과 추정 (ROI.md)</div>
     <h2>커버리지 <span class="red">3%</span> → <span class="turq" style="color:var(--turq)">100%</span></h2>
     <div class="roi">
-      <div class="box"><span class="big">3% → 100%</span><div class="lbl">전량 발생 수 초 내 1차 분류 (실패 로그·과거 사례 자동 첨부)</div></div>
+      <div class="box"><span class="big">3% → 100%</span><div class="lbl">전량 발생 수 초 내 1차 분류 (실패 로그·과거 사례 자동 첨부) — 도입 시 추정, 현재 실측은 3%</div></div>
       <div class="box"><span class="big">일 → 분</span><div class="lbl">배정 리드타임 — 당번 창구 대기(최대 1일)에서 폴링 주기로</div></div>
       <div class="box"><span class="big g num-lg">연 ~470h</span><div class="lbl">당번 시간 절감 (보수 추정 · 실측은 dry-run으로 확정 예정)</div></div>
       <div class="box"><span class="big">조직 기억</span><div class="lbl">3개월마다 리셋되던 노하우가 vault에 영구 축적 — 온보딩 비용 소멸</div></div>
@@ -319,16 +319,16 @@
   <!-- 9. Adoption / safety -->
   <section class="slide">
     <div class="eyebrow"><span class="num">08</span> 사내 적용성 · 안전</div>
-    <h2>실환경에서 <span class="accent">이미 동작</span>한다</h2>
+    <h2>사내 환경 <span class="accent">dry-run 검증</span>을 마쳤다</h2>
     <div class="gate">
-      <div class="step"><span class="mode">dry-run</span><p>기본값 — 실티켓 하나도 안 바뀌고 분류 품질만 관찰</p></div>
+      <div class="step"><span class="mode">dry-run</span><p>기본값 — 실티켓 하나도 안 바뀌고 분류 품질만 관찰 <strong style="color:var(--turq)">← 검증 완료</strong></p></div>
       <span class="arrow">→</span>
       <div class="step"><span class="mode">label</span><p>svp-test 라벨 티켓만 전체 루프 검증</p></div>
       <span class="arrow">→</span>
-      <div class="step"><span class="mode">live</span><p>팀 합의 후 전면 전환</p></div>
+      <div class="step"><span class="mode">live</span><p>팀 합의 후 전면 전환 — 남은 한 단계</p></div>
     </div>
     <ul class="safety">
-      <li>사내 <strong>Jira · Jenkins</strong> 실연동 검증 — 중계빌드에서 실패 TC 구간 로그 자동 첨부</li>
+      <li>사내 <strong>Jira · Jenkins</strong> 대상 dry-run 검증 완료 — 중계빌드에서 실패 TC 구간 로그 자동 첨부. live 쓰기는 게이트 뒤에서 대기</li>
       <li><strong>3단 write 게이트</strong>로 도입 리스크를 설계에 내장 (무위험 관찰 → 부분 → 전면)</li>
       <li>운영 vault는 <strong>사내에 분리</strong> — 비밀정보는 서버 .env에만, 클라이언트 무자격증명</li>
     </ul>

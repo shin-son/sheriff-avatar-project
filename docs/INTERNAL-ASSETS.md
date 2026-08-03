@@ -40,7 +40,7 @@
 
 | 항목 | 값 |
 |---|---|
-| Gerrit MCP 서버 이름 | `Exynos-Auto-CICD-Gerrit` (코드 고정 — `server/wiki-query.mjs` lookupGerritCommitter) |
+| Gerrit MCP 서버 이름 | `<채우기>` — 코드 고정(`server/wiki-query.mjs` lookupGerritCommitter). 사내 claude MCP 설정에 등록된 이름과 일치해야 하며, 조회 실패 시 wiki owner 후보만 생성 |
 | Gerrit MCP 엔드포인트/설정 위치 | `<채우기>` |
 | Jira MCP 서버 이름 (`SVP_COMMENT_MCP_NAME`) | `<채우기>` — `SVP_COMMENT_CHANNEL=mcp`일 때만 |
 | Jira MCP 엔드포인트/설정 위치 | `<채우기>` |
