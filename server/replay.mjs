@@ -160,9 +160,11 @@ function score({ pred, truthCsv }) {
   const tickets = new Map(loadTickets().map((t) => [t.key, t]))
   const override = truthCsv ? loadTruthCsv(truthCsv) : null
 
+  // --truth가 주어지면 CSV가 유일한 정답 소스 — 없는 키는 '정답 없음'으로 제외한다.
+  // (티켓 assignee 폴백은 클론 환경에서 봇(cicd_ap)을 정답으로 삼아 점수를 희석시킨다.)
   const rows = preds.map((p) => ({
     ...p,
-    truth: override?.get(p.key) ?? tickets.get(p.key)?.truth.assignee ?? null
+    truth: override ? (override.get(p.key) ?? null) : (tickets.get(p.key)?.truth.assignee ?? null)
   }))
   const noTruth = rows.filter((r) => !r.truth)
   const fallback = rows.filter((r) => r.truth && r.fallback)
