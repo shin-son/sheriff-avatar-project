@@ -113,6 +113,9 @@ async function run({ half, out }) {
       : []
   )
   const targets = halfOf(loadTickets(), half).filter((t) => !done.has(t.key))
+  // 멀티-owner 모듈(owner: 블록 리스트): 예측은 제품과 동일하게 owners[0]이지만,
+  // "올바른 팀으로 갔는가" 채점을 위해 전체 목록도 기록한다.
+  const ownersOf = new Map(listModules().map((m) => [m.module, m.owners ?? [m.owner]]))
   console.log(`[replay] run: ${targets.length}건 (완료 ${done.size}건 스킵, half=${half ?? '전체'}) → ${predFile}`)
   for (const [i, t] of targets.entries()) {
     const keywordMatches = queryWiki(t.event)
@@ -125,6 +128,7 @@ async function run({ half, out }) {
       category: llm.category,
       confidence: llm.confidence,
       owner: resolveOwner(llm.category),
+      owners: ownersOf.get(llm.category) ?? [],
       fallback: llm.summary?.startsWith('LLM 분류 실패') ?? false,
       jenkinsLog: t.jenkinsLog ?? false
     }
@@ -163,9 +167,13 @@ function score({ pred, truthCsv }) {
   const noTruth = rows.filter((r) => !r.truth)
   const fallback = rows.filter((r) => r.truth && r.fallback)
   const evaluated = rows.filter((r) => r.truth && !r.fallback)
+  // 팀 정확도: 멀티-owner 모듈은 목록 중 누구든 해결자와 일치하면 정답 (owners 미기록 구버전 예측은 owner로 폴백)
+  const teamHit = (r) => (r.owners?.length ? r.owners.includes(r.truth) : r.owner === r.truth)
   const correct = evaluated.filter((r) => r.owner === r.truth)
+  const teamCorrect = evaluated.filter(teamHit)
   const auto = evaluated.filter((r) => r.confidence > AUTO_MIN && r.category !== 'unknown')
   const autoCorrect = auto.filter((r) => r.owner === r.truth)
+  const autoTeamCorrect = auto.filter(teamHit)
   const withLog = evaluated.filter((r) => r.jenkinsLog)
   const withLogCorrect = withLog.filter((r) => r.owner === r.truth)
   const noLog = evaluated.filter((r) => !r.jenkinsLog)
@@ -173,9 +181,10 @@ function score({ pred, truthCsv }) {
 
   console.log(`\n== replay score (${pred}) ==`)
   console.log(`대상 ${preds.length}건 | 정답 없음 ${noTruth.length} | LLM fallback ${fallback.length} | 평가 ${evaluated.length}`)
-  console.log(`분류 정확도(예측 owner == 실제 해결자): ${correct.length}/${evaluated.length} = ${pct(correct.length, evaluated.length)}`)
+  console.log(`배정 정확도(owners[0] == 해결자, 제품 그대로): ${correct.length}/${evaluated.length} = ${pct(correct.length, evaluated.length)}`)
+  console.log(`팀 정확도(owners 중 해결자 포함):          ${teamCorrect.length}/${evaluated.length} = ${pct(teamCorrect.length, evaluated.length)}`)
   console.log(`잠재 자동 배정률(신뢰도 >${AUTO_MIN}):      ${auto.length}/${evaluated.length} = ${pct(auto.length, evaluated.length)}`)
-  console.log(`자동 배정 정밀도(>${AUTO_MIN} 중 정답):     ${autoCorrect.length}/${auto.length} = ${pct(autoCorrect.length, auto.length)}`)
+  console.log(`자동 배정 정밀도(>${AUTO_MIN} 중 정답):     ${autoCorrect.length}/${auto.length} = ${pct(autoCorrect.length, auto.length)} (팀 기준 ${pct(autoTeamCorrect.length, auto.length)})`)
   console.log(`unknown율:                             ${pct(evaluated.filter((r) => r.category === 'unknown').length, evaluated.length)}`)
   console.log(`Jenkins 로그 확보 건 정확도:            ${pct(withLogCorrect.length, withLog.length)} (${withLog.length}건)`)
   console.log(`로그 미확보 건 정확도:                  ${pct(noLogCorrect.length, noLog.length)} (${noLog.length}건)`)
