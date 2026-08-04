@@ -23,9 +23,9 @@
   }
 
   /* ---- 사이클 (왼쪽) ---- */
-  .cycle { position: relative; width: 42vw; height: 74vh; flex: none; }
+  .cycle { position: relative; width: 44vw; height: 74vh; flex: none; }
   .node {
-    position: absolute; width: 16.5vw; padding: 2.2vh 1.2vw;
+    position: absolute; width: 15vw; padding: 2.2vh 1vw;
     background: #0d0c08; border: 1px solid #3a301f;
     border-radius: 12px; text-align: center;
     opacity: .22; transition: all .5s ease;
@@ -50,8 +50,8 @@
   .stage.cycled .ring { border-color: #c9a45c88; }
   .cycle .caption {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    color: #8d795a; font-size: 2.5vh; letter-spacing: .28em; text-align: center;
-    transition: color .6s ease;
+    color: #8d795a; font-size: 1.9vh; letter-spacing: .18em; text-align: center;
+    line-height: 1.9; transition: color .6s ease;
   }
   .stage.cycled .caption { color: #c9a45c; }
 
@@ -95,7 +95,7 @@
     <div class="node n1" id="c1"><div class="num">01</div><div class="txt">위키 기반 분류</div></div>
     <div class="node n2" id="c2"><div class="num">02</div><div class="txt">티켓 분석 코멘트</div></div>
     <div class="node n3" id="c3"><div class="num">03</div><div class="txt">담당자 자동 배정</div></div>
-    <div class="node n4" id="c4"><div class="num">04</div><div class="txt">해결 시 위키 업데이트</div></div>
+    <div class="node n4" id="c4"><div class="num">04</div><div class="txt">해결 시<br>위키 업데이트</div></div>
   </div>
   <div class="future" id="future">
     <div class="bigarrow">
