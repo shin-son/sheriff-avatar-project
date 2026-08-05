@@ -1,0 +1,64 @@
+{
+  "title": "SVP dry-run 실측 — 재현 환경 집계 산출물",
+  "generatedAt": "2026-08-05",
+  "tool": "server/replay.mjs (수치 블록은 score --json 스키마)",
+  "privacy": "집계 수치만 — 티켓 키·실명·원문 미포함. 원자료(replay-data/, truth.csv)는 사내 보관",
+  "methodology": {
+    "environment": "실 해결 티켓을 복제한 재현 환경 (클론 프로젝트) — 티켓 제목·description·Jenkins 로그는 실데이터",
+    "sampling": "시간순 기계적 수집 (ORDER BY created ASC), 체리피킹 없음",
+    "groundTruth": "원본 티켓의 실제 최종 해결자 (truth CSV, 채점 단계에서만 사용 — 분류 프롬프트와 격리)",
+    "collected": 51,
+    "labeled": 21,
+    "evaluated": 20,
+    "jenkinsLogFetched": "평가 20건 전량",
+    "confidenceGate": 80
+  },
+  "baseline": {
+    "pred": "predictions.jsonl",
+    "confidenceGate": 80,
+    "counts": { "predictions": 51, "noTruth": 31, "llmFallback": 0, "evaluated": 20 },
+    "assigneeAccuracy": { "n": 12, "d": 20, "rate": 0.6 },
+    "teamAccuracy": { "n": 14, "d": 20, "rate": 0.7 },
+    "autoAssignRate": { "n": 15, "d": 20, "rate": 0.75 },
+    "autoPrecision": { "n": 10, "d": 15, "rate": 0.667 },
+    "autoPrecisionTeam": { "n": 11, "d": 15, "rate": 0.733 },
+    "unknownRate": { "n": 0, "d": 20, "rate": 0 },
+    "withJenkinsLogAccuracy": { "n": 12, "d": 20, "rate": 0.6 },
+    "withoutJenkinsLogAccuracy": { "n": 0, "d": 0, "rate": null }
+  },
+  "context": {
+    "theoreticalCeiling": {
+      "resolverInVaultOwners": { "n": 16, "d": 21, "rate": 0.762 },
+      "note": "예측은 vault 모듈 노트의 owner 집합에서만 나오므로, 해결자가 미등록인 티켓은 구조적으로 맞출 수 없다. 팀 정확도 70%는 이 상한에 근접"
+    },
+    "gapAnalysis": {
+      "over80Misassignments": 4,
+      "causedByVaultMissingResolver": 2,
+      "note": "노트 보완 시 >80 정밀도 13/15(~87%) 경로 — lint 공백 탐지가 이 공백을 자동 지목"
+    }
+  },
+  "beforeAfter": {
+    "design": "라벨된 20건을 해결일 순 전/후반 10건으로 분할 — 전반부를 ingest한 vault(after) vs 시드 vault(before)로 같은 후반부를 재분류",
+    "before": {
+      "pred": "before.jsonl",
+      "counts": { "predictions": 10, "noTruth": 0, "llmFallback": 1, "evaluated": 9 },
+      "teamAccuracy": { "n": 6, "d": 9, "rate": 0.667 },
+      "autoAssignRate": { "n": 5, "d": 9, "rate": 0.556 },
+      "autoPrecisionTeam": { "n": 4, "d": 5, "rate": 0.8 }
+    },
+    "after": {
+      "pred": "after.jsonl",
+      "counts": { "predictions": 10, "noTruth": 0, "llmFallback": 0, "evaluated": 10 },
+      "teamAccuracy": { "n": 6, "d": 10, "rate": 0.6 },
+      "autoAssignRate": { "n": 6, "d": 10, "rate": 0.6 },
+      "autoPrecisionTeam": { "n": 4, "d": 6, "rate": 0.667 }
+    },
+    "verdict": "검출 불가 — 후반부 중 전반부와 같은 실패 서명(재발쌍)이 1/10뿐이라 축적 효과가 통계에 나타날 수 없는 설계. 발표에는 사용하지 않음",
+    "recurrenceCase": {
+      "signaturePairs": 1,
+      "confidenceBefore": 78,
+      "confidenceAfter": 83,
+      "note": "유일한 재발쌍에서 이전 해결 기록 축적 후 자동 배정 게이트(80)를 통과 — 단건 사례. 대조군(재발 무관 9건)에서도 ±5~6 변동이 관찰되어 통계적 주장은 하지 않는다"
+    }
+  }
+}

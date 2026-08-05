@@ -1,0 +1,34 @@
+# 실측 산출물 (dry-run measurement artifacts)
+
+ROI.md·발표 덱이 인용하는 실측 수치("자동 배정률 75%, 팀 정확도 70%" 등)의 **집계 산출물**.
+주장을 제3자가 대조할 수 있도록 repo에 남긴다.
+
+- `replay-summary-2026-08-05.json` — 2026-08-05 재현 환경 측정의 집계. 수치 블록은
+  `server/replay.mjs score --json`의 출력 스키마이고, `context`/`beforeAfter.verdict` 등
+  해석 필드는 측정 기록에서 전사했다.
+
+## 왜 집계만 있나
+
+원자료(`server/replay-data/` — 티켓 원문·Jenkins 로그·해결자 실명 truth CSV)는 사내 데이터라
+repo에 커밋하지 않는다(gitignore, CLAUDE.md 절대 규칙 4). 반출 가능한 것은 **티켓 키·실명이
+포함되지 않은 집계 수치**뿐이며, 이 디렉터리가 그 반출본이다.
+
+## 재현 방법
+
+사내 환경(Jira 접근 + Bedrock 자격증명)에서:
+
+```bash
+# 1. 해결 완료 티켓 수집 (read-only) → 2. 분류 재생 → 3. 채점
+node server/replay.mjs collect --jql "<JQL> AND resolution = Done" --max 200
+node server/replay.mjs run
+SVP_LLM_CONFIDENCE_MIN=80 node server/replay.mjs score --truth <truth.csv> --json > docs/measurement/replay-summary-<날짜>.json
+```
+
+측정 설계(ground truth 격리·시간순 샘플링·before/after 프로토콜)는 `server/replay.mjs` 헤더
+주석과 PR #66 참고.
+
+## 한계 (스스로 기록)
+
+- **n=20** — 방향성 확인용 1차 측정. 표본 확대 시 수치가 ±10%p 움직일 수 있다.
+- 재현 환경(실 티켓 복제본) 측정 — 실 시스템 직결 백테스트가 아니다. 티켓 내용·로그는 실데이터.
+- before/after는 재발쌍 부족(1/10)으로 축적 효과를 검출하지 못했다 — 산출물에 그대로 남겼다.
