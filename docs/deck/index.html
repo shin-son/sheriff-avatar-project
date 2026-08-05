@@ -303,22 +303,35 @@
     </ul>
   </section>
 
-  <!-- 8. ROI -->
+  <!-- 8. Measurement -->
   <section class="slide">
-    <div class="eyebrow"><span class="num">07</span> 효과 — 도입 효과 추정 (ROI.md)</div>
+    <div class="eyebrow"><span class="num">07</span> 실측 — 재현 환경 측정</div>
+    <h2>가정이 아니라 <span class="accent">측정했다</span></h2>
+    <div class="roi">
+      <div class="box"><span class="big g num-lg">75%</span><div class="lbl">잠재 자동 배정률 (신뢰도 &gt;80) — ROI 보수 가정 30%의 <strong>2.5배</strong></div></div>
+      <div class="box"><span class="big num-lg">70%</span><div class="lbl">팀 단위 분류 정확도 — 담당자가 위키에 존재하는 <strong>이론 상한(~75%)에 근접</strong>. 부족한 건 분류기가 아니라 아직 안 쓰인 노트다</div></div>
+      <div class="box"><span class="big num-lg">73% → 87%</span><div class="lbl">&gt;80 자동 배정 정밀도 — 오배정의 절반은 위키 공백. <strong>노트 보완 시 87% 경로</strong>를 실측으로 확인, 그 공백은 lint가 자동 지목</div></div>
+      <div class="box"><span class="big num-lg">78 → 83</span><div class="lbl">재발 티켓이 해결 기록 축적 후 <strong>자동 배정 게이트(80) 통과</strong> — compounding 사례 (단건)</div></div>
+    </div>
+    <p class="lead">실 해결 티켓을 복제한 재현 환경 <strong>20건 전량 채점</strong> — 정답은 원본 티켓의 실제 해결자, 시간순 기계적 샘플링.</p>
+  </section>
+
+  <!-- 9. ROI -->
+  <section class="slide">
+    <div class="eyebrow"><span class="num">08</span> 효과 — 도입 효과 추정 (ROI.md)</div>
     <h2>커버리지 <span class="red">3%</span> → <span class="turq" style="color:var(--turq)">100%</span></h2>
     <div class="roi">
       <div class="box"><span class="big">3% → 100%</span><div class="lbl">전량 발생 수 초 내 1차 분류 (실패 로그·과거 사례 자동 첨부) — 도입 시 추정, 현재 실측은 3%</div></div>
       <div class="box"><span class="big">일 → 분</span><div class="lbl">배정 리드타임 — 당번 창구 대기(최대 1일)에서 폴링 주기로</div></div>
-      <div class="box"><span class="big g num-lg">연 ~470h</span><div class="lbl">당번 시간 절감 (보수 추정 · 실측은 dry-run으로 확정 예정)</div></div>
+      <div class="box"><span class="big g num-lg">연 ~470h</span><div class="lbl">당번 시간 절감 — 자동 배정 30% 보수 가정 기준. 실측 잠재 배정률(75%)이 이를 상회</div></div>
       <div class="box"><span class="big">조직 기억</span><div class="lbl">3개월마다 리셋되던 노하우가 vault에 영구 축적 — 온보딩 비용 소멸</div></div>
     </div>
     <p class="lead">LLM 비용은 <strong>모델 tier·프롬프트 캐싱</strong>으로 관리 — 절감이 비용을 상회하도록 설계.</p>
   </section>
 
-  <!-- 9. Adoption / safety -->
+  <!-- 10. Adoption / safety -->
   <section class="slide">
-    <div class="eyebrow"><span class="num">08</span> 사내 적용성 · 안전</div>
+    <div class="eyebrow"><span class="num">09</span> 사내 적용성 · 안전</div>
     <h2>사내 환경 <span class="accent">dry-run 검증</span>을 마쳤다</h2>
     <div class="gate">
       <div class="step"><span class="mode">dry-run</span><p>기본값 — 실티켓 하나도 안 바뀌고 분류 품질만 관찰 <strong style="color:var(--turq)">← 검증 완료</strong></p></div>
@@ -334,7 +347,7 @@
     </ul>
   </section>
 
-  <!-- 10. Closing -->
+  <!-- 11. Closing -->
   <section class="slide center">
     <span class="title-star" aria-hidden="true" style="margin:0 auto 30px"></span>
     <p class="close-line">10분 전엔 사람이 판단해야 했던 이슈가,<br>이제 <span class="accent">스스로 배정</span>된다.</p>
