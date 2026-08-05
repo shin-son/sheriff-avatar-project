@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SVP 모의 심사 리포트 — 5라운드 종합</title>
+<title>SVP 모의 심사 리포트 — 6라운드 종합</title>
 <style>
   :root {
     --ground:#FAF8F4; --surface:#FFFFFF; --surface-2:#F3EFE6; --ink:#241E14; --ink-2:#55493A;
@@ -86,42 +86,42 @@
 <button class="theme-btn" onclick="var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark')">◐ 테마</button>
 <div class="wrap">
   <header>
-    <p class="eyebrow">★ 해커톤 모의 심사 · 5라운드 종합</p>
+    <p class="eyebrow">★ 해커톤 모의 심사 · 6라운드 종합</p>
     <h1>Sheriff aVatar Project (SVP)</h1>
-    <p class="sub">기준: 기술성 30 · 창의성 25 · 완성도 20 · 비즈니스 15 · 전달력 10 &nbsp;|&nbsp; 5차 대상: 코드 프리즈(7-30) 이후 main (#51~#63 병합)</p>
+    <p class="sub">기준: 기술성 30 · 창의성 25 · 완성도 20 · 비즈니스 15 · 전달력 10 &nbsp;|&nbsp; 6차 대상: main + 사내 재현 환경 실측 결과(집계 수치)</p>
     <div class="hero">
-      <div class="hero-score serif num"><span class="from">72.0</span><span class="arrow">→</span><span class="from">77.7</span><span class="arrow">→</span><span class="from">82.2</span><span class="arrow">→</span><span class="from">84.1</span><span class="arrow">→</span><span class="big">85.2</span><span class="of">/ 100</span></div>
-      <span class="chip num">▲ +13.2</span>
-      <div class="verdict"><p><strong>다섯 라운드에 걸쳐 72.0 → 85.2 — 코드 프리즈로 "돌아가는 main"이 확보됐다.</strong> 4차의 최대 리스크였던 lint 스택이 머지됐고, 신뢰도 보정으로 &gt;80 자동 배정 게이트가 실제로 작동한다. 남은 레버는 4차와 동일하게 코드 밖: 데모 영상 촬영(시나리오는 확보)과 dry-run 실측.</p></div>
+      <div class="hero-score serif num"><span class="from">72.0</span><span class="arrow">→</span><span class="from">…</span><span class="arrow">→</span><span class="from">84.1</span><span class="arrow">→</span><span class="from">85.2</span><span class="arrow">→</span><span class="big">86.1</span><span class="of">/ 100</span></div>
+      <span class="chip num">▲ +14.1</span>
+      <div class="verdict"><p><strong>마지막 레버였던 dry-run 실측이 확보됐다 — 실 티켓 복제 20건 전량 채점.</strong> 팀 정확도 70%(이론 상한 근접), 잠재 자동 배정률 75%(가정 30%의 2.5배), 오배정의 절반은 vault 공백으로 노트 보완 시 정밀도 87% 경로까지 실측. 남은 것은 데모 영상 완성과 실측 수치의 덱 반영뿐이다.</p></div>
     </div>
   </header>
 
   <section>
-    <h2>항목별 궤적 — 5라운드</h2>
+    <h2>항목별 궤적 — 6라운드</h2>
     <table class="num">
-      <thead><tr><th>항목</th><th>가중</th><th>1차 (7-27)</th><th>2차 (7-28)</th><th>3차 (7-29)</th><th>4차 (7-30)</th><th>5차 (7-31)</th><th>Δ</th></tr></thead>
+      <thead><tr><th>항목</th><th>가중</th><th>1차 (7-27)</th><th>2차 (7-28)</th><th>3차 (7-29)</th><th>4차 (7-30)</th><th>5차 (7-31)</th><th>6차 (8-5)</th><th>Δ</th></tr></thead>
       <tbody>
-        <tr><th>기술성 <small>코드·아키텍처·난이도</small></th><td>30%</td><td>77</td><td>80</td><td>83</td><td>85</td><td class="final">86</td><td class="delta">+9</td></tr>
-        <tr><th>창의성 <small>차별성·유사사례</small></th><td>25%</td><td>65</td><td>69</td><td>74</td><td>78</td><td class="final">78</td><td class="delta">+13</td></tr>
-        <tr><th>완성도 <small>데모·버그·안정성·UX</small></th><td>20%</td><td>72</td><td>86</td><td>91</td><td>92</td><td class="final">94</td><td class="delta">+22</td></tr>
-        <tr><th>비즈니스 <small>적용성·ROI·실용성</small></th><td>15%</td><td>76</td><td>81</td><td>81</td><td>82</td><td class="final">83</td><td class="delta">+7</td></tr>
-        <tr><th>전달력 <small>발표·스토리텔링</small></th><td>10%</td><td>68</td><td>71</td><td>84</td><td>84</td><td class="final">86</td><td class="delta">+18</td></tr>
-        <tr class="total-row"><th>가중 총점</th><td></td><td>72.0</td><td>77.7</td><td>82.2</td><td>84.1</td><td class="final">85.2</td><td class="delta">+13.2</td></tr>
+        <tr><th>기술성 <small>코드·아키텍처·난이도</small></th><td>30%</td><td>77</td><td>80</td><td>83</td><td>85</td><td>86</td><td class="final">86</td><td class="delta">+9</td></tr>
+        <tr><th>창의성 <small>차별성·유사사례</small></th><td>25%</td><td>65</td><td>69</td><td>74</td><td>78</td><td>78</td><td class="final">80</td><td class="delta">+15</td></tr>
+        <tr><th>완성도 <small>데모·버그·안정성·UX</small></th><td>20%</td><td>72</td><td>86</td><td>91</td><td>92</td><td>94</td><td class="final">94</td><td class="delta">+22</td></tr>
+        <tr><th>비즈니스 <small>적용성·ROI·실용성</small></th><td>15%</td><td>76</td><td>81</td><td>81</td><td>82</td><td>83</td><td class="final">86</td><td class="delta">+10</td></tr>
+        <tr><th>전달력 <small>발표·스토리텔링</small></th><td>10%</td><td>68</td><td>71</td><td>84</td><td>84</td><td>86</td><td class="final">86</td><td class="delta">+18</td></tr>
+        <tr class="total-row"><th>가중 총점</th><td></td><td>72.0</td><td>77.7</td><td>82.2</td><td>84.1</td><td>85.2</td><td class="final">86.1</td><td class="delta">+14.1</td></tr>
       </tbody>
     </table>
   </section>
 
   <section>
     <h2>최종 점수 (1차 대비)</h2>
-    <div class="chart" role="img" aria-label="5차 점수: 기술성 86, 창의성 78, 완성도 94, 비즈니스 83, 전달력 86">
-      <span class="head">항목</span><span class="head">1차 → 5차 (0–100)</span><span class="head" style="text-align:right">점수</span>
+    <div class="chart" role="img" aria-label="6차 점수: 기술성 86, 창의성 80, 완성도 94, 비즈니스 86, 전달력 86">
+      <span class="head">항목</span><span class="head">1차 → 6차 (0–100)</span><span class="head" style="text-align:right">점수</span>
       <span class="dim">기술성</span><span class="track"><span class="g1" style="width:77%"></span><span class="fill" style="width:86%"></span><span class="tick80"></span></span><span class="sc">86 <span class="was">← 77</span></span>
-      <span class="dim">창의성</span><span class="track"><span class="g1" style="width:65%"></span><span class="fill" style="width:78%"></span><span class="tick80"></span></span><span class="sc">78 <span class="was">← 65</span></span>
+      <span class="dim">창의성</span><span class="track"><span class="g1" style="width:65%"></span><span class="fill" style="width:80%"></span><span class="tick80"></span></span><span class="sc">80 <span class="was">← 65</span></span>
       <span class="dim">완성도</span><span class="track"><span class="g1" style="width:72%"></span><span class="fill" style="width:94%"></span><span class="tick80"></span></span><span class="sc">94 <span class="was">← 72</span></span>
-      <span class="dim">비즈니스</span><span class="track"><span class="g1" style="width:76%"></span><span class="fill" style="width:83%"></span><span class="tick80"></span></span><span class="sc">83 <span class="was">← 76</span></span>
+      <span class="dim">비즈니스</span><span class="track"><span class="g1" style="width:76%"></span><span class="fill" style="width:86%"></span><span class="tick80"></span></span><span class="sc">86 <span class="was">← 76</span></span>
       <span class="dim">전달력</span><span class="track"><span class="g1" style="width:68%"></span><span class="fill" style="width:86%"></span><span class="tick80"></span></span><span class="sc">86 <span class="was">← 68</span></span>
     </div>
-    <p class="note">세로선은 80점(자동 배정) 기준선.<span class="swatch" style="background:var(--ghost)"></span>1차<span class="swatch" style="background:var(--brass)"></span>5차.</p>
+    <p class="note">세로선은 80점(자동 배정) 기준선.<span class="swatch" style="background:var(--ghost)"></span>1차<span class="swatch" style="background:var(--brass)"></span>6차.</p>
   </section>
 
   <section>
@@ -173,20 +173,31 @@
         <li><strong>프로세스 관찰</strong>: 스택 머지에서 lint 작업 일부가 유실됐다 복구된 사건(#56) — 스택 PR 운용의 실수 비용을 보여줌. 결과적으로 봉합됐고 멀티-owner frontmatter 파싱 버그도 이때 잡힘.</li>
       </ul>
     </div>
+    <div class="round">
+      <h3>6차 <span class="d">2026-08-05 · main + 사내 실측 결과 반영</span> — <span class="score">86.1 (+0.9)</span></h3>
+      <ul>
+        <li><strong>dry-run 실측 확보 (5차 레버 ② 완료)</strong> — 실 해결 티켓 20건을 복제한 재현 환경에서 전량 채점 (replay 도구 PR #66, 정답=원본 실제 해결자, 시간순 기계적 샘플): <strong>팀 정확도 70%</strong> (해결자가 vault에 존재하는 상한 ~75%에 근접 — 분류기는 맞출 수 있는 건 거의 전부 맞춤), <strong>잠재 자동 배정률 75%</strong> (ROI 보수 가정 30%의 2.5배), <strong>&gt;80 정밀도 73%</strong>.</li>
+        <li><strong>비즈니스 83→86</strong>: ROI의 핵심 가정(자동 배정 30%)이 실측 대체 가능해짐. 오배정 4건 중 2건은 vault 미등록 해결자 — <strong>노트 보완 시 정밀도 87% 경로가 실측으로 증명</strong>, lint 공백 탐지의 존재 근거가 실데이터로 확인됨.</li>
+        <li><strong>창의성 78→80</strong>: self-improving의 정량 증거 일부 확보 — 재발 티켓 케이스 스터디(confidence 78→83, <strong>80 게이트 통과</strong>, 대조군 검증 조건부). 단 before/after 통계는 재발쌍 1/10로 검출 불가 → 발표 제외 판단. 통계적 uplift 부재로 가산 제한.</li>
+        <li><strong>정직성 기록</strong>: before/after(66.7%→60.0%)를 발표에서 빼기로 한 판단 자체를 남긴다 — 축적 효과는 재발에서 발생하는 메커니즘이라 무작위 20건으로는 구조적으로 검출 불가. compounding 증명은 데모 영상 장면 3~4가 담당.</li>
+        <li><strong>측정 과정에서 도구 버그 2건 발견·수정</strong>: 멀티-owner 첫 담당자만 채점(팀 정확도 지표 추가), truth 미등록 키가 봇 assignee로 폴백해 점수 희석(CSV 단독 소스화) — PR #66에 반영, 미머지.</li>
+      </ul>
+    </div>
   </section>
 
   <section>
     <h2>남은 점수 레버</h2>
     <ol class="lever">
-      <li><div><p class="t">데모 영상 촬영 (전달력, 가중 +0.4~0.6)</p><p class="dd">시나리오·컷 구성(DEMO-SCENARIO.md)까지 준비됨 — <strong>남은 건 촬영뿐</strong>. compounding 구간(장면 3~4)은 한 테이크 필수. 촬영·덱 슬라이드 7 연결 시 전달력 86→~90.</p></div></li>
-      <li><div><p class="t">dry-run 실측 (창의성·비즈니스, 가중 +1.0~1.5)</p><p class="dd">자동 배정률·중복 카운트·before/after 정확도를 사내 백테스트(해결된 티켓 replay)로 측정 → "self-improving"을 숫자로 증명. ROI 30% 가정·LLM 토큰 비용도 실측으로 확정. <strong>수상권을 가르는 마지막 항목.</strong> 신뢰도 보정(#58)이 들어갔으니 자동 배정률 실측값이 발표 가능한 수준으로 나올 조건은 갖춰짐.</p></div></li>
-      <li><div><p class="t">데모 리허설 체크리스트 (완성도 방어)</p><p class="dd">서버 기동 확인(위키 점검이 서버 의존), mock 3종 기동 순서, 코드 프리즈 유지 — 심사 당일 신규 머지 금지.</p></div></li>
+      <li><div><p class="t">데모 영상 완성 (전달력, 가중 +0.4)</p><p class="dd">촬영 진행 중(#65 오프닝 슬라이드 확보). self-correction 장면(피드백 👎→감점→lint 정리 후보→헬스 스코어)을 넣으면 영상이 "쌓는 루프 + 걷어내는 루프" 이중 서사로 완성된다.</p></div></li>
+      <li><div><p class="t">실측 수치를 덱에 반영 (전달력·비즈니스)</p><p class="dd">"복제 20건 전량 채점: 팀 정확도 70%(상한 근접) · 자동 배정률 75%(가정의 2.5배) · 노트 보완 시 정밀도 87% 경로" 한 장. 샘플링 방법(시간순 기계적)과 재현 환경임을 명시 — Q&A 방어의 핵심.</p></div></li>
+      <li><div><p class="t">(선택) 공백 노트 4장 채워 재측정</p><p class="dd">미등록 해결자 4명의 모듈 노트 추가 → 재채점으로 "노트를 채우니 정밀도 73→87%"를 사후 실증. "vault 정비 후 재측정"으로 명명해 별도 숫자로.</p></div></li>
+      <li><div><p class="t">데모 리허설 체크리스트 (완성도 방어)</p><p class="dd">서버 기동 확인(위키 점검이 서버 의존), mock 3종 기동 순서, issue-cache 초기화, 코드 프리즈 유지.</p></div></li>
     </ol>
-    <p class="note">4차 레버 중 "#52–54 머지"는 5차에서 완료, "덱 업데이트"는 수치 대조까지 완료(루프 다이어그램 반영 여부는 덱에서 확인 필요). 코드 레버는 소진 — 85.2에서 더 오르는 길은 영상(+0.5)과 실측(+1.0~1.5)뿐이며, 둘 다 하면 ~87로 창의성 구조적 상한 아래 최적점에 도달한다.</p>
+    <p class="note">5차 레버 ②(dry-run 실측)는 6차에서 완료. 86.1은 영상 완성 + 덱 반영으로 ~87에 도달하는 위치 — 창의성 구조적 상한(조합 신규성) 아래의 사실상 최적점이다.</p>
   </section>
 
   <div class="method">
-    <p><strong>심사 방법</strong> — 1~3차: 각 라운드마다 5개 심사축을 독립 에이전트가 검증(코드 리뷰 + <code>npm run typecheck</code>/테스트 실행 + mock 파이프라인 라이브 기동 + 유사 솔루션 웹 검색). 4~5차: 단일 심사자 델타 평가 — 당일 직접 실행한 검증(5차: 테스트 49/49·typecheck 통과, 데모 영상·dry-run 부재 확인)을 근거로 직전 라운드를 기준선 삼아 채점.</p>
+    <p><strong>심사 방법</strong> — 1~3차: 각 라운드마다 5개 심사축을 독립 에이전트가 검증(코드 리뷰 + <code>npm run typecheck</code>/테스트 실행 + mock 파이프라인 라이브 기동 + 유사 솔루션 웹 검색). 4~5차: 단일 심사자 델타 평가. 6차: 사내 재현 환경 실측의 집계 수치(개인정보·원문 미반출)를 근거로 델타 평가 — 실측 대상은 실 해결 티켓 복제 20건, 정답은 원본의 실제 해결자.</p>
     <p>대상 — 3차: 전체 PR 병합 상태(#33~#45 + dedup 버그 수정). 4차: main(#49·#50 병합) + 오픈 스택 PR #52·#53·#54. 5차: 코드 프리즈(7-30) 이후 main(#51~#63 병합, HEAD <span class="mono">061ce34</span>). 1차 = plain main. 배점: 기술성 30 · 창의성 25 · 완성도 20 · 비즈니스 15 · 전달력 10. 모든 라운드는 자체 평가로 절대점수에 인플레이션 가능 — 궤적과 레버 진단 위주로 읽을 것.</p>
   </div>
 </div>
