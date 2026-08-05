@@ -155,7 +155,11 @@ function pct(n, d) {
   return d === 0 ? '-' : `${((n / d) * 100).toFixed(1)}%`
 }
 
-function score({ pred, truthCsv }) {
+function ratio(n, d) {
+  return { n, d, rate: d === 0 ? null : Number((n / d).toFixed(3)) }
+}
+
+function score({ pred, truthCsv, json }) {
   const preds = readFileSync(join(DATA_DIR, pred), 'utf-8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
   const tickets = new Map(loadTickets().map((t) => [t.key, t]))
   const override = truthCsv ? loadTruthCsv(truthCsv) : null
@@ -180,6 +184,27 @@ function score({ pred, truthCsv }) {
   const withLogCorrect = withLog.filter((r) => r.owner === r.truth)
   const noLog = evaluated.filter((r) => !r.jenkinsLog)
   const noLogCorrect = noLog.filter((r) => r.owner === r.truth)
+
+  // --json: 익명 집계 산출물 (티켓 키·실명·원문 미포함 — 반출·repo 커밋 가능).
+  // 제3자가 실측 주장을 검증할 수 있도록 docs/measurement/에 커밋하는 형식이다.
+  if (json) {
+    console.log(JSON.stringify({
+      generatedAt: new Date().toISOString().slice(0, 10),
+      pred,
+      confidenceGate: AUTO_MIN,
+      counts: { predictions: preds.length, noTruth: noTruth.length, llmFallback: fallback.length, evaluated: evaluated.length },
+      assigneeAccuracy: ratio(correct.length, evaluated.length),
+      teamAccuracy: ratio(teamCorrect.length, evaluated.length),
+      autoAssignRate: ratio(auto.length, evaluated.length),
+      autoPrecision: ratio(autoCorrect.length, auto.length),
+      autoPrecisionTeam: ratio(autoTeamCorrect.length, auto.length),
+      unknownRate: ratio(evaluated.filter((r) => r.category === 'unknown').length, evaluated.length),
+      withJenkinsLogAccuracy: ratio(withLogCorrect.length, withLog.length),
+      withoutJenkinsLogAccuracy: ratio(noLogCorrect.length, noLog.length),
+      privacy: '집계 수치만 — 티켓 키·실명·원문 미포함'
+    }, null, 2))
+    return
+  }
 
   console.log(`\n== replay score (${pred}) ==`)
   console.log(`대상 ${preds.length}건 | 정답 없음 ${noTruth.length} | LLM fallback ${fallback.length} | 평가 ${evaluated.length}`)
@@ -231,7 +256,8 @@ const opts = {
   half: arg('half'),
   out: arg('out', 'predictions.jsonl'),
   pred: arg('pred', 'predictions.jsonl'),
-  truthCsv: arg('truth')
+  truthCsv: arg('truth'),
+  json: process.argv.includes('--json')
 }
 const commands = {
   collect: () => collect(opts),
@@ -240,7 +266,7 @@ const commands = {
   'ingest-half': () => ingestHalf(opts)
 }
 if (!commands[cmd]) {
-  console.error('usage: node server/replay.mjs <collect|run|score|ingest-half> [--jql|--max|--half|--out|--pred|--truth]')
+  console.error('usage: node server/replay.mjs <collect|run|score|ingest-half> [--jql|--max|--half|--out|--pred|--truth|--json]')
   process.exit(1)
 }
 commands[cmd]().catch((err) => {
