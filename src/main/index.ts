@@ -176,7 +176,7 @@ function applyPushedIssue(issue: SheriffIssue): void {
   mainWindow?.webContents.send(idx === -1 ? 'issue:new' : 'issue:updated', issue)
   const replaying = Date.now() - sessionStartedAt < 3000
   if (!notificationsMuted && !replaying && !issue.restored && isRelevantTo(issue, userConfig))
-    toasts.show(issue, confidenceMin)
+    toasts.show(issue, confidenceMin, userConfig.userId)
 }
 
 // Login = opening the push session. The server authenticates the credentials,
