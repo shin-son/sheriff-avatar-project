@@ -1,0 +1,42 @@
+{
+  "title": "SVP dry-run 실측 3차 — 담당자 목록 현행화 후 재채점 [2차와 쌍으로 인용]",
+  "generatedAt": "2026-08-06",
+  "tool": "server/replay.mjs (수치 블록은 score --json 스키마)",
+  "privacy": "집계 수치만 — 티켓 키·실명·원문 미포함. 원자료는 사내 보관",
+  "methodology": {
+    "design": "2차(n=51)가 지목한 공백 중 '기존 모듈의 담당자 목록 노후화'만 현행화하고 동일 예측을 재채점. 분류(LLM)는 재실행하지 않음 — 예측의 category/confidence는 2차와 동일하고 owner 매핑만 갱신 (run3-remap)",
+    "vaultChange": "modules/security.md owner += 1명(보안 영역 실담당), modules/multimedia.md owner += 1명(실담당 확인) — 조직 현실 확인 후에만 추가. 노트 본문·신규 노트 없음",
+    "excluded": "미등록 해결자 중 2명(티켓 4건)은 의도적으로 제외 — 증상 도메인(multimedia)과 원인 도메인(s2r 등)이 달라 owner 추가가 사실 왜곡이 되는 유형. known-failure 지식(원인 도메인 노트에 증상 패턴 기재)으로 해결할 대상",
+    "confidenceGate": 80,
+    "evaluated": 51
+  },
+  "baseline": {
+    "pred": "run3-remap.jsonl",
+    "confidenceGate": 80,
+    "counts": { "predictions": 83, "noTruth": 31, "llmFallback": 1, "evaluated": 51 },
+    "assigneeAccuracy": { "n": 23, "d": 51, "rate": 0.451 },
+    "teamAccuracy": { "n": 42, "d": 51, "rate": 0.824 },
+    "autoAssignRate": { "n": 28, "d": 51, "rate": 0.549 },
+    "autoPrecision": { "n": 18, "d": 28, "rate": 0.643 },
+    "autoPrecisionTeam": { "n": 22, "d": 28, "rate": 0.786 },
+    "unknownRate": { "n": 0, "d": 51, "rate": 0 }
+  },
+  "context": {
+    "vsRun2": {
+      "teamAccuracy": "0.569 → 0.824 (+25.5%p) — 담당자 목록 현행화만으로",
+      "autoPrecisionTeam": "0.714 → 0.786",
+      "autoAssignRate": "0.549 → 0.549 (불변 — 분류 결과를 건드리지 않았다는 증거)",
+      "assigneeAccuracy": "0.451 → 0.451 (불변 — 추가 인원은 owner 목록 후순위)"
+    },
+    "theoreticalCeiling": {
+      "resolverInVaultOwners": { "n": 48, "d": 52, "rate": 0.923 },
+      "attainment": "0.824 / 0.923 ≈ 89%"
+    },
+    "remainingGap": {
+      "tickets": 4,
+      "type": "증상-원인 도메인 불일치 (예: multimedia TC 실패의 원인이 s2r)",
+      "plan": "원인 도메인 노트에 known-failure(증상 TC 패턴 + cause + owner)로 기재 — 규칙 기반이 못 잡는 유형을 지식 기반이 잡는지 별도 검증 예정"
+    },
+    "narrative": "2차가 공백의 위치(미등록 담당자, 티켓 35%)를 특정 → 사람이 목록을 현행화 → 정확도 57→82%. '3개월 로테이션마다 리셋되는 조직 지식'이 owner 목록에도 해당함을 실측이 발견하고, lint 공백 탐지→사람 보완 루프가 실제로 성능을 올림을 확인"
+  }
+}
