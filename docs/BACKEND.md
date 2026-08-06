@@ -104,7 +104,9 @@
   전환 — 상위 참조 노트를 toast에서 바로 👍/👎 평가(1클릭), 나머지 노트는 클릭해 상세 패널에서.
   피드백 누적 노트의 정리 후보 보고는 서버 lint(F15)가 맡는다 — 실제 수정·삭제는 사람 PR 전용.
 - **한계**: 클라이언트 로컬 피드백 기록은 서버 `.feedback.json` 집계와 미연동 (v2 잔재).
-- **검증**: `wiki-query.test.mjs` feedbackDemotion 케이스 + 수동 — 불일치 3회 → 해당 노트 query 점수 반감.
+- **검증**: `wiki-query.test.mjs` feedbackDemotion 케이스 + 수동 — ① `/demo/resolve` 후 해결 담당자
+  toast가 피드백 요청 모드로 전환 → 👍/👎 클릭 → 서버 로그 `feedback from <id>` 확인, ② 불일치 3회 →
+  해당 노트 query 점수 반감.
 
 ## F9 — CI 로그 자동 수집 파이프라인
 
