@@ -15,7 +15,7 @@
 | F5 | Jira 라이터 (댓글·assignee·전이) | `server/jira.mjs` | 구현 완료 (write-mode 게이트) |
 | F6 | 클라이언트 push (Socket.IO) | `server/index.mjs` | 구현 완료 — 초기 명세(8791 raw-WS hub)는 폐기 |
 | F7 | 해결 감지 → WIKI ingest | `server/ingest.mjs` | 구현 완료 |
-| F8 | WIKI 위생 (feedback) | `server/wiki-query.mjs` + 클라이언트 | 부분 구현 (본문 한계 참고) |
+| F8 | WIKI 위생 (feedback) | `server/wiki-query.mjs` + 클라이언트 | 구현 완료 (해결 toast 즉석 피드백 포함) |
 | F9 | CI 로그 자동 수집 파이프라인 | `server/ci-test-fetch.mjs` + `server/jenkins.mjs` | 구현 완료 (1차 경로는 사내 자산 의존 — [INTERNAL-ASSETS.md](./INTERNAL-ASSETS.md)) |
 | F10 | ingest 중복 제거·재발 감지 | `server/ingest.mjs` | 구현 완료 |
 | F11 | retrieval self-correction | `server/wiki-query.mjs` | 구현 완료 |
@@ -95,13 +95,15 @@
   재해결(더 늦은 resolvedAt)만 `-r<n>` 버전 raw + supersede 표식으로 재기록. 상태는 `.ingest-state.json` 영속.
 - **검증**: `ingest.test.mjs` decideIngest 5케이스 + 수동 — Done 처리 → case-log 1건, 재시작 후 중복 0건.
 
-## F8 — WIKI 위생 (feedback) — 부분 구현
+## F8 — WIKI 위생 (feedback)
 
 - **구현됨**: 담당자가 이슈 상세(DetailPanel/CompactView)에서 참조 노트의 **일치/불일치**(👍/👎)를 판정 →
   `wiki:feedback` 소켓으로 서버 전달 → `recordFeedback`이 `wiki-vault/.feedback.json`에 누적 → `queryWiki`가
   불일치 누적(`SVP_FEEDBACK_DEMOTE` 기본 3+ 그리고 down > up) 노트를 점수 반감 (`feedbackDemotion`, F11③).
-- **미구현·한계**: "해결(Done) 시 피드백 요청 toast push"는 없다 — 피드백 입력은 상세 패널 UI뿐.
+- **해결 시 피드백 요청 push**: 해결(Done) 전이가 push되면 해결 담당자의 toast가 피드백 요청 모드로
+  전환 — 상위 참조 노트를 toast에서 바로 👍/👎 평가(1클릭), 나머지 노트는 클릭해 상세 패널에서.
   피드백 누적 노트의 정리 후보 보고는 서버 lint(F15)가 맡는다 — 실제 수정·삭제는 사람 PR 전용.
+- **한계**: 클라이언트 로컬 피드백 기록은 서버 `.feedback.json` 집계와 미연동 (v2 잔재).
 - **검증**: `wiki-query.test.mjs` feedbackDemotion 케이스 + 수동 — 불일치 3회 → 해당 노트 query 점수 반감.
 
 ## F9 — CI 로그 자동 수집 파이프라인

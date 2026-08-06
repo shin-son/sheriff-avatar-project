@@ -72,7 +72,7 @@ SVP의 목표는 **triage 판정을 팀의 해결 이력(LLM-WIKI)에 근거한 
 | [F5](./BACKEND.md#f5--jira-라이터) | Jira write 3종 (assignee·분석 댓글·In Progress 전이) — 전부 write 게이트 경유 (§6) |
 | [F6](./BACKEND.md#f6--클라이언트-push-socketio) | Socket.IO push — 로그인·역할 부여·서버 측 필터링·재접속 replay |
 | [F7](./BACKEND.md#f7--해결-감지--wiki-ingest) | 해결(Done) 감지 → raw 동결 + LLM 요약 case-log 기록 + index/log 자동 갱신 (멱등) |
-| [F8](./BACKEND.md#f8--wiki-위생-feedback--부분-구현) | 참조 노트 일치/불일치 피드백 집계 → 불일치 누적 노트 query 감점 (부분 구현, §8) |
+| [F8](./BACKEND.md#f8--wiki-위생-feedback) | 참조 노트 일치/불일치 피드백 집계 → 불일치 누적 노트 query 감점 + 해결 시 toast 즉석 피드백 |
 | [F9](./BACKEND.md#f9--ci-로그-자동-수집-파이프라인) | Jenkins 실패 샤드 콘솔에서 해당 TC 실행 구간 자동 추출 + 로그 정형화 (전 단계 폴백) |
 | [F10](./BACKEND.md#f10--ingest-중복-제거재발-감지) | 같은 실패 서명의 재발은 anchor 하나 + 포인터로 축약, raw는 티켓마다 보존 |
 | [F11](./BACKEND.md#f11--retrieval-self-correction) | 검색 자기 교정 — 재발 가중(boost), reopen 시 최신 결론 우선(supersede), 피드백 감점 |
@@ -119,8 +119,7 @@ SVP의 목표는 **triage 판정을 팀의 해결 이력(LLM-WIKI)에 근거한 
 
 - **인증이 데모 수준** — admin/admin = 당번, 아이디=비밀번호 = 팀원 (`server/index.mjs` — "Demo auth until
   SVP-5"). 사내 계정 연동 전까지 운영 배포 불가.
-- **F8 피드백 루프 부분 구현** — 해결(Done) 시 피드백을 요청하는 push가 없어 입력은 이슈 상세 패널에서만
-  가능하다. 클라이언트 로컬 lint는 서버의 `.feedback.json` 집계와 미연동 (v2 잔재).
+- **클라이언트 로컬 피드백 기록**은 서버의 `.feedback.json` 집계와 미연동 (v2 잔재 — 서버 집계가 정본).
 - **Jira write 실패 시 재시도 없음** — 로그만 남기고 계속 진행. assignee 성공 후 댓글·전이가 실패해도
   배정을 되돌리지 않는다 (F5).
 - **폴링 백오프 없음** — Jira 장애 시 매 주기 에러 로그 후 재시도. 복구되면 base JQL 전체 재조회로 따라잡는다 (F1).
