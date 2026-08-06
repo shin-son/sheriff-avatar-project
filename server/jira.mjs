@@ -1,5 +1,8 @@
 // Jira write helpers (API.md §2): summary comment, assignee, status transition.
 // Callers decide what a failure means — these just throw on non-2xx.
+// 순간 장애(네트워크·429·5xx)는 지수 백오프로 재시도, 4xx는 즉시 실패 (retry.mjs).
+import { isRetryableStatus, withRetry } from './retry.mjs'
+
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
 const PAT = process.env.SVP_JIRA_PAT
 
@@ -8,17 +11,21 @@ function auth() {
 }
 
 async function request(path, options = {}) {
-  const res = await fetch(`${JIRA}${path}`, {
-    ...options,
-    headers: { ...auth(), 'Content-Type': 'application/json', ...options.headers }
-  })
-  if (!res.ok) {
-    // Jira는 거부 사유(권한·필드·워크플로)를 응답 본문에 담는다 — 상태 코드만으로는
-    // 원인 분석이 안 되므로 본문 앞부분을 에러에 실어 로그까지 끌고 간다.
-    const detail = (await res.text().catch(() => '')).slice(0, 300)
-    throw new Error(`${options.method ?? 'GET'} ${path} returned ${res.status}${detail ? ` — ${detail}` : ''}`)
-  }
-  return res
+  return withRetry(async () => {
+    const res = await fetch(`${JIRA}${path}`, {
+      ...options,
+      headers: { ...auth(), 'Content-Type': 'application/json', ...options.headers }
+    })
+    if (!res.ok) {
+      // Jira는 거부 사유(권한·필드·워크플로)를 응답 본문에 담는다 — 상태 코드만으로는
+      // 원인 분석이 안 되므로 본문 앞부분을 에러에 실어 로그까지 끌고 간다.
+      const detail = (await res.text().catch(() => '')).slice(0, 300)
+      const err = new Error(`${options.method ?? 'GET'} ${path} returned ${res.status}${detail ? ` — ${detail}` : ''}`)
+      err.permanent = !isRetryableStatus(res.status)
+      throw err
+    }
+    return res
+  }, { label: `jira ${options.method ?? 'GET'} ${path}` })
 }
 
 export function postComment(key, body) {

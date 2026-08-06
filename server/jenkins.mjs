@@ -9,6 +9,7 @@
 
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
+import { withRetry } from './retry.mjs'
 
 const USER = process.env.SVP_JENKINS_USER
 const TOKEN = process.env.SVP_JENKINS_TOKEN
@@ -67,18 +68,24 @@ function rawGet(url) {
   })
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-/** GET with one retry after backoff — 순간 장애·간헐 차단 대비. */
+/** GET with exponential-backoff retries (retry.mjs) — 순간 장애·간헐 차단 대비.
+ *  계약 유지: 재시도 소진 후에도 5xx면 마지막 응답을 그대로 반환하고(호출부가
+ *  status로 판정), 네트워크 오류만 전파한다. 4xx는 재시도하지 않는다(로테이션 404 등). */
 async function jenkinsGet(url) {
   try {
-    const res = await rawGet(url)
-    if (res.ok) return res
-  } catch {
-    // network error — retry below
+    return await withRetry(async () => {
+      const res = await rawGet(url)
+      if (res.status >= 500) {
+        const err = new Error(`HTTP ${res.status}`)
+        err.res = res
+        throw err
+      }
+      return res
+    }, { label: 'jenkins GET' })
+  } catch (err) {
+    if (err.res) return err.res
+    throw err
   }
-  await sleep(1500)
-  return rawGet(url)
 }
 
 /**

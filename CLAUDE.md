@@ -83,7 +83,9 @@ server/                          v3 서버 (headless Node, plain .mjs) — Linux
   cache.mjs                      issue-cache.json 영속화 (재시작 시 재수집·재분류 방지)
   comment-channel.mjs            Jira 댓글 전송 채널 (rest/mcp)
   ticket.mjs                     티켓 정규화 — htmlToText·' : ' key-value 파싱 (normalize)
-  *.test.mjs                     순수 함수 단위 테스트 49종 (npm test)
+  retry.mjs                      HTTP 재시도 — 지수 백오프, 네트워크·429·5xx만 (4xx 즉시 실패)
+  replay.mjs                     dry-run 실측 도구 — 해결 티켓 재생 채점 (제품 경로 아님, docs/measurement)
+  *.test.mjs                     순수 함수 단위 테스트 54종 (npm test)
 src/preload/                     contextBridge API (window.svp)
 src/renderer/                    React UI (index = 대시보드, toast = 팝업)
 src/shared/                      main/renderer 공용 타입·팀 설정

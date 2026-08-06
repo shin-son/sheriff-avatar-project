@@ -71,7 +71,8 @@
 - **불변 조건**: 모든 서버발 Jira write는 `SVP_JIRA_WRITE_MODE` 게이트 경유 — dry-run(기본, 로그만) /
   label(`SVP_TEST_LABEL` 티켓만) / live. 분석 댓글은 분류가 끝난 **모든 bot-배정 티켓**에 1건 — 자동 배정이
   없어도(≤80·담당자 미등록) 근거를 남긴다. 자동 배정 시에는 assignee 성공 후에만 댓글·전이. 쓰기 실패
-  재시도 없음 — 로그 후 계속 (assignee 성공 후 댓글/전이 실패는 배정을 되돌리지 않는다).
+  순간 장애(네트워크·429·5xx)는 지수 백오프 재시도(`server/retry.mjs`, 기본 2회), 4xx는 즉시 실패.
+  소진 후에는 로그 후 계속 (assignee 성공 후 댓글/전이 실패는 배정을 되돌리지 않는다).
 - **검증**: 수동 — mock Jira `GET /demo/tickets`에서 댓글·assignee·상태가 시나리오대로 기록됨.
 
 ## F6 — 클라이언트 push (Socket.IO)
@@ -187,6 +188,7 @@
 | `server/jenkins.test.mjs` | 7 | extractBuildUrl 1 · shardLinksIn 2 · tcSectionIn 4 — F9 |
 | `server/ticket.test.mjs` | 5 | htmlToText 2 · normalize 3 — F1 |
 | `server/ci-test-fetch.test.mjs` | 5 | isFormattedLog — F9 |
+| `server/retry.test.mjs` | 5 | backoffDelay 1 · isRetryableStatus 1 · withRetry 3 — Jira/Jenkins 재시도 |
 
 `npm run test:coverage`(`node --test --experimental-test-coverage`)로 커버리지 확인 — 순수 로직 모듈 기준
 `ticket.mjs` 100% / `wiki-lint.mjs` 91.8% 라인 커버리지. LLM·네트워크 I/O 어댑터(classifier·jira 등)는

@@ -28,6 +28,7 @@ import { buildComment, postComment, setAssignee, transitionTo } from './jira.mjs
 import { normalize } from './ticket.mjs'
 import { buildCandidates, listCatalog, listModules, queryWiki, readNotes, recordFeedback, resolveOwner } from './wiki-query.mjs'
 import { lintWiki } from './wiki-lint.mjs'
+import { isRetryableStatus, withRetry } from './retry.mjs'
 
 const PORT = Number(process.env.SVP_SERVER_PORT ?? 8793)
 const JIRA = process.env.SVP_JIRA_BASE_URL ?? 'http://localhost:8792'
@@ -391,9 +392,16 @@ function auth() {
 
 async function search(jql) {
   const url = `${JIRA}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,created,updated,assignee,labels`
-  const res = await fetch(url, { headers: auth() })
-  if (!res.ok) throw new Error(`search returned ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  return (await res.json()).issues ?? []
+  // 순간 장애는 재시도(지수 백오프) — 폴링 한 사이클을 통째로 잃지 않기 위해. 4xx(JQL 오류 등)는 즉시 실패.
+  return withRetry(async () => {
+    const res = await fetch(url, { headers: auth() })
+    if (!res.ok) {
+      const err = new Error(`search returned ${res.status}: ${(await res.text()).slice(0, 200)}`)
+      err.permanent = !isRetryableStatus(res.status)
+      throw err
+    }
+    return (await res.json()).issues ?? []
+  }, { label: 'jira search' })
 }
 
 // Jenkins fetch가 끼면서 신규 수집 한 사이클이 수 초를 넘을 수 있다 — setInterval
