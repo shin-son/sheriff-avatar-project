@@ -184,6 +184,7 @@
 | `server/jenkins.test.mjs` | 7 | extractBuildUrl 1 · shardLinksIn 2 · tcSectionIn 4 — F9 |
 | `server/ticket.test.mjs` | 5 | htmlToText 2 · normalize 3 — F1 |
 | `server/ci-test-fetch.test.mjs` | 5 | isFormattedLog — F9 |
+| `server/retry.test.mjs` | 5 | backoffDelay 1 · isRetryableStatus 1 · withRetry 3 — Jira/Jenkins 재시도 |
 
 `npm run test:coverage`(`node --test --experimental-test-coverage`)로 커버리지 확인 — 순수 로직 모듈 기준
 `ticket.mjs` 100% / `wiki-lint.mjs` 91.8% 라인 커버리지. LLM·네트워크 I/O 어댑터(classifier·jira 등)는
