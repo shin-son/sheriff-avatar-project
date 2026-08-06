@@ -179,3 +179,34 @@ body.toast-body {
   color: var(--dust);
   font-weight: 600;
 }
+
+/* F8 — 해결 toast의 참조 노트 즉석 피드백 */
+.toast-fb-ask {
+  color: var(--dust);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.toast-fb-btn {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 7px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 150ms;
+  flex-shrink: 0;
+}
+
+.toast-fb-btn:hover {
+  opacity: 1;
+}
+
+.toast-fb-done {
+  color: var(--brass);
+  font-weight: 600;
+}
