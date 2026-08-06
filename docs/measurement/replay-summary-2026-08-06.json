@@ -1,0 +1,47 @@
+{
+  "title": "SVP dry-run 실측 2차 (표본 확대) — 재현 환경 집계 산출물 [확정본]",
+  "generatedAt": "2026-08-06",
+  "tool": "server/replay.mjs (수치 블록은 score --json 스키마)",
+  "privacy": "집계 수치만 — 티켓 키·실명·원문 미포함. 원자료(replay-data/, truth.csv)는 사내 보관",
+  "supersedes": "replay-summary-2026-08-05.json (1차, n=20) — 동일 방법론의 표본 확대. 1차는 기록으로 보존",
+  "methodology": {
+    "environment": "실 해결 티켓을 복제한 재현 환경 (클론 프로젝트) — 티켓 제목·description·Jenkins 로그는 실데이터",
+    "sampling": "시간순 기계적 수집 (ORDER BY created ASC), 체리피킹 없음",
+    "groundTruth": "원본 티켓의 실제 최종 해결자 (truth CSV, 채점 단계에서만 사용 — 분류 프롬프트와 격리)",
+    "collected": 83,
+    "labeled": 52,
+    "evaluated": 51,
+    "jenkinsLogFetched": "평가 51건 전량",
+    "confidenceGate": 80
+  },
+  "baseline": {
+    "pred": "predictions.jsonl",
+    "confidenceGate": 80,
+    "counts": { "predictions": 83, "noTruth": 31, "llmFallback": 1, "evaluated": 51 },
+    "assigneeAccuracy": { "n": 23, "d": 51, "rate": 0.451 },
+    "teamAccuracy": { "n": 29, "d": 51, "rate": 0.569 },
+    "autoAssignRate": { "n": 28, "d": 51, "rate": 0.549 },
+    "autoPrecision": { "n": 18, "d": 28, "rate": 0.643 },
+    "autoPrecisionTeam": { "n": 20, "d": 28, "rate": 0.714 },
+    "unknownRate": { "n": 0, "d": 51, "rate": 0 },
+    "withJenkinsLogAccuracy": { "n": 23, "d": 51, "rate": 0.451 },
+    "withoutJenkinsLogAccuracy": { "n": 0, "d": 0, "rate": null }
+  },
+  "context": {
+    "theoreticalCeiling": {
+      "resolverInVaultOwners": { "n": 34, "d": 52, "rate": 0.654 },
+      "attainment": { "note": "팀 정확도 0.569 / 상한 0.654 = 상한 대비 ~87% 달성 (1차 ~92%) — 정확도가 vault 커버리지 상한을 따라간다는 가설이 표본 확대에서도 유지" }
+    },
+    "gapAnalysis": {
+      "vaultMissingResolvers": 4,
+      "ticketsResolvedByMissing": { "n": 18, "d": 52, "rate": 0.346 },
+      "note": "미등록 해결자 4명(1차와 동일 명단)이 전체 정답 티켓의 34.6%를 차지 — 모듈 노트 4장이 커버할 공백. lint 공백 탐지가 이 위치를 자동 지목"
+    },
+    "vsFirstRun": {
+      "teamAccuracy": "0.70 → 0.569 (상한이 0.76 → 0.654로 하락한 것을 따라감)",
+      "autoAssignRate": "0.75 → 0.549 (ROI 가정 0.30의 1.8배로 여전히 상회)",
+      "autoPrecisionTeam": "0.733 → 0.714 (안정 — 게이트 신뢰성 유지)",
+      "note": "표본 확대(20→51)로 vault 미커버 모듈의 티켓 비중이 늘며 상한과 절대치가 함께 하락 — 분류기 성능 저하가 아니라 커버리지 병목의 재확인"
+    }
+  }
+}
